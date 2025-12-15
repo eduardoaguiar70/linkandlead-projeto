@@ -32,20 +32,19 @@ const CreatePostModal = ({ onClose, onSuccess }) => {
     useEffect(() => {
         const fetchClients = async () => {
             try {
-                // Fetch from PROFILES to get the User UUID + Company Name
+                // CHANGED: Fetch from 'clients' table instead of 'profiles'
                 const { data, error } = await supabase
-                    .from('profiles')
-                    .select('id, nome_empresa, role')
-                    .eq('role', 'client')
-                    .order('nome_empresa')
+                    .from('clients')
+                    .select('*') // Fetch all fields (name, description, tone_of_voice, etc.)
+                    .order('name')
 
                 if (error) throw error
-                // Filter out any without name
-                const validClients = (data || []).filter(c => c.nome_empresa)
-                console.log("Clients Fetched:", validClients)
+                // Filter out any without name (just in case)
+                const validClients = (data || []).filter(c => c.name)
+                console.log("Clients Fetched from 'clients' table:", validClients)
                 setClients(validClients)
             } catch (err) {
-                console.error('Erro ao buscar clientes (profiles):', err)
+                console.error('Erro ao buscar clientes (tabela clients):', err)
             } finally {
                 setLoadingClients(false)
             }
@@ -55,15 +54,15 @@ const CreatePostModal = ({ onClose, onSuccess }) => {
 
     const handleClientChange = (e) => {
         const uuid = e.target.value
-        console.log("Selected Client UUID:", uuid)
+        console.log("Selected Client ID:", uuid)
         setSelectedClientId(uuid)
 
         const clientData = clients.find(c => c.id === uuid)
         if (clientData) {
-            setClienteName(clientData.nome_empresa)
+            setClienteName(clientData.name) // CHANGED: nome_empresa -> name
             setSelectedClientData(clientData)
         } else {
-            console.warn("Client data not found for UUID:", uuid)
+            console.warn("Client data not found for ID:", uuid)
             setClienteName('')
             setSelectedClientData(null)
         }
@@ -224,7 +223,7 @@ const CreatePostModal = ({ onClose, onSuccess }) => {
                                             <option value="" disabled>Selecione...</option>
                                             {clients.map(c => (
                                                 <option key={c.id} value={c.id}>
-                                                    {c.nome_empresa}
+                                                    {c.name}
                                                 </option>
                                             ))}
                                         </select>
