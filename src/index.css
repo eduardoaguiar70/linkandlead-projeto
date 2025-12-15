@@ -1,0 +1,144 @@
+/* Google Fonts - Montserrat */
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,100..900;1,100..900&display=swap');
+
+
+
+:root {
+  /* Brand Typography */
+  --font-main: 'Montserrat', system-ui, -apple-system, sans-serif;
+
+  /* Color Palette - HIGH CONTRAST LIGHT THEME */
+  --color-bg: #ffffff;
+  /* Pure White Background */
+  --color-surface: #ffffff;
+  /* Pure White Cards */
+
+  /* Text Colors - Accessibility Focus */
+  --color-text-heading: #000000;
+  /* Pure Black for Headers */
+  --color-text-body: #1f2937;
+  /* Gray 800 - Very dark gray for body */
+  --color-text-muted: #4b5563;
+  /* Gray 600 - Secondary text */
+
+  /* Brand Colors */
+  --color-primary: #ff4d00;
+  /* Vibrant Brand Orange */
+  --color-primary-hover: #e64a19;
+
+  /* Borders */
+  --color-border: #e2e8f0;
+  /* Slate 200 */
+
+  /* UI Elements */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-pill: 50px;
+
+  /* Spacing */
+  --spacing-container: 1200px;
+}
+
+/* Global Reset & Base */
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  font-family: var(--font-main);
+  background-color: var(--color-bg);
+  color: var(--color-text-body);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  line-height: 1.6;
+}
+
+/* Headings */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  color: var(--color-text-heading);
+  font-weight: 700;
+  /* Bold */
+  margin-top: 0;
+  line-height: 1.25;
+}
+
+/* Common Text */
+p {
+  margin-bottom: 1rem;
+}
+
+/* Buttons (Global Defaults) */
+button {
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+/* Standard Primary Button Class */
+.btn-primary {
+  background-color: var(--color-primary);
+  color: white;
+  border: none;
+  padding: 0.75rem 1.5rem;
+  border-radius: var(--radius-pill);
+  font-weight: 600;
+  font-size: 0.95rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  box-shadow: 0 4px 6px -1px rgba(255, 77, 0, 0.2);
+}
+
+.btn-primary:hover {
+  background-color: var(--color-primary-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 8px -1px rgba(255, 77, 0, 0.3);
+}
+
+/* Inputs & Forms */
+input,
+select,
+textarea {
+  font-family: inherit;
+  background-color: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: var(--radius-sm);
+  padding: 0.75rem 1rem;
+  font-size: 1rem;
+  color: #000000;
+  /* Force black input text */
+  transition: border-color 0.2s;
+  outline: none;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(255, 77, 0, 0.1);
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 5px;
+  border: 2px solid #f1f5f9;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
