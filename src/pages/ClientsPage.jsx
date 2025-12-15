@@ -1,13 +1,21 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../services/supabaseClient';
-import { Pencil } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext'; // Import Auth
+import { Pencil, Upload, FileText, X, Check } from 'lucide-react';
 
 export default function ClientsPage() {
+    const { user } = useAuth(); // Hook Auth
     const [clients, setClients] = useState([]);
     const [loading, setLoading] = useState(true);
     const [showModal, setShowModal] = useState(false);
     const [saving, setSaving] = useState(false);
     const [editingClient, setEditingClient] = useState(null);
+
+    // ... (rest of local state) ...
+
+    // File Upload State
+    const [filesToUpload, setFilesToUpload] = useState([]);
+    const [existingFiles, setExistingFiles] = useState([]);
 
     const [formData, setFormData] = useState({
         name: '',
@@ -34,12 +42,37 @@ export default function ClientsPage() {
         }
     }
 
+    async function fetchClientFiles(clientId) {
+        try {
+            const { data, error } = await supabase
+                .from('client_knowledge')
+                .select('*')
+                .eq('client_id', clientId);
+
+            if (error) throw error;
+            setExistingFiles(data || []);
+        } catch (error) {
+            console.error('Erro ao buscar arquivos do cliente:', error);
+        }
+    }
+
     const handleInputChange = (e) => {
         const { name, value } = e.target;
         setFormData(prev => ({
             ...prev,
             [name]: value
         }));
+    };
+
+    const handleFileChange = (e) => {
+        if (e.target.files && e.target.files.length > 0) {
+            const newFiles = Array.from(e.target.files);
+            setFilesToUpload(prev => [...prev, ...newFiles]);
+        }
+    };
+
+    const removeFileToUpload = (index) => {
+        setFilesToUpload(prev => prev.filter((_, i) => i !== index));
     };
 
     const handleEdit = (client) => {
@@ -51,6 +84,9 @@ export default function ClientsPage() {
             target_audience_default: client.target_audience_default || '',
             pain_points: client.pain_points || ''
         });
+        setFilesToUpload([]);
+        setExistingFiles([]);
+        fetchClientFiles(client.id);
         setShowModal(true);
     };
 
@@ -63,6 +99,8 @@ export default function ClientsPage() {
             target_audience_default: '',
             pain_points: ''
         });
+        setFilesToUpload([]);
+        setExistingFiles([]);
         setShowModal(true);
     };
 
@@ -89,33 +127,130 @@ export default function ClientsPage() {
         }
     };
 
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-        setSaving(true);
-        try {
-            if (editingClient) {
-                // UPDATE
-                const { error } = await supabase
-                    .from('clients')
-                    .update(formData)
-                    .eq('id', editingClient.id);
-                if (error) throw error;
-                alert('Cliente atualizado com sucesso!');
-            } else {
-                // CREATE
-                const { error } = await supabase
-                    .from('clients')
-                    .insert([formData]);
-                if (error) throw error;
-                alert('Cliente cadastrado com sucesso!');
+    const sanitizeFileName = (originalName) => {
+        return originalName.replace(/[^a-zA-Z0-9.]/g, '_');
+    };
+
+    const uploadFiles = async (clientId) => {
+        if (!filesToUpload || filesToUpload.length === 0) return;
+
+        console.log(`[DEBUG] uploadFiles chamado com clientID: ${clientId} (Tipo: ${typeof clientId})`);
+
+        for (const file of filesToUpload) {
+            if (!file) continue;
+
+            const sanitizedName = sanitizeFileName(file.name);
+            const fileName = `${Date.now()}_${sanitizedName}`;
+            const filePath = `${clientId}/${fileName}`;
+
+            console.log(`[DEBUG] Iniciando upload: ${fileName} para bucket client-documents`);
+
+            const { data, error: uploadError } = await supabase.storage
+                .from('client-documents')
+                .upload(filePath, file);
+
+            if (uploadError) {
+                console.error(`[DEBUG] Erro no Upload do arquivo ${file.name}:`, uploadError);
+                throw new Error(`Falha no upload de "${file.name}": ${uploadError.message}`);
             }
 
+            console.log(`[DEBUG] Upload sucesso:`, data);
+
+            const insertPayload = {
+                client_id: clientId,
+                file_name: file.name,
+                file_path: filePath
+            };
+
+            console.log("[DEBUG] Inserindo no banco:", insertPayload);
+
+            const { error: dbError } = await supabase
+                .from('client_knowledge')
+                .insert([insertPayload]);
+
+            if (dbError) {
+                console.error(`[DEBUG] Erro ao salvar no banco (client_knowledge):`, dbError);
+                if (dbError.code === '22P02') {
+                    throw new Error(`Erro de Tipo no Banco (22P02): Verifique se o ID do cliente está correto (${clientId}). Detalhes: ${dbError.message}`);
+                }
+                throw new Error(`Erro ao registrar arquivo "${file.name}" no banco: ${dbError.message}`);
+            }
+        }
+    };
+
+    const handleSubmit = async (e) => {
+        e.preventDefault(); // 1. Prevent Default
+        console.log("1. Iniciou handleSave");
+        setSaving(true);
+
+        try {
+            console.log("2. User ID:", user?.id);
+
+            // PAYLOAD CONSTRUCTION & LOGGING
+            let payload = {};
+            try {
+                payload = {
+                    name: formData.name,
+                    description: formData.description,
+                    tone_of_voice: formData.tone_of_voice,
+                    target_audience_default: formData.target_audience_default,
+                    pain_points: formData.pain_points,
+                    // Add other fields here if needed
+                };
+                console.log("3. Payload montado:", payload);
+            } catch (payloadError) {
+                throw new Error("Erro ao montar o payload: " + payloadError.message);
+            }
+
+            // --- EXECUTE SUPABASE CALLS AFTER PAYLOAD IS READY ---
+            let clientData = null;
+            let realClientId = null;
+
+            if (editingClient) {
+                console.log("[DEBUG] Atualizando cliente existente...", editingClient.id);
+                const { data, error } = await supabase
+                    .from('clients')
+                    .update(payload) // Use the constructed payload
+                    .eq('id', editingClient.id)
+                    .select()
+                    .single();
+
+                if (error) throw error;
+                clientData = data;
+            } else {
+                console.log("[DEBUG] Criando novo cliente...");
+                const { data, error } = await supabase
+                    .from('clients')
+                    .insert([payload]) // Use the constructed payload
+                    .select()
+                    .single();
+
+                if (error) throw error;
+                clientData = data;
+            }
+
+            // SAFETY CHECKS
+            if (!clientData) throw new Error("Erro crítico: Dados do cliente não retornaram do banco.");
+            realClientId = clientData.id;
+            console.log("[DEBUG] ID Numérico capturado:", realClientId);
+            if (!realClientId) throw new Error("Erro crítico: ID do cliente é inválido.");
+
+            // UPLOAD
+            if (filesToUpload.length > 0) {
+                console.log(`[DEBUG] Iniciando uploads para ID: ${realClientId}`);
+                await uploadFiles(realClientId);
+            }
+
+            // SUCCESS
+            alert(editingClient ? 'Cliente atualizado com sucesso!' : 'Cliente cadastrado com sucesso!');
             setShowModal(false);
             fetchClients();
+
         } catch (error) {
-            console.error('Erro ao salvar:', error);
-            alert('Erro ao salvar cliente: ' + error.message);
+            console.error("ERRO CRÍTICO NO SALVAMENTO:", error);
+            alert("Erro: " + (error.message || "Erro desconhecido"));
         } finally {
+            console.log("[DEBUG] Finalizando processo (finally).");
             setSaving(false);
         }
     };
@@ -258,6 +393,82 @@ export default function ClientsPage() {
                                     style={{ width: '100%', padding: '0.5rem', border: '1px solid #d1d5db', borderRadius: '0.25rem' }}
                                     rows="3"
                                 />
+                            </div>
+
+                            {/* DOCUMENT UPLOAD SECTION */}
+                            <div style={{ borderTop: '1px solid #e5e7eb', paddingTop: '1rem', marginTop: '0.5rem' }}>
+                                <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: '600' }}>
+                                    Arquivos de Contexto (PDF, DOC)
+                                </label>
+
+                                <div style={{
+                                    border: '1px dashed #d1d5db',
+                                    borderRadius: '0.25rem',
+                                    padding: '1rem',
+                                    textAlign: 'center',
+                                    marginBottom: '1rem',
+                                    cursor: 'pointer',
+                                    position: 'relative'
+                                }}>
+                                    <input
+                                        type="file"
+                                        multiple
+                                        onChange={handleFileChange}
+                                        style={{
+                                            position: 'absolute',
+                                            top: 0,
+                                            left: 0,
+                                            width: '100%',
+                                            height: '100%',
+                                            opacity: 0,
+                                            cursor: 'pointer'
+                                        }}
+                                    />
+                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem', color: '#6b7280' }}>
+                                        <Upload size={24} />
+                                        <span style={{ fontSize: '0.875rem' }}>Clique ou arraste arquivos aqui</span>
+                                    </div>
+                                </div>
+
+                                {/* LISTA DE ARQUIVOS PENDENTES */}
+                                {filesToUpload.length > 0 && (
+                                    <div style={{ marginBottom: '1rem' }}>
+                                        <p style={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#4b5563', marginBottom: '0.25rem' }}>Prontos para enviar:</p>
+                                        <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+                                            {filesToUpload.map((file, idx) => (
+                                                <li key={idx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.875rem', background: '#f9fafb', padding: '0.25rem 0.5rem', marginBottom: '0.25rem', borderRadius: '0.25rem' }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', overflow: 'hidden' }}>
+                                                        <FileText size={14} color="#4b5563" />
+                                                        <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{file.name}</span>
+                                                    </div>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => removeFileToUpload(idx)}
+                                                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', padding: 0 }}
+                                                    >
+                                                        <X size={14} />
+                                                    </button>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                )}
+
+                                {/* LISTA DE ARQUIVOS JÁ EXISTENTES */}
+                                {existingFiles.length > 0 && (
+                                    <div>
+                                        <p style={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#4b5563', marginBottom: '0.25rem' }}>Arquivos Anteriores:</p>
+                                        <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+                                            {existingFiles.map((file) => (
+                                                <li key={file.id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.875rem', color: '#059669', marginBottom: '0.25rem' }}>
+                                                    <Check size={14} />
+                                                    <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{file.file_name}</span>
+                                                    <span style={{ fontSize: '0.75rem', color: '#6b7280' }}>- Enviado</span>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                )}
                             </div>
 
                             <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1rem' }}>
