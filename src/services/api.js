@@ -16,7 +16,7 @@ export const generateContent = async (cliente, tema, publico, clientData = null,
             })
         }
 
-        const response = await fetch(import.meta.env.VITE_N8N_WEBHOOK_URL, {
+        const response = await fetch('https://n8n-n8n-start.kfocge.easypanel.host/webhook/create-post-workflow', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',

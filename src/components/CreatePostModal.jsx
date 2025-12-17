@@ -22,6 +22,7 @@ const CreatePostModal = ({ onClose, onSuccess }) => {
 
     // Content State
     const [generatedText, setGeneratedText] = useState('')
+    const [currentPostId, setCurrentPostId] = useState(null) // NEW: Track created post ID
     const [imageFile, setImageFile] = useState(null)
 
     // Process State
@@ -57,7 +58,7 @@ const CreatePostModal = ({ onClose, onSuccess }) => {
         console.log("Selected Client ID:", uuid)
         setSelectedClientId(uuid)
 
-        const clientData = clients.find(c => c.id === uuid)
+        const clientData = clients.find(c => String(c.id) === uuid)
         if (clientData) {
             setClienteName(clientData.name) // CHANGED: nome_empresa -> name
             setSelectedClientData(clientData)
@@ -92,6 +93,16 @@ const CreatePostModal = ({ onClose, onSuccess }) => {
             else text = JSON.stringify(data, null, 2)
 
             setGeneratedText(text.replace(/^"|"$/g, '').replace(/\\n/g, '\n'))
+
+            // NEW: Capture and store the Post ID if returned
+            if (data.id) {
+                console.log("Draft created with ID:", data.id)
+                setCurrentPostId(data.id)
+            } else if (data.record_id) {
+                console.log("Draft created with ID:", data.record_id)
+                setCurrentPostId(data.record_id)
+            }
+
             setStep(2)
         } catch (err) {
             console.error(err)
@@ -135,23 +146,36 @@ const CreatePostModal = ({ onClose, onSuccess }) => {
                 if (publicUrlData) finalImageUrl = publicUrlData.publicUrl
             }
 
-            // 2. Insert into DB
+            // 2. Insert or Update logic
             const payload = {
-                id_client: selectedClientId, // Guarantee this is the UUID state
+                id_client: selectedClientId,
                 nome_cliente: clienteName,
                 tema: tema,
                 publico: publico,
-                corpo_post: generatedText, // The edited text
+                corpo_post: generatedText,
                 sugestao_imagem: finalImageUrl,
-                status: 'waiting_approval' // Explicit status
+                status: 'waiting_approval'
             }
-            console.log("Insert Payload:", payload)
+            console.log("Save Payload:", payload)
 
-            const { error: dbError } = await supabase
-                .from('tabela_projetofred1')
-                .insert([payload])
+            if (currentPostId) {
+                // UPDATE existing record
+                console.log("Updating existing post:", currentPostId)
+                const { error: dbError } = await supabase
+                    .from('tabela_projetofred1')
+                    .update(payload)
+                    .eq('id', currentPostId)
 
-            if (dbError) throw dbError
+                if (dbError) throw dbError
+            } else {
+                // INSERT new record (Fallback)
+                console.log("Inserting new post")
+                const { error: dbError } = await supabase
+                    .from('tabela_projetofred1')
+                    .insert([payload])
+
+                if (dbError) throw dbError
+            }
 
             alert("Post salvo com sucesso!")
             if (onSuccess) {
