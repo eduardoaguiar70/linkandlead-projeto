@@ -19,7 +19,73 @@ import AdminLayout from './components/AdminLayout'
 import ClientLoginPage from './pages/ClientLoginPage'
 import ClientDashboardLayout from './components/ClientDashboardLayout'
 import ClientInsightsPage from './pages/ClientInsightsPage'
-import { ClientAuthProvider } from './contexts/ClientAuthContext'
+import { ClientAuthProvider, useClientAuth } from './contexts/ClientAuthContext'
+import { useParams, useNavigate } from 'react-router-dom'
+
+// Magic Link Handler Component
+const MagicLinkHandler = () => {
+  console.log("ROTA ACIONADA: MagicLinkHandler montado") // DEBUG LIFE CHECK
+  const { token } = useParams()
+  console.log("Token from URL:", token)
+
+  const { loginWithToken, loading: authLoading, clientUser } = useClientAuth()
+  const navigate = useNavigate()
+  const [authAttempted, setAuthAttempted] = useState(false)
+  const [error, setError] = useState(null)
+
+  useEffect(() => {
+    const attemptLogin = async () => {
+      if (token && !clientUser) {
+        // Ignore "insights" if it accidentally matches (though Router should handle it)
+        if (token === 'insights' || token === 'login') return;
+
+        const success = await loginWithToken(token)
+        if (!success) {
+          setError('Link inválido ou expirado.')
+        }
+      }
+      setAuthAttempted(true)
+    }
+    attemptLogin()
+  }, [token, clientUser, loginWithToken])
+
+  if (authLoading || !authAttempted) {
+    return (
+      <div className="loading-screen" style={{ display: 'flex', flexDirection: 'column', gap: '1rem', alignItems: 'center', justifyContent: 'center', height: '100vh' }}>
+        <div style={{ width: '40px', height: '40px', border: '3px solid #e2e8f0', borderTopColor: '#2563eb', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
+        <span>Validando acesso...</span>
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '1rem', fontFamily: 'sans-serif' }}>
+        <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#ef4444' }}>Acesso Negado</h2>
+        <p style={{ color: '#64748b' }}>{error}</p>
+        <button
+          onClick={() => navigate('/portal/login')}
+          style={{ padding: '0.75rem 1.5rem', background: '#2563eb', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer' }}
+        >
+          Ir para Login
+        </button>
+      </div>
+    )
+  }
+
+  if (!clientUser) {
+    // Fallback safety
+    return <Navigate to="/portal/login" replace />
+  }
+
+  // Success: Render the standard Dashboard Layout
+  return (
+    <ClientDashboardLayout>
+      <ClientInsightsPage />
+    </ClientDashboardLayout>
+  )
+}
 
 // Validates authentication and role (Admin)
 const ProtectedRoute = ({ children, allowedRoles }) => {
@@ -42,62 +108,61 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
 }
 
 function App() {
-  const [isSessionLoading, setIsSessionLoading] = useState(true)
-
-  useEffect(() => {
-    supabase.auth.getSession().then(() => {
-      setIsSessionLoading(false)
-    })
-  }, [])
-
-  if (isSessionLoading) {
-    return <div className="loading-screen" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', flexDirection: 'column', gap: '1rem' }}>
-      <div style={{ width: '40px', height: '40px', border: '3px solid #e2e8f0', borderTopColor: '#2563eb', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
-      <span style={{ color: '#64748b', fontSize: '0.875rem' }}>Inicializando sistema...</span>
-      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-    </div>
-  }
+  // REMOVED BLOCKING SESSION CHECK here to allow instant render of public routes.
+  // AuthProvider will handle its own loading state for protected routes.
 
   return (
-    <AuthProvider>
-      <Router>
-        <Routes>
-          {/* === PUBLIC ROUTES === */}
-          <Route path="/login" element={<Login />} />
-          <Route path="/aprovacao" element={<ClientPortal />} />
-          <Route path="/post-feedback/:id" element={<PostFeedbackPage />} /> {/* New Feedback Loop */}
+    <Router>
+      <Routes>
+        {/* === CLIENT PORTAL ROUTES (Decoupled from Global AuthProvider) === */}
 
-          {/* === NEW CLIENT PORTAL (Protected by ClientAuthProvider) === */}
-          <Route path="/portal/login" element={<ClientLoginPage />} />
+        {/* 1. Magic Link Route (Public - handled by ClientInsightsPage logic) */}
+        <Route path="/portal/:token" element={
+          <ClientAuthProvider>
+            <ClientInsightsPage />
+          </ClientAuthProvider>
+        } />
 
-          <Route path="/portal/*" element={
-            <ClientAuthProvider>
-              <Routes>
-                <Route element={<ClientDashboardLayout />}>
-                  <Route path="insights" element={<ClientInsightsPage />} />
-                  <Route path="*" element={<Navigate to="insights" replace />} />
-                </Route>
-              </Routes>
-            </ClientAuthProvider>
-          } />
+        {/* 2. Login Page (Public) */}
+        <Route path="/portal/login" element={<ClientLoginPage />} />
 
-          {/* === ADMIN ROUTES (Protected by AuthProvider + Role) === */}
-          <Route element={
-            <ProtectedRoute allowedRoles={['admin']}>
-              <AdminLayout />
-            </ProtectedRoute>
-          }>
-            <Route path="/" element={<AdminPanel />} />
-            <Route path="/posts" element={<PostsPage />} />
-            <Route path="/clients" element={<ClientsPage />} />
-            <Route path="/ideas" element={<IdeasPage />} />
-          </Route>
+        {/* 3. Insights Page (Protected by Layout check logic) */}
+        <Route path="/portal/insights" element={
+          <ClientAuthProvider>
+            <ClientDashboardLayout>
+              <ClientInsightsPage />
+            </ClientDashboardLayout>
+          </ClientAuthProvider>
+        } />
 
-          {/* Fallback to Home */}
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </Router>
-    </AuthProvider>
+        {/* === MAIN APP ROUTES (Wrapped in AuthProvider) === */}
+        <Route path="/*" element={
+          <AuthProvider>
+            <Routes>
+              {/* Public App Routes */}
+              <Route path="/login" element={<Login />} />
+              <Route path="/aprovacao" element={<ClientPortal />} />
+              <Route path="/post-feedback/:id" element={<PostFeedbackPage />} />
+
+              {/* Admin Protected Routes */}
+              <Route element={
+                <ProtectedRoute allowedRoles={['admin']}>
+                  <AdminLayout />
+                </ProtectedRoute>
+              }>
+                <Route path="/" element={<AdminPanel />} />
+                <Route path="/posts" element={<PostsPage />} />
+                <Route path="/clients" element={<ClientsPage />} />
+                <Route path="/ideas" element={<IdeasPage />} />
+              </Route>
+
+              {/* Fallback */}
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </AuthProvider>
+        } />
+      </Routes>
+    </Router>
   )
 }
 

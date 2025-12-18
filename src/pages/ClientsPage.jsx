@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../services/supabaseClient';
 import { useAuth } from '../contexts/AuthContext'; // Import Auth
-import { Pencil, Upload, FileText, X, Check } from 'lucide-react';
+import { Pencil, Upload, FileText, X, Check, Link as LinkIcon } from 'lucide-react';
 
 export default function ClientsPage() {
     const { user } = useAuth(); // Hook Auth
@@ -10,6 +10,29 @@ export default function ClientsPage() {
     const [showModal, setShowModal] = useState(false);
     const [saving, setSaving] = useState(false);
     const [editingClient, setEditingClient] = useState(null);
+    const [toast, setToast] = useState(null); // { message, type }
+
+    // ... (rest of local state) ...
+    // Note: I am NOT changing the lines between 14-27, just re-stating them if needed for context but 'replace_file_content' replaces the block.
+    // To minimize context, I will target specific blocks if possible, but multiple edits are needed.
+    // Better to use a single large block or multiple chunks?
+    // I will use multiple chunks with multi_replace_file_content logic simulated via single call if continuous, or just use replace_file_content for the whole file? No, too large.
+    // I will use replace_file_content for the imports and state first.
+    // Wait, I can't do multiple disparate chunks with replace_file_content.
+    // I should use `multi_replace_file_content` if available? 
+    // Checking tools... `multi_replace_file_content` IS available. 
+    // I will use `default_api:multi_replace_file_content`.
+    // Wait, the user prompt showed `default_api:replace_file_content` and `default_api:multi_replace_file_content` descriptors.
+    // Yes, I have `multi_replace_file_content`.
+
+    // Proceeding with `multi_replace_file_content`.
+
+    // Chunk 1: Imports
+    // Chunk 2: Toast State
+    // Chunk 3: handleCopyLink function
+    // Chunk 4: Button in Table
+    // Chunk 5: Toast UI render
+
 
     // ... (rest of local state) ...
 
@@ -125,6 +148,18 @@ export default function ClientsPage() {
         } finally {
             setSaving(false);
         }
+    };
+
+    const handleCopyLink = (client) => {
+        if (!client.access_token) {
+            alert("Este cliente não possui um token de acesso.");
+            return;
+        }
+        const link = `${window.location.origin}/portal/${client.access_token}`;
+        navigator.clipboard.writeText(link);
+
+        setToast({ message: "Link de acesso copiado!", type: "success" });
+        setTimeout(() => setToast(null), 3000);
     };
 
     const sanitizeFileName = (originalName) => {
@@ -304,6 +339,20 @@ export default function ClientsPage() {
                                         <td style={{ padding: '1rem', fontSize: '0.875rem' }}>{client.tone_of_voice}</td>
                                         <td style={{ padding: '1rem', textAlign: 'right' }}>
                                             <button
+                                                onClick={() => handleCopyLink(client)}
+                                                style={{
+                                                    background: 'transparent',
+                                                    border: 'none',
+                                                    cursor: 'pointer',
+                                                    color: '#16a34a', // Green
+                                                    padding: '0.25rem',
+                                                    marginRight: '0.5rem'
+                                                }}
+                                                title="Copiar Link de Acesso"
+                                            >
+                                                <LinkIcon size={18} />
+                                            </button>
+                                            <button
                                                 onClick={() => handleEdit(client)}
                                                 style={{
                                                     background: 'transparent',
@@ -322,6 +371,28 @@ export default function ClientsPage() {
                             )}
                         </tbody>
                     </table>
+                </div>
+            )}
+
+            {/* TOAST */}
+            {toast && (
+                <div style={{
+                    position: 'fixed',
+                    bottom: '2rem',
+                    right: '2rem',
+                    background: toast.type === 'error' ? '#ef4444' : '#22c55e',
+                    color: 'white',
+                    padding: '1rem 1.5rem',
+                    borderRadius: '8px',
+                    boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    zIndex: 100,
+                    animation: 'slideIn 0.3s ease-out'
+                }}>
+                    <Check size={18} />
+                    <span style={{ fontWeight: 600 }}>{toast.message}</span>
                 </div>
             )}
 

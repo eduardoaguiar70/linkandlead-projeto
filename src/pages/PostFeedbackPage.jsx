@@ -311,192 +311,216 @@ const pageStyles = `
 `
 
 const PostFeedbackPage = () => {
-    const { id } = useParams()
-    const navigate = useNavigate()
-    const { user, profile, loading: authLoading } = useAuth()
-    const [post, setPost] = useState(null)
-    const [comments, setComments] = useState([])
-    const [loading, setLoading] = useState(true)
-    const [messageText, setMessageText] = useState('')
-    const [sending, setSending] = useState(false)
-    const [uploading, setUploading] = useState(false)
+  const { id } = useParams()
+  const navigate = useNavigate()
+  const { user, profile, loading: authLoading } = useAuth()
+  const [post, setPost] = useState(null)
+  const [comments, setComments] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [messageText, setMessageText] = useState('')
+  const [sending, setSending] = useState(false)
+  const [uploading, setUploading] = useState(false)
 
-    const commentsEndRef = useRef(null)
-    const inputRef = useRef(null)
+  const commentsEndRef = useRef(null)
+  const inputRef = useRef(null)
 
-    const isAdmin = profile?.role === 'admin'
-    const isClient = profile?.role === 'client'
+  const isAdmin = profile?.role === 'admin'
+  const isClient = profile?.role === 'client'
 
-    useEffect(() => { commentsEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [comments])
+  useEffect(() => { commentsEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [comments])
 
-    useEffect(() => {
-        if (!id) return
-        const fetchData = async () => {
-            try {
-                const { data: postData } = await supabase.from('tabela_projetofred1').select('*').eq('id', id).single()
-                setPost(postData)
-                const { data: commentsData } = await supabase.from('post_comments').select('*').eq('post_id', id).order('created_at', { ascending: true })
-                setComments(commentsData || [])
-            } catch (err) { console.error(err) } finally { setLoading(false) }
-        }
-        fetchData()
-        const channel = supabase.channel(`post_feed_${id}`).on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'post_comments', filter: `post_id=eq.${id}` }, (pl) => setComments(prev => [...prev, pl.new])).subscribe()
-        return () => { supabase.removeChannel(channel) }
-    }, [id])
-
-    const handleSendMessage = async () => {
-        if (!messageText.trim() || !user) return
-        setSending(true)
-        try {
-            const authorName = isAdmin ? 'Link&Lead' : (post?.nome_cliente || 'Cliente')
-            await supabase.from('post_comments').insert([{ post_id: id, content: messageText, role: isAdmin ? 'admin' : 'client', author_name: authorName }])
-            setMessageText('')
-        } catch (err) { alert('Erro ao enviar.') } finally { setSending(false) }
+  useEffect(() => {
+    if (!id) return
+    const fetchData = async () => {
+      try {
+        const { data: postData } = await supabase.from('tabela_projetofred1').select('*').eq('id', id).single()
+        setPost(postData)
+        const { data: commentsData } = await supabase.from('post_comments').select('*').eq('post_id', id).order('created_at', { ascending: true })
+        setComments(commentsData || [])
+      } catch (err) { console.error(err) } finally { setLoading(false) }
     }
+    fetchData()
+    const channel = supabase.channel(`post_feed_${id}`).on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'post_comments', filter: `post_id=eq.${id}` }, (pl) => setComments(prev => [...prev, pl.new])).subscribe()
+    return () => { supabase.removeChannel(channel) }
+  }, [id])
 
-    const handleUpdateStatus = async (newStatus) => {
-        if (!isClient) return
-        try {
-            await supabase.from('tabela_projetofred1').update({ status: newStatus }).eq('id', id)
-            setPost({ ...post, status: newStatus })
-            if (newStatus === 'APPROVED') alert('Post Aprovado! 🚀')
-            else inputRef.current?.focus()
-        } catch (err) { alert('Erro.') }
-    }
+  const handleSendMessage = async () => {
+    if (!messageText.trim() || !user) return
+    setSending(true)
+    try {
+      const authorName = isAdmin ? 'Link&Lead' : (post?.nome_cliente || 'Cliente')
+      await supabase.from('post_comments').insert([{ post_id: id, content: messageText, role: isAdmin ? 'admin' : 'client', author_name: authorName }])
+      setMessageText('')
+    } catch (err) { alert('Erro ao enviar.') } finally { setSending(false) }
+  }
 
-    const handleImageUpload = async (e) => {
-        const file = e.target.files[0]
-        if (!file) return
-        setUploading(true)
-        try {
-            const fileName = `${id}_${Date.now()}_${file.name}`
-            await supabase.storage.from('post-images').upload(fileName, file)
-            const { data } = supabase.storage.from('post-images').getPublicUrl(fileName)
-            await supabase.from('tabela_projetofred1').update({ sugestao_imagem: data.publicUrl }).eq('id', id)
-            setPost({ ...post, sugestao_imagem: data.publicUrl })
-        } catch (err) { alert('Erro no upload.') } finally { setUploading(false) }
-    }
+  const handleUpdateStatus = async (newStatus) => {
+    if (!isClient) return
+    try {
+      await supabase.from('tabela_projetofred1').update({ status: newStatus }).eq('id', id)
+      setPost({ ...post, status: newStatus })
+      if (newStatus === 'APPROVED') alert('Post Aprovado! 🚀')
+      else inputRef.current?.focus()
+    } catch (err) { alert('Erro.') }
+  }
 
-    if (authLoading || loading) return <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Loader2 className="animate-spin" /></div>
-    if (!post) return <div>404 Post Not Found</div>
+  const handleImageUpload = async (e) => {
+    const file = e.target.files[0]
+    if (!file) return
+    setUploading(true)
+    try {
+      const fileName = `${id}_${Date.now()}_${file.name}`
+      await supabase.storage.from('post-images').upload(fileName, file)
+      const { data } = supabase.storage.from('post-images').getPublicUrl(fileName)
 
-    const statusObj = post.status === 'APPROVED' ? { cls: 'status-approved', txt: 'Aprovado' } : post.status === 'CHANGES_REQUESTED' ? { cls: 'status-changes', txt: 'Revisão Solicitada' } : { cls: 'status-pending', txt: 'Pendente' }
+      // Save as array [url]
+      const newImageArray = [data.publicUrl]
 
-    return (
-        <div className="feedback-page">
-            <style>{pageStyles}</style>
+      await supabase.from('tabela_projetofred1').update({ sugestao_imagem: newImageArray }).eq('id', id)
+      setPost({ ...post, sugestao_imagem: newImageArray })
+    } catch (err) { alert('Erro no upload.') } finally { setUploading(false) }
+  }
 
-            <div className="page-container">
-                <div className="back-nav">
-                    <button onClick={() => navigate(-1)} className="btn-back">
-                        <ArrowLeft size={16} /> Voltar
-                    </button>
-                </div>
+  if (authLoading || loading) return <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Loader2 className="animate-spin" /></div>
+  if (!post) return <div>404 Post Not Found</div>
 
-                {/* --- 1. POST PREVIEW (Top) --- */}
-                <div className="post-preview-card">
-                    {/* Header */}
-                    <div className="preview-header">
-                        <div className="preview-avatar">
-                            {post.nome_cliente ? post.nome_cliente.charAt(0).toUpperCase() : 'C'}
-                        </div>
-                        <div className="preview-meta">
-                            <h3>{post.nome_cliente || 'Nome do Cliente'}</h3>
-                            <p className="preview-subtext">Post Preview • {new Date(post.created_at).toLocaleDateString()}</p>
-                        </div>
-                        <div style={{ marginLeft: 'auto' }}>
-                            <div className={`status-banner ${statusObj.cls}`}>
-                                {statusObj.txt}
-                            </div>
-                        </div>
-                    </div>
+  const normalizedStatus = (post.status || '').toUpperCase()
+  const statusObj = normalizedStatus === 'APPROVED' || normalizedStatus.includes('APPROV') ? { cls: 'status-approved', txt: 'Aprovado' } : normalizedStatus === 'CHANGES_REQUESTED' || normalizedStatus.includes('REVI') || normalizedStatus.includes('CHANGE') ? { cls: 'status-changes', txt: 'Revisão Solicitada' } : { cls: 'status-pending', txt: 'Pendente' }
 
-                    {/* Text Content */}
-                    <div className="post-content-text">
-                        {post.corpo_post}
-                    </div>
+  // Helper to get array
+  const images = Array.isArray(post.sugestao_imagem) ? post.sugestao_imagem : post.sugestao_imagem ? [post.sugestao_imagem] : []
 
-                    {/* Media Content */}
-                    <div className="post-media" style={{ position: 'relative' }}>
-                        {post.sugestao_imagem ? (
-                            <img src={post.sugestao_imagem} alt="Post" />
-                        ) : (
-                            <div className="media-placeholder">
-                                <ImageIcon size={48} style={{ opacity: 0.3, marginBottom: 4 }} />
-                                <span>Sem imagem selecionada</span>
-                            </div>
-                        )}
+  return (
+    <div className="feedback-page">
+      <style>{pageStyles}</style>
 
-                        {isClient && (
-                            <label className="upload-btn-overlay">
-                                {uploading ? <Loader2 size={12} className="animate-spin" /> : <ImageIcon size={12} />}
-                                {uploading ? '...' : 'Alterar Imagem'}
-                                <input type="file" onChange={handleImageUpload} hidden disabled={uploading} />
-                            </label>
-                        )}
-                    </div>
-
-                    {/* Mock Footer */}
-                    <div className="social-footer">
-                        <div className="mock-action"><ThumbsUp size={16} /> Curtir</div>
-                        <div className="mock-action"><MessageCircle size={16} /> Comentar</div>
-                    </div>
-                </div>
-
-                {/* --- 2. FEEDBACK (Messages) --- */}
-                <div className="feedback-section">
-                    <div className="feedback-title">Comentários</div>
-                    <div className="chat-scroll">
-                        {comments.length === 0 && <div style={{ textAlign: 'center', color: '#cbd5e1', padding: '1rem', fontSize: '0.9rem' }}>Nenhum comentário ainda.</div>}
-                        {comments.map((msg, i) => {
-                            const isAdminMsg = msg.role === 'admin'
-                            return (
-                                <div key={i} className={`message-row ${isAdminMsg ? 'row-admin' : 'row-client'}`}>
-                                    <div className={`chat-bubble ${isAdminMsg ? 'bubble-admin' : 'bubble-client'}`}>
-                                        {msg.content}
-                                    </div>
-                                    <div className="chat-meta">{msg.author_name} • {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
-                                </div>
-                            )
-                        })}
-                        <div ref={commentsEndRef}></div>
-                    </div>
-                </div>
-            </div>
-
-            {/* --- 3. FIXED COMPACT FOOTER --- */}
-            <div className="fixed-footer">
-                <div className="footer-content">
-                    {/* Chat Input */}
-                    <div className="input-wrapper">
-                        <input
-                            ref={inputRef}
-                            className="chat-input"
-                            placeholder="Digite sua mensagem..."
-                            value={messageText}
-                            onChange={e => setMessageText(e.target.value)}
-                            onKeyDown={e => e.key === 'Enter' && handleSendMessage()}
-                        />
-                        <button className="btn-send" onClick={handleSendMessage} disabled={sending || !messageText.trim()}>
-                            {sending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
-                        </button>
-                    </div>
-
-                    {/* Actions (Only Client) */}
-                    {isClient && (
-                        <div className="approval-actions">
-                            <button className="btn-action btn-request" onClick={() => handleUpdateStatus('CHANGES_REQUESTED')}>
-                                Solicitar Alteração
-                            </button>
-                            <button className="btn-action btn-approve" onClick={() => handleUpdateStatus('APPROVED')}>
-                                Aprovar e Publicar
-                            </button>
-                        </div>
-                    )}
-                </div>
-            </div>
+      <div className="page-container">
+        <div className="back-nav">
+          <button onClick={() => navigate(-1)} className="btn-back">
+            <ArrowLeft size={16} /> Voltar
+          </button>
         </div>
-    )
+
+        {/* --- 1. POST PREVIEW (Top) --- */}
+        <div className="post-preview-card">
+          {/* Header */}
+          <div className="preview-header">
+            <div className="preview-avatar">
+              {post.nome_cliente ? post.nome_cliente.charAt(0).toUpperCase() : 'C'}
+            </div>
+            <div className="preview-meta">
+              <h3>{post.nome_cliente || 'Nome do Cliente'}</h3>
+              <p className="preview-subtext">Post Preview • {new Date(post.created_at).toLocaleDateString()}</p>
+            </div>
+            <div style={{ marginLeft: 'auto' }}>
+              <div className={`status-banner ${statusObj.cls}`}>
+                {statusObj.txt}
+              </div>
+            </div>
+          </div>
+
+          {/* Text Content */}
+          <div className="post-content-text">
+            {post.corpo_post}
+          </div>
+
+          {/* Media Content */}
+          <div className="post-media" style={{ position: 'relative', background: '#000', minHeight: '300px', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+            {images.length > 0 ? (
+              <div style={{ display: 'flex', overflowX: 'auto', width: '100%', scrollSnapType: 'x mandatory', gap: '4px' }}>
+                {images.map((url, idx) => (
+                  <img
+                    key={idx}
+                    src={url}
+                    alt={`Slide ${idx}`}
+                    style={{
+                      flex: '0 0 100%',
+                      width: '100%',
+                      height: 'auto',
+                      maxHeight: '600px',
+                      objectFit: 'contain',
+                      scrollSnapAlign: 'start'
+                    }}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="media-placeholder">
+                <ImageIcon size={48} style={{ opacity: 0.3, marginBottom: 4 }} />
+                <span>Sem imagem selecionada</span>
+              </div>
+            )}
+
+            {isClient && (
+              <label className="upload-btn-overlay">
+                {uploading ? <Loader2 size={12} className="animate-spin" /> : <ImageIcon size={12} />}
+                {uploading ? '...' : 'Alterar Imagem'}
+                <input type="file" onChange={handleImageUpload} hidden disabled={uploading} />
+              </label>
+            )}
+          </div>
+
+          {/* Mock Footer */}
+          <div className="social-footer">
+            <div className="mock-action"><ThumbsUp size={16} /> Curtir</div>
+            <div className="mock-action"><MessageCircle size={16} /> Comentar</div>
+          </div>
+        </div>
+
+        {/* --- 2. FEEDBACK (Messages) --- */}
+        <div className="feedback-section">
+          <div className="feedback-title">Comentários</div>
+          <div className="chat-scroll">
+            {comments.length === 0 && <div style={{ textAlign: 'center', color: '#cbd5e1', padding: '1rem', fontSize: '0.9rem' }}>Nenhum comentário ainda.</div>}
+            {comments.map((msg, i) => {
+              const isAdminMsg = msg.role === 'admin'
+              return (
+                <div key={i} className={`message-row ${isAdminMsg ? 'row-admin' : 'row-client'}`}>
+                  <div className={`chat-bubble ${isAdminMsg ? 'bubble-admin' : 'bubble-client'}`}>
+                    {msg.content}
+                  </div>
+                  <div className="chat-meta">{msg.author_name} • {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                </div>
+              )
+            })}
+            <div ref={commentsEndRef}></div>
+          </div>
+        </div>
+      </div>
+
+      {/* --- 3. FIXED COMPACT FOOTER --- */}
+      <div className="fixed-footer">
+        <div className="footer-content">
+          {/* Chat Input */}
+          <div className="input-wrapper">
+            <input
+              ref={inputRef}
+              className="chat-input"
+              placeholder="Digite sua mensagem..."
+              value={messageText}
+              onChange={e => setMessageText(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleSendMessage()}
+            />
+            <button className="btn-send" onClick={handleSendMessage} disabled={sending || !messageText.trim()}>
+              {sending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+            </button>
+          </div>
+
+          {/* Actions (Only Client) */}
+          {isClient && (
+            <div className="approval-actions">
+              <button className="btn-action btn-request" onClick={() => handleUpdateStatus('CHANGES_REQUESTED')}>
+                Solicitar Alteração
+              </button>
+              <button className="btn-action btn-approve" onClick={() => handleUpdateStatus('APPROVED')}>
+                Aprovar e Publicar
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
 }
 
 export default PostFeedbackPage

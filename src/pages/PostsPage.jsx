@@ -18,6 +18,25 @@ import './PostsPage.css'
 
 const PostsPage = () => {
     // Dashboard States
+    // Helper for Status Translation
+    const getStatusLabel = (status) => {
+        if (!status) return 'Desconhecido'
+
+        const map = {
+            'WAITING_APPROVAL': 'Aguardando Aprovação',
+            'CHANGES_REQUESTED': 'Alteração Solicitada',
+            'APPROVED': 'Aprovado',
+            // Redundancy
+            'waiting_approval': 'Aguardando Aprovação',
+            'changes_requested': 'Alteração Solicitada',
+            'approved': 'Aprovado',
+            'postado': 'Postado',
+            'POSTADO': 'Postado'
+        }
+
+        return map[status] || map[status.toUpperCase()] || map[status.toLowerCase()] || status
+    }
+
     const { profile, loading: authLoading } = useAuth()
     const navigate = useNavigate()
     const [posts, setPosts] = useState([])
@@ -30,36 +49,21 @@ const PostsPage = () => {
     // Notifications State
     const [unreadCounts, setUnreadCounts] = useState({})
 
+    // Stable Fetch Functions
+    // Safe Mount Check
+    const isMounted = React.useRef(true)
     useEffect(() => {
-        if (!authLoading && profile) {
-            fetchPosts()
-            fetchUnreadMessages()
-        }
+        return () => { isMounted.current = false }
+    }, [])
 
-        // Realtime listener for new messages to update badges instantly
-        const channel = supabase.channel('admin_dashboard_messages')
-            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'post_comments' }, (payload) => {
-                if (payload.new.role === 'client') {
-                    setUnreadCounts(prev => ({
-                        ...prev,
-                        [payload.new.post_id]: (prev[payload.new.post_id] || 0) + 1
-                    }))
-                }
-            })
-            .subscribe()
-
-        return () => {
-            supabase.removeChannel(channel)
-        }
-    }, [authLoading, profile])
-
-    const fetchPosts = async () => {
-        setLoadingPosts(true)
+    const fetchPosts = React.useCallback(async () => {
+        if (isMounted.current) setLoadingPosts(true)
         try {
             let query = supabase
                 .from('tabela_projetofred1')
                 .select('*')
                 .order('id', { ascending: false })
+                .range(0, 49) // Limit to last 50 items
 
             // Role-based filtering
             if (profile?.role === 'client') {
@@ -67,24 +71,25 @@ const PostsPage = () => {
                     query = query.eq('nome_cliente', profile.nome_empresa)
                 } else {
                     console.warn('Cliente sem nome_empresa definido.')
-                    setPosts([])
-                    setLoadingPosts(false)
+                    if (isMounted.current) {
+                        setPosts([])
+                        setLoadingPosts(false)
+                    }
                     return
                 }
             }
 
             const { data, error } = await query
-
             if (error) throw error
-            setPosts(data || [])
+            if (isMounted.current) setPosts(data || [])
         } catch (err) {
             console.error('Erro ao buscar posts:', err)
         } finally {
-            setLoadingPosts(false)
+            if (isMounted.current) setLoadingPosts(false)
         }
-    }
+    }, [profile?.role, profile?.nome_empresa])
 
-    const fetchUnreadMessages = async () => {
+    const fetchUnreadMessages = React.useCallback(async () => {
         try {
             const { data, error } = await supabase
                 .from('post_comments')
@@ -94,17 +99,40 @@ const PostsPage = () => {
 
             if (error) throw error
 
-            // Count occurrences per post_id
             const counts = {}
             data.forEach(msg => {
                 counts[msg.post_id] = (counts[msg.post_id] || 0) + 1
             })
             setUnreadCounts(counts)
-
         } catch (err) {
             console.error("Erro ao buscar notificações:", err)
         }
-    }
+    }, [])
+
+    useEffect(() => {
+        if (!authLoading && profile) {
+            // Initial Load
+            fetchPosts()
+            fetchUnreadMessages()
+
+            // Realtime subscription (Cleanup enforced)
+            const channel = supabase
+                .channel('realtime:posts_and_comments')
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'tabela_projetofred1' }, () => {
+                    fetchPosts()
+                })
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'post_comments' }, () => {
+                    fetchUnreadMessages()
+                })
+                .subscribe()
+
+            return () => {
+                supabase.removeChannel(channel)
+            }
+        }
+    }, [authLoading, profile?.id, fetchPosts, fetchUnreadMessages]) // Primitive dependency + memozied functions
+
+
 
     const handleDelete = async (id) => {
         if (!window.confirm('Tem certeza que deseja excluir este post?')) return
@@ -129,20 +157,25 @@ const PostsPage = () => {
     }
 
     const getStatusColor = (status) => {
-        const s = (status || 'waiting_approval').toLowerCase()
-        if (s.includes('approved') || s.includes('aprovado')) return 'badge-success'
-        if (s.includes('changes_requested') || s.includes('revis')) return 'badge-warning'
-        if (s.includes('postado')) return 'badge-purple'
+        const s = (status || 'WAITING_APPROVAL').toUpperCase()
+        if (s === 'APPROVED' || s === 'APROVADO' || s.includes('APPROV')) return 'badge-success'
+        if (s === 'CHANGES_REQUESTED' || s.includes('CHANGE') || s.includes('REVI')) return 'badge-warning'
+        if (s.includes('POSTADO')) return 'badge-purple'
         return 'badge-info'
     }
 
+    // Filter Logic
     const filteredPosts = posts.filter(post => {
+        // 1. Client Filter (URL)
         if (clientFilter && post.nome_cliente !== clientFilter) return false
+
+        // 2. Tab Filter
         if (statusFilter === 'Todos') return true
-        const s = post.status ? post.status.toLowerCase() : ''
-        if (statusFilter === 'Pendentes') return s === 'waiting_approval'
-        if (statusFilter === 'Aprovados') return s === 'approved'
-        if (statusFilter === 'Revisão') return s === 'revisão' || s === 'changes_requested'
+
+        const s = (post.status || 'WAITING_APPROVAL').toUpperCase()
+        if (statusFilter === 'Pendentes') return s === 'WAITING_APPROVAL' || s.includes('WAITING')
+        if (statusFilter === 'Aprovados') return s === 'APPROVED' || s.includes('APPROV')
+        if (statusFilter === 'Revisão') return s === 'CHANGES_REQUESTED' || s.includes('REVI')
         return true
     })
 
@@ -225,7 +258,7 @@ const PostsPage = () => {
                                             <td>{post.publico || '-'}</td>
                                             <td>
                                                 <span className={`badge ${getStatusColor(post.status)}`}>
-                                                    {post.status || 'Aguardando'}
+                                                    {getStatusLabel(post.status)}
                                                 </span>
                                             </td>
                                             <td>

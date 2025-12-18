@@ -80,13 +80,20 @@ const ClientDashboard = () => {
                                     </div>
                                 )}
                                 {/* Badge de Status Flutuante */}
+                                {/* Badge de Status Flutuante */}
                                 <div className="absolute top-3 right-3">
-                                    <span className={`px-3 py-1 rounded-full text-xs font-bold shadow-sm backdrop-blur-md ${(post.status || '').toUpperCase() === 'APPROVED' ? 'bg-green-100/90 text-green-700' :
-                                            (post.status || '').toLowerCase().includes('waiting') || (post.status || '').toLowerCase().includes('pending') ? 'bg-amber-100/90 text-amber-700' :
-                                                'bg-gray-100/90 text-gray-600'
-                                        }`}>
-                                        {(post.status || '').toUpperCase() === 'APPROVED' ? 'Aprovado' :
-                                            (post.status || '').toLowerCase().includes('waiting') || (post.status || '').toLowerCase().includes('pending') ? 'Pendente' : 'Em Revisão'}
+                                    <span className={`px-3 py-1 rounded-full text-xs font-bold shadow-sm backdrop-blur-md ${(() => {
+                                        const s = (post.status || '').toUpperCase();
+                                        if (s === 'APPROVED' || s.includes('APPROV')) return 'bg-green-100/90 text-green-700';
+                                        if (s.includes('WAITING') || s.includes('PEND')) return 'bg-amber-100/90 text-amber-700';
+                                        return 'bg-gray-100/90 text-gray-600';
+                                    })()}`}>
+                                        {(() => {
+                                            const s = (post.status || '').toUpperCase();
+                                            if (s === 'APPROVED' || s.includes('APPROV')) return 'Aprovado';
+                                            if (s.includes('WAITING') || s.includes('PEND')) return 'Pendente';
+                                            return 'Em Revisão';
+                                        })()}
                                     </span>
                                 </div>
                             </div>
@@ -107,7 +114,7 @@ const ClientDashboard = () => {
                                     onClick={() => navigate(`/post-feedback/${post.id}`)}
                                     className="w-full mt-4 py-2.5 rounded-xl bg-purple-50 text-purple-700 font-semibold text-sm hover:bg-purple-600 hover:text-white transition-all duration-300 flex items-center justify-center gap-2"
                                 >
-                                    {(post.status || '').toUpperCase() === 'APPROVED' ? 'Ver Detalhes' : 'Revisar Conteúdo'}
+                                    {(post.status || '').toUpperCase().includes('APPROV') ? 'Ver Detalhes' : 'Revisar Conteúdo'}
                                     <span>→</span>
                                 </button>
                             </div>

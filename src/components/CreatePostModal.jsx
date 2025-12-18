@@ -21,9 +21,10 @@ const CreatePostModal = ({ onClose, onSuccess }) => {
     const [publico, setPublico] = useState('')
 
     // Content State
+    // Content State
     const [generatedText, setGeneratedText] = useState('')
     const [currentPostId, setCurrentPostId] = useState(null) // NEW: Track created post ID
-    const [imageFile, setImageFile] = useState(null)
+    const [selectedFiles, setSelectedFiles] = useState([])
 
     // Process State
     const [loading, setLoading] = useState(false) // Generic loading for actions
@@ -125,25 +126,33 @@ const CreatePostModal = ({ onClose, onSuccess }) => {
         setErrorMsg(null)
 
         try {
-            let finalImageUrl = null
+            let finalImageUrls = []
 
-            // 1. Upload Image if exists
-            if (imageFile) {
-                const fileExt = imageFile.name.split('.').pop()
-                const sanitizedName = imageFile.name.replace(/[^a-zA-Z0-9]/g, '_')
-                const fileName = `${Date.now()}_${sanitizedName}.${fileExt}`
+            // 1. Upload Images if exist
+            if (selectedFiles.length > 0) {
+                console.log(`Uploading ${selectedFiles.length} images...`)
 
-                const { error: uploadError } = await supabase.storage
-                    .from('post-images')
-                    .upload(fileName, imageFile)
+                // Map all uploads to promises
+                const uploadPromises = selectedFiles.map(async (file) => {
+                    const fileExt = file.name.split('.').pop()
+                    const sanitizedName = file.name.replace(/[^a-zA-Z0-9]/g, '_')
+                    const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}_${sanitizedName}.${fileExt}`
 
-                if (uploadError) throw uploadError
+                    const { error: uploadError } = await supabase.storage
+                        .from('post-images')
+                        .upload(fileName, file)
 
-                const { data: publicUrlData } = supabase.storage
-                    .from('post-images')
-                    .getPublicUrl(fileName)
+                    if (uploadError) throw uploadError
 
-                if (publicUrlData) finalImageUrl = publicUrlData.publicUrl
+                    const { data: publicUrlData } = supabase.storage
+                        .from('post-images')
+                        .getPublicUrl(fileName)
+
+                    return publicUrlData.publicUrl
+                })
+
+                // Wait for all uploads
+                finalImageUrls = await Promise.all(uploadPromises)
             }
 
             // 2. Insert or Update logic
@@ -153,7 +162,7 @@ const CreatePostModal = ({ onClose, onSuccess }) => {
                 tema: tema,
                 publico: publico,
                 corpo_post: generatedText,
-                sugestao_imagem: finalImageUrl,
+                sugestao_imagem: finalImageUrls, // Save array of URLs
                 status: 'waiting_approval'
             }
             console.log("Save Payload:", payload)
@@ -193,10 +202,21 @@ const CreatePostModal = ({ onClose, onSuccess }) => {
     }
 
     const handleFileChange = (e) => {
-        const file = e.target.files[0]
-        if (file) {
-            if (!file.type.startsWith('image/')) return alert('Apenas imagens.')
-            setImageFile(file)
+        if (e.target.files && e.target.files.length > 0) {
+            const newFiles = Array.from(e.target.files)
+
+            // Validate files
+            const validFiles = newFiles.filter(file => {
+                if (file.size > 50 * 1024 * 1024) {
+                    alert(`Arquivo ${file.name} excede o limite de 50MB e foi ignorado.`)
+                    return false
+                }
+                return true
+            })
+
+            if (validFiles.length > 0) {
+                setSelectedFiles(prev => [...prev, ...validFiles])
+            }
         }
     }
 
@@ -307,21 +327,47 @@ const CreatePostModal = ({ onClose, onSuccess }) => {
                     {step === 3 && (
                         <div className="fade-in">
                             <div style={{ marginBottom: '2rem' }}>
-                                <label className="input-label">Deseja anexar uma imagem?</label>
-                                <div className={`upload-wrapper ${imageFile ? 'has-file' : ''}`} style={{ marginTop: '0.5rem' }}>
-                                    <input type="file" accept="image/*" onChange={handleFileChange} className="file-input-hidden" />
-                                    {imageFile ? (
-                                        <div className="upload-content-selected">
-                                            <div className="file-info">
-                                                <ImageIcon size={20} className="file-icon-selected" />
-                                                <span className="file-name">{imageFile.name}</span>
-                                            </div>
-                                            <button onClick={() => setImageFile(null)} className="btn-remove-file"><X size={16} /></button>
+                                <label className="input-label">Deseja anexar imagens? (Carrossel)</label>
+                                <div className={`upload-wrapper ${selectedFiles.length > 0 ? 'has-file' : ''}`} style={{ marginTop: '0.5rem', minHeight: '120px', flexDirection: 'column', alignItems: 'flex-start', padding: '1rem' }}>
+                                    <input
+                                        type="file"
+                                        accept="image/*"
+                                        multiple
+                                        onChange={handleFileChange}
+                                        className="file-input-hidden"
+                                    />
+
+                                    {selectedFiles.length === 0 ? (
+                                        <div className="upload-content-empty" style={{ width: '100%', justifyContent: 'center', height: '100%' }}>
+                                            <UploadCloud size={24} className="upload-icon-empty" />
+                                            <span className="upload-text">Clique para Upload de Imagens (Múltiplas)</span>
                                         </div>
                                     ) : (
-                                        <div className="upload-content-empty">
-                                            <UploadCloud size={24} className="upload-icon-empty" />
-                                            <span className="upload-text">Clique para Upload (Opcional)</span>
+                                        <div style={{ width: '100%' }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                                                <span className="file-name" style={{ fontSize: '0.85rem', color: '#64748b' }}>
+                                                    {selectedFiles.length} imagem(ns) selecionada(s)
+                                                </span>
+                                                <button
+                                                    onClick={(e) => { e.stopPropagation(); setSelectedFiles([]) }}
+                                                    className="btn-remove-file"
+                                                    title="Limpar tudo"
+                                                >
+                                                    <X size={16} />
+                                                </button>
+                                            </div>
+
+                                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(80px, 1fr))', gap: '0.5rem' }}>
+                                                {selectedFiles.map((file, index) => (
+                                                    <div key={index} style={{ position: 'relative', aspectRatio: '1/1', borderRadius: '8px', overflow: 'hidden', border: '1px solid #e2e8f0' }}>
+                                                        <img
+                                                            src={URL.createObjectURL(file)}
+                                                            alt={`Preview ${index}`}
+                                                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                                        />
+                                                    </div>
+                                                ))}
+                                            </div>
                                         </div>
                                     )}
                                 </div>

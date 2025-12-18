@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { useClientAuth } from '../contexts/ClientAuthContext'
 import { supabase } from '../services/supabaseClient'
+import { useParams } from 'react-router-dom'
 import {
     LayoutDashboard,
     CheckCircle2,
@@ -216,10 +217,6 @@ const pageStyles = `
 
 // --- SUB-COMPONENT: QUESTION RESPONSE MODAL ---
 const QuestionResponseModal = ({ question, onClose, onResponseSent }) => {
-    // ... [KEEPING EXISTING LOGIC UNCHANGED] ...
-    // Note: To save space in this response, I'm assuming the logic is identical to before.
-    // However, I must write the FULL file content for `write_to_file`.
-    // I will copy-paste the logic from the previous step.
     const [answerText, setAnswerText] = useState('')
     const [isRecording, setIsRecording] = useState(false)
     const [audioBlob, setAudioBlob] = useState(null)
@@ -257,6 +254,13 @@ const QuestionResponseModal = ({ question, onClose, onResponseSent }) => {
         } catch (err) { alert('Erro microfone: ' + err.message) }
     }
 
+    // Cleanup interval on unmount
+    useEffect(() => {
+        return () => {
+            if (timerRef.current) clearInterval(timerRef.current)
+        }
+    }, [])
+
     const stopRecording = () => {
         if (mediaRecorderRef.current && isRecording) {
             mediaRecorderRef.current.stop()
@@ -271,6 +275,7 @@ const QuestionResponseModal = ({ question, onClose, onResponseSent }) => {
 
     const handleProcessAudio = async () => {
         if (!audioBlob) return alert("Áudio vazio.")
+        if (audioBlob.size > 50 * 1024 * 1024) return alert("O arquivo de áudio excede o limite de 50MB.")
         setIsProcessing(true)
         try {
             const fileName = "audio_" + Date.now() + ".webm"
@@ -378,27 +383,111 @@ const PostReviewModal = ({ post, onClose, onReview }) => {
 
 // --- MAIN PAGE ---
 const ClientInsightsPage = () => {
-    const { clientId, clientLegacyId, clientName } = useClientAuth()
+    // Legacy/Context access (still used for Admin Emulation or Standard Login)
+    const { clientId: contextId, clientLegacyId, clientName: contextName } = useClientAuth()
+
     const [posts, setPosts] = useState([])
     const [questions, setQuestions] = useState([])
-    const [loading, setLoading] = useState(true)
+    const [status, setStatus] = useState('loading') // 'loading', 'success', 'error'
+    const [errorMessage, setErrorMessage] = useState('')
+    const [clientData, setClientData] = useState(null) // Local client data for Magic Link
+
     const [selectedQuestion, setSelectedQuestion] = useState(null)
     const [selectedPost, setSelectedPost] = useState(null)
 
-    useEffect(() => { if (clientId) loadDashboard() }, [clientId, clientLegacyId])
+    // "RADICAL SIMPLIFICATION" - Single Load Logic
+    useEffect(() => {
+        let isMounted = true
 
-    const loadDashboard = async () => {
-        try {
-            setLoading(true)
-            if (clientLegacyId) {
-                const { data } = await supabase.from('interview_questions').select('*').eq('client_id', clientLegacyId).eq('status', 'pending').order('created_at', { ascending: false })
-                setQuestions(data || [])
+        const carregarDados = async () => {
+            // 1. Detect Token Mode
+            const pathname = window.location.pathname;
+            const isMagicLink = pathname.includes('/portal/') && !pathname.includes('insights') && !pathname.includes('login');
+
+            if (!isMagicLink) {
+                // Not Magic Link -> Standard Context logic
+                if (contextName && status !== 'success') {
+                    // Check if context has valid data
+                    supabase.from('tabela_projetofred1')
+                        .select('*')
+                        .eq('nome_cliente', contextName)
+                        .order('created_at', { ascending: false })
+                        .range(0, 49) // Paginação Auto (Limit 50)
+                        .then(({ data }) => {
+                            if (isMounted) {
+                                setPosts(data || [])
+                                setClientData({ name: contextName })
+                                setStatus('success')
+                            }
+                        })
+                }
+                return;
             }
-            const { data, error } = await supabase.from('tabela_projetofred1').select('*').eq('id_client', clientId).order('created_at', { ascending: false })
-            if (!error) setPosts(data || [])
-        } catch (err) { console.error(err) } finally { setLoading(false) }
-    }
 
+            console.log("Iniciando carga única (Magic Link)...");
+
+            const token = pathname.split('/').pop();
+
+            // 2. Busca Cliente
+            const { data: cliente, error: erroCliente } = await supabase
+                .from('clients')
+                .select('*')
+                .eq('access_token', token)
+                .maybeSingle();
+
+            if (erroCliente) console.error("Erro Cliente:", erroCliente);
+
+            if (!cliente) {
+                if (isMounted) {
+                    setStatus('error');
+                    setErrorMessage("Link inválido ou expirado.");
+                }
+                return;
+            }
+
+            // 3. Busca Posts (Cruzando nome)
+            const { data: postsData, error: erroPosts } = await supabase
+                .from('tabela_projetofred1')
+                .select('*')
+                .eq('nome_cliente', cliente.name)
+                .order('created_at', { ascending: false })
+                .range(0, 49); // Paginação Auto
+
+            if (erroPosts) console.error("Erro Posts:", erroPosts);
+
+            // 4. Busca Perguntas (Via UUID id_client)
+            let questionsData = [];
+            if (cliente.id_client) {
+                const { data: qData, error: qError } = await supabase
+                    .from('interview_questions')
+                    .select('*')
+                    .eq('id_client', cliente.id_client)
+                    .eq('status', 'pending')
+                    .order('created_at', { ascending: false })
+                    .range(0, 49); // Paginação Auto
+
+                if (qError) console.error("Erro Questions:", qError);
+                questionsData = qData || [];
+            } else {
+                console.warn("Cliente sem id_client (UUID) para buscar perguntas.");
+            }
+
+            if (isMounted) {
+                setClientData(cliente);
+                setPosts(postsData || []);
+                setQuestions(questionsData);
+                setStatus('success');
+            }
+        };
+
+        carregarDados();
+
+        return () => {
+            isMounted = false
+        }
+    }, [contextName]); // Dependency on contextName helps trigger standard auth load if needed
+
+    // --- HELPERS (Keep existing) ---
     const handlePostReview = async (postId, status, comment) => {
         const { error } = await supabase.from('tabela_projetofred1').update({ status }).eq('id', postId)
         if (!error) {
@@ -406,42 +495,86 @@ const ClientInsightsPage = () => {
             if (status === 'aprovado') alert("Post aprovado com sucesso! 🚀")
         }
     }
-
     const handleQuestionResponse = (qId) => setQuestions(prev => prev.filter(q => q.id !== qId))
-
-    // Badge Logic
     const getStatusStyle = (status) => {
-        if (status?.includes('approv') || status === 'aprovado') return { bg: '#dcfce7', color: '#166534', label: 'Aprovado', icon: <CheckCircle2 size={12} /> }
-        if (status?.includes('waiting')) return { bg: '#fef3c7', color: '#b45309', label: 'Pendente', icon: <Play size={12} /> }
-        if (status?.includes('revi')) return { bg: '#f3e8ff', color: '#7e22ce', label: 'Em Revisão', icon: <Mic size={12} /> }
+        const s = (status || '').toUpperCase()
+        if (s === 'APPROVED' || s === 'APROVADO' || s.includes('APPROV')) return { bg: '#dcfce7', color: '#166534', label: 'Aprovado', icon: <CheckCircle2 size={12} /> }
+        if (s === 'WAITING_APPROVAL' || s.includes('WAITING') || s.includes('PEND')) return { bg: '#fef3c7', color: '#b45309', label: 'Aguardando Aprovação', icon: <Play size={12} /> }
+        if (s === 'CHANGES_REQUESTED' || s.includes('CHANGE') || s.includes('REVI')) return { bg: '#f3e8ff', color: '#7e22ce', label: 'Alteração Solicitada', icon: <Mic size={12} /> }
         return { bg: '#f1f5f9', color: '#64748b', label: 'Status: ' + status, icon: <AlertCircle size={12} /> }
     }
 
-    if (loading) return <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8' }}><Loader2 className="animate-spin" size={40} /></div>
+    if (status === 'loading') {
+        return (
+            <div style={{ padding: '4rem', textAlign: 'center', color: '#64748b' }}>
+                <h1>Carregando Portal... <Loader2 className="animate-spin inline ml-2" /></h1>
+            </div>
+        )
+    }
 
+    if (status === 'error') {
+        return (
+            <div style={{ padding: '4rem', textAlign: 'center' }}>
+                <h1 style={{ color: '#ef4444' }}>Erro: {errorMessage}</h1>
+            </div>
+        )
+    }
+
+    const displayName = clientData?.name || contextName || 'Cliente';
+
+    // SUCCESS RENDER
     return (
         <div className="insights-container">
             <style>{pageStyles}</style>
 
             {/* Header */}
             <div className="insights-header">
-                <h1>Olá, {clientName || 'Cliente'}</h1>
+                <h1>Olá, {displayName}</h1>
                 <p>
-                    Você tem <span className="highlight-stats">{posts.length} posts</span> na sua galeria
-                    e <span className="highlight-stats">{questions.length} perguntas</span> pendentes.
+                    Você tem <span className="highlight-stats">{questions.length} perguntas pendentes</span> e <span className="highlight-stats">{posts.length} posts</span> na sua galeria.
                 </p>
             </div>
 
-            {/* Section: Posts Grid */}
-            {posts.length > 0 && (
+            {/* Section: Questions (Pending) */}
+            {questions.length > 0 && (
                 <div style={{ marginBottom: '4rem' }}>
                     <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#334155', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <ImageIcon size={20} /> Galeria de Conteúdo
+                        <Mic size={20} /> Perguntas Pendentes
                     </h3>
+                    <div className="questions-list">
+                        {questions.map(q => (
+                            <div key={q.id} className="question-item">
+                                <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+                                    <div style={{ background: '#fef3c7', padding: '0.75rem', borderRadius: '50%', color: '#d97706' }}>
+                                        <MessageSquare size={20} />
+                                    </div>
+                                    <div>
+                                        <p style={{ fontWeight: 600, color: '#1e293b', marginBottom: '4px' }}>{q.question_text}</p>
+                                        <span style={{ fontSize: '0.875rem', color: '#64748b' }}>Aguardando sua resposta</span>
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={() => setSelectedQuestion(q)}
+                                    style={{ padding: '0.75rem 1.5rem', background: '#7c3aed', color: 'white', border: 'none', borderRadius: '12px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}
+                                >
+                                    Responder <ChevronRight size={16} />
+                                </button>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
 
+            {/* Section: Posts Grid */}
+            <div style={{ marginBottom: '4rem' }}>
+                <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#334155', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <ImageIcon size={20} /> Galeria de Conteúdo
+                </h3>
+
+                {posts.length > 0 ? (
                     <div className="insights-grid">
                         {posts.map(post => {
-                            const status = getStatusStyle(post.status)
+                            const statusBadge = getStatusStyle(post.status)
                             return (
                                 <div key={post.id} className="insight-card group" onClick={() => window.location.href = `/post-feedback/${post.id}`}>
                                     {/* Image Top */}
@@ -453,8 +586,8 @@ const ClientInsightsPage = () => {
                                                 <ImageIcon size={48} className="opacity-20" />
                                             </div>
                                         )}
-                                        <div className="status-badge-float" style={{ background: status.bg, color: status.color }}>
-                                            {status.label}
+                                        <div className="status-badge-float" style={{ background: statusBadge.bg, color: statusBadge.color }}>
+                                            {statusBadge.label}
                                         </div>
                                     </div>
 
@@ -468,13 +601,13 @@ const ClientInsightsPage = () => {
 
                                         <div className="card-actions">
                                             <button
-                                                className={`btn-action ${status.label === 'Aprovado' ? 'btn-outline' : 'btn-primary'}`}
+                                                className={`btn-action ${statusBadge.label === 'Aprovado' ? 'btn-outline' : 'btn-primary'}`}
                                                 onClick={(e) => {
                                                     e.stopPropagation();
                                                     window.location.href = `/post-feedback/${post.id}`;
                                                 }}
                                             >
-                                                {status.label === 'Aprovado' ? (
+                                                {statusBadge.label === 'Aprovado' ? (
                                                     <>Ver Detalhes <ChevronRight size={16} /></>
                                                 ) : (
                                                     <>Revisar e Aprovar <Play size={16} /></>
@@ -486,42 +619,18 @@ const ClientInsightsPage = () => {
                             )
                         })}
                     </div>
-                </div>
-            )}
-
-            {/* Section: Questions List */}
-            {questions.length > 0 && (
-                <div>
-                    <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#334155', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <MessageSquare size={20} /> Perguntas Pendentes
-                    </h3>
-                    <div className="questions-list">
-                        {questions.map(q => (
-                            <div key={q.id} className="question-item">
-                                <div style={{ flex: 1, paddingRight: '2rem' }}>
-                                    <p style={{ fontWeight: 600, color: '#0f172a', fontSize: '1rem' }}>{q.question_text}</p>
-                                    <span style={{ fontSize: '0.85rem', color: '#94a3b8' }}>Toque para responder em áudio ou texto</span>
-                                </div>
-                                <button onClick={() => setSelectedQuestion(q)} style={{ background: '#ea580c', color: 'white', border: 'none', padding: '0.75rem 1.5rem', borderRadius: '10px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                    Responder <ChevronRight size={16} />
-                                </button>
-                            </div>
-                        ))}
+                ) : (
+                    <div style={{ textAlign: 'center', padding: '4rem', background: 'white', borderRadius: '20px', border: '1px dashed #cbd5e1' }}>
+                        <CheckCircle2 size={48} className="text-gray-400 mx-auto mb-4" />
+                        <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#1e293b' }}>Nenhum post encontrado!</h3>
+                        <p style={{ color: '#64748b' }}>Verifique se o cliente "{displayName}" tem posts cadastrados.</p>
                     </div>
-                </div>
-            )}
+                )}
+            </div>
 
             {/* Modals */}
             {selectedQuestion && <QuestionResponseModal question={selectedQuestion} onClose={() => setSelectedQuestion(null)} onResponseSent={handleQuestionResponse} />}
             {selectedPost && <PostReviewModal post={selectedPost} onClose={() => setSelectedPost(null)} onReview={handlePostReview} />}
-
-            {posts.length === 0 && questions.length === 0 && (
-                <div style={{ textAlign: 'center', padding: '4rem', background: 'white', borderRadius: '20px', border: '1px dashed #cbd5e1' }}>
-                    <CheckCircle2 size={48} className="text-green-500 mx-auto mb-4" />
-                    <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#1e293b' }}>Tudo em dia!</h3>
-                    <p style={{ color: '#64748b' }}>Nenhuma pendência encontrada.</p>
-                </div>
-            )}
         </div>
     )
 }

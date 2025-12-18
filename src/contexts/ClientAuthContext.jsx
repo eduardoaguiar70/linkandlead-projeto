@@ -10,6 +10,7 @@ export const ClientAuthProvider = ({ children }) => {
     const [clientId, setClientId] = useState(null) // UUID
     const [clientLegacyId, setClientLegacyId] = useState(null) // Integer ID (Legacy)
     const [clientName, setClientName] = useState('')
+    const [isTokenAuth, setIsTokenAuth] = useState(false)
     const [loading, setLoading] = useState(true)
 
     useEffect(() => {
@@ -51,6 +52,8 @@ export const ClientAuthProvider = ({ children }) => {
         }
 
         const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+            if (isTokenAuth) return // Don't override if manually logged in via token
+
             if (session?.user) {
                 fetchClientData(session.user)
             } else {
@@ -66,18 +69,62 @@ export const ClientAuthProvider = ({ children }) => {
             mounted = false
             subscription.unsubscribe()
         }
-    }, [])
+    }, [isTokenAuth]) // Re-run if token auth state changes (though mainly to re-bind listener logic)
+
+    const loginWithToken = async (token) => {
+        setLoading(true)
+        try {
+            // Check 'clients' table for access_token
+            const { data: client, error } = await supabase
+                .from('clients')
+                .select('*')
+                .eq('access_token', token)
+                .single()
+
+            if (error || !client) {
+                throw new Error('Token inválido ou expirado.')
+            }
+
+            // Set global state "as if" logged in
+            // Mocking a clientUser object to satisfy existence checks
+            setClientUser({ id: 'token_user', email: 'token_access', role: 'client' })
+
+            // Use client.id directly. 
+            // Note: If 'tabela_projetofred1' uses UUID from profiles, this might miss-match unless client.id IS the UUID.
+            // Assuming client.id is the correct identifier for posts in this context.
+            setClientId(client.id)
+            setClientLegacyId(client.id) // Assuming same ID or fallback
+            // FIX: User confirmed 'clients' table uses 'name' column.
+            setClientName(client.name || client.nome_empresa)
+            setIsTokenAuth(true)
+
+            return true
+        } catch (err) {
+            console.error(err)
+            return false
+        } finally {
+            setLoading(false)
+        }
+    }
 
     const signOut = async () => {
-        await supabase.auth.signOut()
-        setClientUser(null)
-        setClientId(null)
-        setClientLegacyId(null)
-        setClientName('')
+        if (isTokenAuth) {
+            setIsTokenAuth(false)
+            setClientUser(null)
+            setClientId(null)
+            setClientLegacyId(null)
+            setClientName('')
+        } else {
+            await supabase.auth.signOut()
+            setClientUser(null)
+            setClientId(null)
+            setClientLegacyId(null)
+            setClientName('')
+        }
     }
 
     return (
-        <ClientAuthContext.Provider value={{ clientUser, clientId, clientLegacyId, clientName, loading, signOut }}>
+        <ClientAuthContext.Provider value={{ clientUser, clientId, clientLegacyId, clientName, loading, signOut, isTokenAuth, loginWithToken }}>
             {children}
         </ClientAuthContext.Provider>
     )

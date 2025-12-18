@@ -4,18 +4,37 @@ import { X, Loader2, Save, Image as ImageIcon, UploadCloud } from 'lucide-react'
 
 const EditPostModal = ({ post, onClose, onSuccess }) => {
     const [text, setText] = useState(post.corpo_post || '')
-    const [currentImageUrl, setCurrentImageUrl] = useState(post.sugestao_imagem)
-    const [newImageFile, setNewImageFile] = useState(null)
+    // Initialize as array (handle legacy string or null)
+    const initialImages = Array.isArray(post.sugestao_imagem)
+        ? post.sugestao_imagem
+        : post.sugestao_imagem
+            ? [post.sugestao_imagem]
+            : []
+
+    const [currentImageUrls, setCurrentImageUrls] = useState(initialImages)
+    const [newImageFiles, setNewImageFiles] = useState([])
 
     const [loading, setLoading] = useState(false)
     const [errorMsg, setErrorMsg] = useState(null)
 
     const handleFileChange = (e) => {
-        const file = e.target.files[0]
-        if (file) {
-            if (!file.type.startsWith('image/')) return alert('Apenas imagens.')
-            if (file.size > 5 * 1024 * 1024) return alert('Máximo 5MB.')
-            setNewImageFile(file)
+        if (e.target.files && e.target.files.length > 0) {
+            const files = Array.from(e.target.files)
+
+            // Validate basic constraints
+            const validFiles = files.filter(file => {
+                if (!file.type.startsWith('image/')) {
+                    alert(`Arquivo ${file.name} não é uma imagem.`)
+                    return false
+                }
+                if (file.size > 50 * 1024 * 1024) {
+                    alert(`Arquivo ${file.name} excede o limite de 50MB.`)
+                    return false
+                }
+                return true
+            })
+
+            setNewImageFiles(validFiles)
         }
     }
 
@@ -25,31 +44,35 @@ const EditPostModal = ({ post, onClose, onSuccess }) => {
         setErrorMsg(null)
 
         try {
-            let finalImageUrl = currentImageUrl
+            let finalImageUrls = currentImageUrls
 
-            // 1. Upload new image if selected
-            if (newImageFile) {
-                const fileExt = newImageFile.name.split('.').pop()
-                const sanitizedName = newImageFile.name.replace(/[^a-zA-Z0-9]/g, '_')
-                const fileName = `${Date.now()}_${sanitizedName}.${fileExt}`
+            // 1. Upload new images if selected (Replacing old)
+            if (newImageFiles.length > 0) {
+                const uploadPromises = newImageFiles.map(async (file) => {
+                    const fileExt = file.name.split('.').pop()
+                    const sanitizedName = file.name.replace(/[^a-zA-Z0-9]/g, '_')
+                    const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}_${sanitizedName}.${fileExt}`
 
-                const { error: uploadError } = await supabase.storage
-                    .from('post-images')
-                    .upload(fileName, newImageFile)
+                    const { error: uploadError } = await supabase.storage
+                        .from('post-images')
+                        .upload(fileName, file)
 
-                if (uploadError) throw uploadError
+                    if (uploadError) throw uploadError
 
-                const { data: publicUrlData } = supabase.storage
-                    .from('post-images')
-                    .getPublicUrl(fileName)
+                    const { data: publicUrlData } = supabase.storage
+                        .from('post-images')
+                        .getPublicUrl(fileName)
 
-                if (publicUrlData) finalImageUrl = publicUrlData.publicUrl
+                    return publicUrlData.publicUrl
+                })
+
+                finalImageUrls = await Promise.all(uploadPromises)
             }
 
             // 2. Update DB
             const updates = {
                 corpo_post: text,
-                sugestao_imagem: finalImageUrl
+                sugestao_imagem: finalImageUrls // Save as Array
             }
 
             // REVISÃO LOGIC: If editing a post with feedback, reset status to waiting_approval
@@ -132,29 +155,50 @@ const EditPostModal = ({ post, onClose, onSuccess }) => {
                             />
                         </div>
 
-                        {/* IMAGE EDITOR */}
+                        {/* IMAGE EDITOR (CAROUSEL SUPPORT) */}
                         <div className="modern-form-group">
-                            <label className="input-label">Mídia (Imagem)</label>
+                            <label className="input-label">Mídia (Imagens)</label>
 
-                            {/* Current/New Preview */}
-                            <div style={{ marginBottom: '1rem', background: '#f8fafc', padding: '1rem', borderRadius: '8px', textAlign: 'center' }}>
-                                {newImageFile ? (
-                                    <div style={{ color: '#16a34a', fontWeight: 600 }}>
-                                        Nova imagem selecionada: {newImageFile.name}
+                            {/* Current/New Preview Grid */}
+                            <div style={{ marginBottom: '1rem', background: '#f8fafc', padding: '1rem', borderRadius: '8px' }}>
+                                {newImageFiles.length > 0 ? (
+                                    <div>
+                                        <div style={{ color: '#16a34a', fontWeight: 600, marginBottom: '0.5rem', textAlign: 'center' }}>
+                                            {newImageFiles.length} Novas imagens selecionadas:
+                                        </div>
+                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(80px, 1fr))', gap: '8px' }}>
+                                            {newImageFiles.map((file, idx) => (
+                                                <div key={idx} style={{ aspectRatio: '1/1', borderRadius: '6px', overflow: 'hidden', border: '1px solid #ddd' }}>
+                                                    <img src={URL.createObjectURL(file)} alt="Preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                                </div>
+                                            ))}
+                                        </div>
                                     </div>
-                                ) : currentImageUrl ? (
-                                    <img src={currentImageUrl} alt="Current" style={{ maxHeight: '200px', maxWidth: '100%', borderRadius: '8px' }} />
+                                ) : currentImageUrls.length > 0 ? (
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(80px, 1fr))', gap: '8px' }}>
+                                        {currentImageUrls.map((url, idx) => (
+                                            <div key={idx} style={{ aspectRatio: '1/1', borderRadius: '6px', overflow: 'hidden', border: '1px solid #ddd' }}>
+                                                <img src={url} alt={`Current ${idx}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                            </div>
+                                        ))}
+                                    </div>
                                 ) : (
-                                    <div style={{ color: '#94a3b8' }}>Sem imagem atualmente</div>
+                                    <div style={{ color: '#94a3b8', textAlign: 'center' }}>Sem imagem atualmente</div>
                                 )}
                             </div>
 
                             {/* Upload Input */}
-                            <div className={`upload-wrapper ${newImageFile ? 'has-file' : ''}`}>
-                                <input type="file" accept="image/*" onChange={handleFileChange} className="file-input-hidden" />
+                            <div className={`upload-wrapper ${newImageFiles.length > 0 ? 'has-file' : ''}`}>
+                                <input
+                                    type="file"
+                                    accept="image/*"
+                                    multiple
+                                    onChange={handleFileChange}
+                                    className="file-input-hidden"
+                                />
                                 <div className="upload-content-empty">
                                     <UploadCloud size={20} className="upload-icon-empty" />
-                                    <span className="upload-text">Clique para trocar a imagem</span>
+                                    <span className="upload-text">Clique para trocar imagens (Substituir tudo)</span>
                                 </div>
                             </div>
                         </div>

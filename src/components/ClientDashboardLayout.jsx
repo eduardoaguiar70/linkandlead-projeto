@@ -5,7 +5,7 @@ import { LogOut, LayoutDashboard, Lightbulb } from 'lucide-react'
 import { supabase } from '../services/supabaseClient'
 
 const ClientDashboardLayout = () => {
-    const { clientUser, clientId, loading, signOut } = useClientAuth()
+    const { clientUser, clientId, loading, signOut, isTokenAuth } = useClientAuth()
     const location = useLocation()
 
     if (loading) return <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>Carregando Portal...</div>
@@ -31,21 +31,23 @@ const ClientDashboardLayout = () => {
                     <span style={{ color: '#64748b', fontWeight: 500 }}>Portal do Cliente</span>
                 </div>
 
-                <button
-                    onClick={signOut}
-                    style={{
-                        background: 'transparent',
-                        border: 'none',
-                        color: '#ef4444',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '6px',
-                        cursor: 'pointer',
-                        fontWeight: 500
-                    }}
-                >
-                    <LogOut size={18} /> Sair
-                </button>
+                {!isTokenAuth && (
+                    <button
+                        onClick={signOut}
+                        style={{
+                            background: 'transparent',
+                            border: 'none',
+                            color: '#ef4444',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            cursor: 'pointer',
+                            fontWeight: 500
+                        }}
+                    >
+                        <LogOut size={18} /> Sair
+                    </button>
+                )}
             </header>
 
             {/* MAIN CONTENT */}
