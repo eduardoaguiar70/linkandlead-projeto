@@ -14,39 +14,58 @@ export const AuthProvider = ({ children }) => {
     useEffect(() => {
         let mounted = true;
 
-        // 2. TIMEOUT DE SEGURANÇA (Safety Timeout)
-        // Forces loading to stop after 4 seconds to prevent infinite hanging
-        const safetyTimeout = setTimeout(() => {
-            if (mounted && loading) {
-                console.warn('Auth check timed out. Forcing stop loading.');
-                setLoading(false);
+        // 1. Initial Session Check (Critical for F5/Refresh)
+        const checkSession = async () => {
+            try {
+                const { data: { session } } = await supabase.auth.getSession();
+                if (mounted && session?.user) {
+                    setUser(session.user);
+                    setLoading(false); // RELEASE LOADING IMMEDIATELY
+                    fetchProfile(session.user.id, session.user.email); // Background fetch
+                } else if (mounted) {
+                    setLoading(false); // No session, stop loading
+                }
+            } catch (err) {
+                console.error('Session check failed:', err);
+                if (mounted) setLoading(false);
             }
-        }, 4000);
+        };
 
-        // 1. USE O LISTENER DE ESTADO (Primary Logic)
+        checkSession();
+
+        // 2. Auth State Listener
         const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
             if (!mounted) return;
-            console.log('Auth State Change:', event, session?.user?.email);
+            console.log('Auth State Change:', event);
 
             if (session?.user) {
-                setUser(session.user);
-                // 1. Try to fetch profile if user exists
-                await fetchProfile(session.user.id, session.user.email);
-            } else {
-                // 2. If no session, stop loading immediately
-                console.log('No active session. Clearing state.');
+                // If user changes or login happens, update state
+                if (session.user.id !== user?.id) {
+                    setUser(session.user);
+                    setLoading(false); // RELEASE LOADING IMMEDIATELY
+                    fetchProfile(session.user.id, session.user.email); // Background fetch
+                }
+            } else if (event === 'SIGNED_OUT') {
                 setUser(null);
                 setProfile(null);
                 setLoading(false);
             }
         });
 
+        // 3. Safety Timeout
+        const safetyTimeout = setTimeout(() => {
+            if (mounted && loading) {
+                console.warn('Auth check timed out. Forcing stop loading.');
+                setLoading(false);
+            }
+        }, 5000);
+
         return () => {
             mounted = false;
             clearTimeout(safetyTimeout);
             subscription.unsubscribe();
         };
-    }, []);
+    }, []); // Empty dependency array ok, relying on internal logic
 
     const fetchProfile = async (userId, userEmail) => {
         try {

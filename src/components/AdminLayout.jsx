@@ -7,7 +7,9 @@ import {
     Users,
     LogOut,
     Plus,
-    Lightbulb // Added
+    Lightbulb,
+    Menu, // Added
+    X // Added
 } from 'lucide-react'
 import CreatePostModal from './CreatePostModal'
 // Reusing AdminPanel styles as requested/implied for consistency without full CSS refactor
@@ -19,16 +21,45 @@ const AdminLayout = () => {
     const { signOut } = useAuth()
     const { t, language, setLanguage } = useLanguage()
     const [showModal, setShowModal] = useState(false)
+    const [isSidebarOpen, setSidebarOpen] = useState(false) // Mobile State
     const location = useLocation()
 
     const isActive = (path) => {
         return location.pathname === path ? 'nav-item active' : 'nav-item'
     }
 
+    const toggleSidebar = () => setSidebarOpen(!isSidebarOpen)
+
     return (
         <div className="dashboard-layout">
+            {/* MOBILE HEADER (VISIBLE ONLY ON MOBILE) */}
+            <div className="mobile-header">
+                <button onClick={toggleSidebar} className="menu-btn">
+                    <Menu size={24} />
+                </button>
+                <img src="/logo-linklead.png" alt="Link&Lead" style={{ height: '32px' }} />
+            </div>
+
+            {/* OVERLAY FOR MOBILE */}
+            {isSidebarOpen && (
+                <div
+                    className="sidebar-overlay"
+                    onClick={() => setSidebarOpen(false)}
+                />
+            )}
+
             {/* GLOBAL SIDEBAR */}
-            <aside className="sidebar">
+            <aside className={`sidebar ${isSidebarOpen ? 'open' : ''}`}>
+
+                {/* Mobile Close Button */}
+                <button
+                    className="mobile-close-btn"
+                    onClick={() => setSidebarOpen(false)}
+                >
+                    <X size={20} />
+                </button>
+
+
                 <div className="logo-area">
                     <img src="/logo-linklead.png" alt="Link&Lead" style={{ maxWidth: '160px', height: 'auto' }} />
                 </div>

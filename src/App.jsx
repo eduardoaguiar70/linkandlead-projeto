@@ -92,16 +92,26 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
   const { user, profile, loading } = useAuth()
   const location = useLocation()
 
+  // 1. Loading inicial de Auth (Sessão)
   if (loading) return <div className="loading-screen">Carregando...</div>
 
+  // 2. Sem usuário -> Login
   if (!user) {
     return <Navigate to="/login" state={{ from: location }} replace />
   }
 
+  // 3. Usuário existe, mas Perfil ainda carregando (Fetch em background)
+  // Se a rota exige role, precisamos esperar o profile
+  if (allowedRoles && !profile) {
+    return <div className="loading-screen">Verificando permissões...</div>
+  }
+
+  // 4. Checagem de Role
   if (allowedRoles && profile && !allowedRoles.includes(profile.role)) {
-    // Redirect based on role if trying to access unauthorized area
+    // Redirect based on role
     if (profile.role === 'client') return <Navigate to="/portal/insights" replace />
     if (profile.role === 'admin') return <Navigate to="/" replace />
+    return <Navigate to="/login" replace /> // Fallback
   }
 
   return children

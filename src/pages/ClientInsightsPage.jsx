@@ -213,7 +213,48 @@ const pageStyles = `
     transform: translateX(4px);
     border-color: #cbd5e1;
   }
+
+  /* Image Count Badge */
+  .image-count-badge {
+    position: absolute;
+    bottom: 0.5rem;
+    right: 0.5rem;
+    background: rgba(0, 0, 0, 0.7);
+    color: white;
+    padding: 0.25rem 0.6rem;
+    border-radius: 8px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
 `
+
+// --- HELPERS ---
+const getImagesFromPost = (post) => {
+    if (!post.sugestao_imagem) return []
+
+    // 1. If it's already an array (Supabase JSON/Array column), return it
+    if (Array.isArray(post.sugestao_imagem)) {
+        return post.sugestao_imagem
+    }
+
+    try {
+        const val = String(post.sugestao_imagem).trim()
+        // 2. Check if it looks like a JSON array
+        if (val.startsWith('[')) {
+            const parsed = JSON.parse(val)
+            if (Array.isArray(parsed)) return parsed
+        }
+        // 3. Fallback for single string URL
+        return [val]
+    } catch (e) {
+        // Failsafe
+        return [post.sugestao_imagem]
+    }
+}
 
 // --- SUB-COMPONENT: QUESTION RESPONSE MODAL ---
 const QuestionResponseModal = ({ question, onClose, onResponseSent }) => {
@@ -343,6 +384,11 @@ const QuestionResponseModal = ({ question, onClose, onResponseSent }) => {
 const PostReviewModal = ({ post, onClose, onReview }) => {
     const [comment, setComment] = useState('')
     const [isSubmitting, setIsSubmitting] = useState(false)
+    const [currentImgIndex, setCurrentImgIndex] = useState(0)
+
+    const images = getImagesFromPost(post)
+    const currentImage = images[currentImgIndex]
+
     const handleAction = async (action) => {
         setIsSubmitting(true)
         try {
@@ -350,11 +396,42 @@ const PostReviewModal = ({ post, onClose, onReview }) => {
             onClose()
         } catch (err) { alert(err.message) } finally { setIsSubmitting(false) }
     }
+
     return (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10000 }}>
-            <div style={{ background: 'white', width: '95%', maxWidth: '1000px', height: '85vh', borderRadius: '24px', overflow: 'hidden', display: 'flex' }}>
-                <div style={{ flex: 1.5, background: 'black', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <img src={post.sugestao_imagem} style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} alt="Post" />
+            <div style={{ background: 'white', width: '95%', maxWidth: '1000px', height: '85vh', borderRadius: '24px', overflow: 'hidden', display: 'flex', flexDirection: window.innerWidth < 768 ? 'column' : 'row' }}>
+                <div style={{ flex: 1.5, background: 'black', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
+
+                    {/* Image */}
+                    {currentImage ? (
+                        <img src={currentImage} style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} alt="Post" />
+                    ) : (
+                        <div style={{ color: 'white' }}>Sem Imagem</div>
+                    )}
+
+                    {/* Navigation Buttons */}
+                    {images.length > 1 && (
+                        <>
+                            <button
+                                onClick={(e) => { e.stopPropagation(); setCurrentImgIndex(prev => prev > 0 ? prev - 1 : images.length - 1) }}
+                                style={{ position: 'absolute', left: '1rem', background: 'rgba(255,255,255,0.2)', color: 'white', border: 'none', borderRadius: '50%', padding: '0.5rem', cursor: 'pointer', backdropFilter: 'blur(4px)' }}
+                            >
+                                <ChevronRight style={{ transform: 'rotate(180deg)' }} />
+                            </button>
+                            <button
+                                onClick={(e) => { e.stopPropagation(); setCurrentImgIndex(prev => prev < images.length - 1 ? prev + 1 : 0) }}
+                                style={{ position: 'absolute', right: '1rem', background: 'rgba(255,255,255,0.2)', color: 'white', border: 'none', borderRadius: '50%', padding: '0.5rem', cursor: 'pointer', backdropFilter: 'blur(4px)' }}
+                            >
+                                <ChevronRight />
+                            </button>
+                            {/* Dots */}
+                            <div style={{ position: 'absolute', bottom: '1rem', display: 'flex', gap: '6px' }}>
+                                {images.map((_, idx) => (
+                                    <div key={idx} style={{ width: 8, height: 8, borderRadius: '50%', background: idx === currentImgIndex ? 'white' : 'rgba(255,255,255,0.4)' }} />
+                                ))}
+                            </div>
+                        </>
+                    )}
                 </div>
                 <div style={{ flex: 1, padding: '2rem', display: 'flex', flexDirection: 'column', background: 'white' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
@@ -487,7 +564,7 @@ const ClientInsightsPage = () => {
         }
     }, [contextName]); // Dependency on contextName helps trigger standard auth load if needed
 
-    // --- HELPERS (Keep existing) ---
+    // --- HELPERS ---
     const handlePostReview = async (postId, status, comment) => {
         const { error } = await supabase.from('tabela_projetofred1').update({ status }).eq('id', postId)
         if (!error) {
@@ -503,6 +580,8 @@ const ClientInsightsPage = () => {
         if (s === 'CHANGES_REQUESTED' || s.includes('CHANGE') || s.includes('REVI')) return { bg: '#f3e8ff', color: '#7e22ce', label: 'Alteração Solicitada', icon: <Mic size={12} /> }
         return { bg: '#f1f5f9', color: '#64748b', label: 'Status: ' + status, icon: <AlertCircle size={12} /> }
     }
+
+    // MOVED TO TOP LEVEL SCOPE
 
     if (status === 'loading') {
         return (
@@ -575,12 +654,23 @@ const ClientInsightsPage = () => {
                     <div className="insights-grid">
                         {posts.map(post => {
                             const statusBadge = getStatusStyle(post.status)
+                            const images = getImagesFromPost(post)
+                            const coverImage = images[0]
+                            const extraImages = images.length - 1
+
                             return (
                                 <div key={post.id} className="insight-card group" onClick={() => window.location.href = `/post-feedback/${post.id}`}>
                                     {/* Image Top */}
                                     <div className="card-image-wrapper">
-                                        {post.sugestao_imagem ? (
-                                            <img src={post.sugestao_imagem} className="card-image" alt="Capa" />
+                                        {coverImage ? (
+                                            <>
+                                                <img src={coverImage} className="card-image" alt="Capa" />
+                                                {extraImages > 0 && (
+                                                    <div className="image-count-badge">
+                                                        <ImageIcon size={12} /> +{extraImages} fotos
+                                                    </div>
+                                                )}
+                                            </>
                                         ) : (
                                             <div className="card-placeholder">
                                                 <ImageIcon size={48} className="opacity-20" />

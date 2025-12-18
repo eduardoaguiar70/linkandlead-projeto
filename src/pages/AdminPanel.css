@@ -11,12 +11,15 @@ body {
   background-color: var(--bg-body);
 }
 
+/* DASHBOARD LAYOUT */
 .dashboard-layout {
   display: flex;
   min-height: 100vh;
+  position: relative;
+  /* Context for absolute mobile elements */
 }
 
-/* SIDEBAR */
+/* SIDEBAR - PREMIUM & RESPONSIVE */
 .sidebar {
   width: var(--sidebar-w);
   background: white;
@@ -27,29 +30,22 @@ body {
   height: 100vh;
   left: 0;
   top: 0;
-  z-index: 100;
+  z-index: 500;
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 4px 0 24px rgba(0, 0, 0, 0.02);
+  /* Soft shadow for depth */
 }
 
 .logo-area {
   padding: 1.5rem;
-  border-bottom: 1px solid var(--border-color);
-}
-
-.logo-area h2 {
-  margin: 0;
-  font-size: 1.25rem;
-  color: #0f172a;
-}
-
-.logo-area span {
-  font-size: 0.8rem;
-  color: #64748b;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+  border-bottom: 1px solid transparent;
+  /* Cleaner look */
+  display: flex;
+  justify-content: center;
 }
 
 .nav-menu {
-  padding: 1.5rem 1rem;
+  padding: 1rem;
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -60,23 +56,35 @@ body {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  padding: 0.75rem 1rem;
+  padding: 0.875rem 1rem;
+  /* More generous touch target */
   color: #64748b;
   text-decoration: none;
-  border-radius: 8px;
+  border-radius: 12px;
+  /* Modern rounded corners */
   font-weight: 500;
   transition: all 0.2s;
+  border: 1px solid transparent;
+  /* Prevent layout shift on active border */
 }
 
-.nav-item:hover,
+.nav-item:hover {
+  background-color: #f8fafc;
+  color: #0f172a;
+}
+
 .nav-item.active {
   background-color: #eff6ff;
   color: var(--accent-color);
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
 .sidebar-footer {
   padding: 1.5rem;
   border-top: 1px solid var(--border-color);
+  background: #f8fafc;
+  /* Distinction for footer */
 }
 
 .btn-new-post {
@@ -84,26 +92,126 @@ body {
   background-color: var(--accent-color);
   color: white;
   border: none;
-  padding: 0.75rem;
-  border-radius: 8px;
+  padding: 0.875rem;
+  border-radius: 10px;
   font-weight: 600;
   cursor: pointer;
   display: flex;
   justify-content: center;
   align-items: center;
   gap: 0.5rem;
+  transition: transform 0.1s, background-color 0.2s;
+  box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.2);
 }
 
 .btn-new-post:hover {
   background-color: #1d4ed8;
+  transform: translateY(-1px);
 }
 
-/* MAIN CONTENT */
+.btn-new-post:active {
+  transform: translateY(0);
+}
+
+/* MOBILE HEADER & CONTROLS */
+.mobile-header {
+  display: none;
+  /* Hidden on desktop */
+}
+
+.mobile-close-btn {
+  display: none;
+}
+
+.sidebar-overlay {
+  display: none;
+}
+
+/* MAIN CONTENT ADJUSTMENT */
 .main-content {
   margin-left: var(--sidebar-w);
   flex: 1;
   padding: 2rem;
-  max-width: 1200px;
+  max-width: 1400px;
+  /* Wider canvas for modern dashboards */
+  transition: margin-left 0.3s;
+}
+
+/* RESPONSIVE DESIGN (< 768px) */
+@media (max-width: 768px) {
+
+  /* Hide sidebar off-screen by default */
+  .sidebar {
+    transform: translateX(-100%);
+    box-shadow: 8px 0 20px rgba(0, 0, 0, 0.1);
+    /* Stronger shadow when open */
+  }
+
+  /* Slide in when open */
+  .sidebar.open {
+    transform: translateX(0);
+  }
+
+  /* Reset main content margin */
+  .main-content {
+    margin-left: 0;
+    padding: 1.5rem;
+    padding-top: 5rem;
+    /* Space for fixed mobile header */
+  }
+
+  /* Mobile Header */
+  .mobile-header {
+    display: flex;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 60px;
+    background: white;
+    z-index: 400;
+    padding: 0 1rem;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--border-color);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  }
+
+  .menu-btn {
+    background: none;
+    border: none;
+    padding: 0.5rem;
+    cursor: pointer;
+    color: #0f172a;
+  }
+
+  /* Overlay */
+  .sidebar-overlay {
+    display: block;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(15, 23, 42, 0.5);
+    /* Slate overlay */
+    z-index: 450;
+    /* Below sidebar, above content */
+    backdrop-filter: blur(2px);
+    animation: fadeIn 0.2s;
+  }
+
+  /* Close Button inside Sidebar */
+  .mobile-close-btn {
+    display: flex;
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    background: transparent;
+    border: none;
+    color: #64748b;
+    padding: 0.5rem;
+  }
 }
 
 .top-bar {

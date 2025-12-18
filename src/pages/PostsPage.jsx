@@ -57,7 +57,7 @@ const PostsPage = () => {
     }, [])
 
     const fetchPosts = React.useCallback(async () => {
-        if (isMounted.current) setLoadingPosts(true)
+        setLoadingPosts(true)
         try {
             let query = supabase
                 .from('tabela_projetofred1')
@@ -66,28 +66,40 @@ const PostsPage = () => {
                 .range(0, 49) // Limit to last 50 items
 
             // Role-based filtering
+            // IMPORTANT: If Admin, show ALL. If Client, show ONLY THEIRS.
             if (profile?.role === 'client') {
                 if (profile.nome_empresa) {
                     query = query.eq('nome_cliente', profile.nome_empresa)
                 } else {
                     console.warn('Cliente sem nome_empresa definido.')
-                    if (isMounted.current) {
-                        setPosts([])
-                        setLoadingPosts(false)
-                    }
+                    setPosts([])
                     return
                 }
+            }
+            // Admin gets standard "All Posts" query (unless client param exists for specific filter)
+            if (clientFilter && clientFilter.trim() !== '') {
+                query = query.eq('nome_cliente', clientFilter)
             }
 
             const { data, error } = await query
             if (error) throw error
-            if (isMounted.current) setPosts(data || [])
+
+            // BLINDAGEM: Se houver processamento de dados (ex: map), proteja-o
+            // Normalize status strictly to Uppercase String or UNKNOWN
+            const postsTratados = (data || []).map(post => ({
+                ...post,
+                status: post.status ? String(post.status).toUpperCase() : 'UNKNOWN'
+            }));
+
+            // FORCE STATE UPDATE - NO MOUNT CHECK
+            setPosts(postsTratados);
+
         } catch (err) {
-            console.error('Erro ao buscar posts:', err)
+            console.error("Erro CRÍTICO no fetch ou processamento:", err);
         } finally {
-            if (isMounted.current) setLoadingPosts(false)
+            setLoadingPosts(false); // FORÇAR REMOÇÃO DO SPINNER
         }
-    }, [profile?.role, profile?.nome_empresa])
+    }, [profile?.role, profile?.nome_empresa, clientFilter])
 
     const fetchUnreadMessages = React.useCallback(async () => {
         try {
@@ -167,7 +179,7 @@ const PostsPage = () => {
     // Filter Logic
     const filteredPosts = posts.filter(post => {
         // 1. Client Filter (URL)
-        if (clientFilter && post.nome_cliente !== clientFilter) return false
+        if (clientFilter && clientFilter.trim() !== '' && post.nome_cliente !== clientFilter) return false
 
         // 2. Tab Filter
         if (statusFilter === 'Todos') return true
