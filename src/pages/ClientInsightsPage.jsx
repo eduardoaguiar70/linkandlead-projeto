@@ -19,6 +19,7 @@ import {
     Clock,
     MoreHorizontal
 } from 'lucide-react'
+import ContentCalendar from '../components/ContentCalendar'
 
 // --- STYLES (Responsive Grid & UI) ---
 const pageStyles = `
@@ -614,37 +615,7 @@ const ClientInsightsPage = () => {
                 </p>
             </div>
 
-            {/* Section: Questions (Pending) */}
-            {questions.length > 0 && (
-                <div style={{ marginBottom: '4rem' }}>
-                    <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#334155', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <Mic size={20} /> Perguntas Pendentes
-                    </h3>
-                    <div className="questions-list">
-                        {questions.map(q => (
-                            <div key={q.id} className="question-item">
-                                <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-                                    <div style={{ background: '#fef3c7', padding: '0.75rem', borderRadius: '50%', color: '#d97706' }}>
-                                        <MessageSquare size={20} />
-                                    </div>
-                                    <div>
-                                        <p style={{ fontWeight: 600, color: '#1e293b', marginBottom: '4px' }}>{q.question_text}</p>
-                                        <span style={{ fontSize: '0.875rem', color: '#64748b' }}>Aguardando sua resposta</span>
-                                    </div>
-                                </div>
-                                <button
-                                    onClick={() => setSelectedQuestion(q)}
-                                    style={{ padding: '0.75rem 1.5rem', background: '#7c3aed', color: 'white', border: 'none', borderRadius: '12px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}
-                                >
-                                    Responder <ChevronRight size={16} />
-                                </button>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            )}
-
-            {/* Section: Posts Grid */}
+            {/* Section: Posts Grid (MOVED TO TOP) */}
             <div style={{ marginBottom: '4rem' }}>
                 <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#334155', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <ImageIcon size={20} /> Galeria de Conteúdo
@@ -659,7 +630,7 @@ const ClientInsightsPage = () => {
                             const extraImages = images.length - 1
 
                             return (
-                                <div key={post.id} className="insight-card group" onClick={() => window.location.href = `/post-feedback/${post.id}`}>
+                                <div id={`post-${post.id}`} key={post.id} className="insight-card group" onClick={() => window.location.href = `/post-feedback/${post.id}`}>
                                     {/* Image Top */}
                                     <div className="card-image-wrapper">
                                         {coverImage ? (
@@ -718,10 +689,45 @@ const ClientInsightsPage = () => {
                 )}
             </div>
 
+            {/* Section: Questions (Pending) */}
+            {questions.length > 0 && (
+                <div style={{ marginBottom: '4rem' }}>
+                    <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#334155', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <Mic size={20} /> Perguntas Pendentes
+                    </h3>
+                    <div className="questions-list">
+                        {questions.map(q => (
+                            <div key={q.id} className="question-item">
+                                <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+                                    <div style={{ background: '#fef3c7', padding: '0.75rem', borderRadius: '50%', color: '#d97706' }}>
+                                        <MessageSquare size={20} />
+                                    </div>
+                                    <div>
+                                        <p style={{ fontWeight: 600, color: '#1e293b', marginBottom: '4px' }}>{q.question_text}</p>
+                                        <span style={{ fontSize: '0.875rem', color: '#64748b' }}>Aguardando sua resposta</span>
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={() => setSelectedQuestion(q)}
+                                    style={{ padding: '0.75rem 1.5rem', background: '#7c3aed', color: 'white', border: 'none', borderRadius: '12px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}
+                                >
+                                    Responder <ChevronRight size={16} />
+                                </button>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {/* Section: Content Calendar (MOVED TO BOTTOM) */}
+            {posts.length > 0 && (
+                <ContentCalendar posts={posts} />
+            )}
+
             {/* Modals */}
             {selectedQuestion && <QuestionResponseModal question={selectedQuestion} onClose={() => setSelectedQuestion(null)} onResponseSent={handleQuestionResponse} />}
             {selectedPost && <PostReviewModal post={selectedPost} onClose={() => setSelectedPost(null)} onReview={handlePostReview} />}
-        </div>
+        </div >
     )
 }
 

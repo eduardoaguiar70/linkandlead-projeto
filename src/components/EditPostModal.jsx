@@ -1,8 +1,27 @@
 import React, { useState } from 'react'
 import { supabase } from '../services/supabaseClient'
-import { X, Loader2, Save, Image as ImageIcon, UploadCloud } from 'lucide-react'
+import { X, Loader2, Save, Image as ImageIcon, UploadCloud, Calendar as CalendarIcon } from 'lucide-react'
+import DatePicker, { registerLocale } from 'react-datepicker'
+import "react-datepicker/dist/react-datepicker.css"
+import ptBR from 'date-fns/locale/pt-BR'
+
+registerLocale('pt-BR', ptBR)
 
 const EditPostModal = ({ post, onClose, onSuccess }) => {
+    const [theme, setTheme] = useState(post.tema || '')
+
+    // Helper to format DB timestamp (UTC) to datetime-local (Local)
+    // This helper is no longer needed if scheduleDate is stored as a Date object
+    // const formatDateForInput = (isoString) => {
+    //     if (!isoString) return ''
+    //     const date = new Date(isoString)
+    //     const offset = date.getTimezoneOffset() * 60000
+    //     const localDate = new Date(date.getTime() - offset)
+    //     return localDate.toISOString().slice(0, 16)
+    // }
+
+    // Initialize directly with Date object or null
+    const [scheduleDate, setScheduleDate] = useState(post.data_agendamento ? new Date(post.data_agendamento) : null)
     const [text, setText] = useState(post.corpo_post || '')
     // Initialize as array (handle legacy string or null)
     const initialImages = Array.isArray(post.sugestao_imagem)
@@ -71,8 +90,10 @@ const EditPostModal = ({ post, onClose, onSuccess }) => {
 
             // 2. Update DB
             const updates = {
+                tema: theme,
                 corpo_post: text,
-                sugestao_imagem: finalImageUrls // Save as Array
+                sugestao_imagem: finalImageUrls, // Save as Array
+                data_agendamento: scheduleDate ? scheduleDate.toISOString() : null // Date Object to ISO
             }
 
             // REVISÃO LOGIC: If editing a post with feedback, reset status to waiting_approval
@@ -144,6 +165,40 @@ const EditPostModal = ({ post, onClose, onSuccess }) => {
                     )}
 
                     <form onSubmit={handleSave}>
+                        {/* THEME EDITOR */}
+                        <div className="modern-form-group">
+                            <label className="input-label">Tema / Título Interno</label>
+                            <input
+                                type="text"
+                                value={theme}
+                                onChange={e => setTheme(e.target.value)}
+                                className="modern-input"
+                                placeholder="Título do post..."
+                            />
+                        </div>
+
+                        {/* SCHEDULE DATE (PREMIUM UI) */}
+                        <div className="modern-form-group">
+                            <label className="input-label" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <CalendarIcon size={16} /> Data de Publicação / Agendamento
+                            </label>
+                            <div className="custom-datepicker-wrapper">
+                                <DatePicker
+                                    selected={scheduleDate}
+                                    onChange={(date) => setScheduleDate(date)}
+                                    showTimeSelect
+                                    timeFormat="HH:mm"
+                                    timeIntervals={15}
+                                    dateFormat="dd/MM/yyyy HH:mm"
+                                    locale="pt-BR"
+                                    placeholderText="Selecione data e hora..."
+                                    className="modern-input"
+                                    wrapperClassName="w-full"
+                                    showPopperArrow={false}
+                                />
+                            </div>
+                        </div>
+
                         {/* TEXT EDITOR */}
                         <div className="modern-form-group">
                             <label className="input-label">Texto do Post</label>
@@ -216,6 +271,69 @@ const EditPostModal = ({ post, onClose, onSuccess }) => {
                     </form>
                 </div>
             </div>
+
+            {/* Premium DatePicker Styles Override */}
+            <style>{`
+                    .custom-datepicker-wrapper .react-datepicker-wrapper {
+                        width: 100%;
+                    }
+                    .react-datepicker {
+                        font-family: 'Inter', sans-serif;
+                        border: 1px solid #e2e8f0;
+                        border-radius: 12px;
+                        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+                        overflow: hidden;
+                    }
+                    .react-datepicker__header {
+                        background-color: white;
+                        border-bottom: 1px solid #e2e8f0;
+                        padding-top: 1rem;
+                    }
+                    .react-datepicker__current-month {
+                        font-weight: 700;
+                        color: #1e293b;
+                        margin-bottom: 0.5rem;
+                        text-transform: capitalize;
+                    }
+                    .react-datepicker__day-name {
+                        color: #64748b;
+                        font-weight: 500;
+                        width: 2.5rem;
+                    }
+                    .react-datepicker__day {
+                        width: 2.5rem;
+                        line-height: 2.5rem;
+                        margin: 0.1rem;
+                        border-radius: 8px;
+                        color: #334155;
+                        font-weight: 500;
+                    }
+                    .react-datepicker__day:hover {
+                        background-color: #f1f5f9;
+                        border-radius: 8px;
+                    }
+                    .react-datepicker__day--selected, 
+                    .react-datepicker__day--keyboard-selected {
+                        background-color: #3b82f6 !important;
+                        color: white !important;
+                        font-weight: 700;
+                    }
+                    .react-datepicker__day--today {
+                        color: #3b82f6;
+                        font-weight: 700;
+                        background: none;
+                    }
+                    .react-datepicker__time-container {
+                        border-left: 1px solid #e2e8f0;
+                    }
+                    .react-datepicker__time-container .react-datepicker__time .react-datepicker__time-box ul.react-datepicker__time-list li.react-datepicker__time-list-item--selected {
+                        background-color: #3b82f6 !important;
+                    }
+                    .react-datepicker__navigation-icon::before {
+                        border-color: #64748b;
+                        border-width: 2px 2px 0 0;
+                    }
+                `}</style>
         </div>
     )
 }

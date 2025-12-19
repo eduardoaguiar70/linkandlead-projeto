@@ -220,6 +220,109 @@ const CreatePostModal = ({ onClose, onSuccess }) => {
         }
     }
 
+    // --- MANUAL SAVING LOGIC ---
+    const handleManualSave = async (e) => {
+        e.preventDefault()
+        if (!selectedClientId) return alert("Por favor, selecione um cliente.")
+
+        // FIX: Direct DB Lookup to guarantee fresh data
+        let finalClientName = ''
+        try {
+            const { data: clientData, error: clientError } = await supabase
+                .from('clients')
+                .select('*') // Fetch ALL columns to check for name/nome/company_name variations
+                .eq('id', selectedClientId)
+                .single()
+
+            if (clientError) throw clientError
+
+            // Try all possible name fields
+            finalClientName =
+                clientData?.name ||
+                clientData?.nome ||
+                clientData?.company_name ||
+                clientData?.nome_empresa
+
+        } catch (fetchErr) {
+            console.error("Erro ao buscar nome do cliente:", fetchErr)
+            // Fallback to state if DB fetch fails (unlikely)
+            const selectedClientObj = clients.find(c => String(c.id) === String(selectedClientId))
+            finalClientName = selectedClientObj?.name || clienteName
+        }
+
+        if (!finalClientName) {
+            return alert("Erro Crítico: Não foi possível identificar o nome do cliente. Por favor, recarregue a página.")
+        }
+
+        console.log("Saving Manual Post (DB Verified):", { id: selectedClientId, name: finalClientName })
+
+        setLoading(true)
+        setErrorMsg(null)
+
+        try {
+            let finalImageUrls = []
+
+            // 1. Upload Images if exist (Reused logic)
+            if (selectedFiles.length > 0) {
+                const uploadPromises = selectedFiles.map(async (file) => {
+                    const fileExt = file.name.split('.').pop()
+                    const sanitizedName = file.name.replace(/[^a-zA-Z0-9]/g, '_')
+                    const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}_${sanitizedName}.${fileExt}`
+
+                    const { error: uploadError } = await supabase.storage
+                        .from('post-images')
+                        .upload(fileName, file)
+
+                    if (uploadError) throw uploadError
+
+                    const { data: publicUrlData } = supabase.storage
+                        .from('post-images')
+                        .getPublicUrl(fileName)
+
+                    return publicUrlData.publicUrl
+                })
+                finalImageUrls = await Promise.all(uploadPromises)
+            }
+
+            // 2. Insert Record
+            const payload = {
+                id_client: selectedClientId,
+                nome_cliente: finalClientName, // Validated Name
+                tema: tema || 'Post Manual', // Fallback theme name
+                publico: publico || 'Geral', // Fallback audience
+                corpo_post: generatedText, // Reusing this state for the manual text body
+                sugestao_imagem: finalImageUrls,
+                status: 'waiting_approval'
+            }
+
+            console.log("DEBUG: Posting Payload:", payload)
+
+            const { data: insertData, error: dbError } = await supabase
+                .from('tabela_projetofred1')
+                .insert([payload])
+                .select() // Request return of inserted data to verify
+
+            if (dbError) throw dbError
+
+            console.log("DEBUG: Database Returned:", insertData)
+
+            // Check if DB wiped the name
+            if (insertData && insertData[0] && !insertData[0].nome_cliente) {
+                alert("ALERTA: O post foi salvo, mas o Banco de Dados parece ter ignorado o nome do cliente. Verifique se existe alguma 'Trigger' ou politica RLS bloqueando essa coluna.")
+            }
+
+            alert("Post manual salvo com sucesso!")
+            if (onSuccess) onSuccess()
+            else onClose()
+
+        } catch (err) {
+            console.error("Erro manual:", err)
+            setErrorMsg("Erro ao salvar: " + err.message)
+        } finally {
+            setLoading(false)
+        }
+    }
+
     // --- UI Renderers ---
     const ProgressBar = () => (
         <div style={{ display: 'flex', gap: '8px', marginBottom: '1.5rem', alignItems: 'center' }}>
@@ -230,6 +333,9 @@ const CreatePostModal = ({ onClose, onSuccess }) => {
         </div>
     )
 
+    // New Tab State
+    const [activeTab, setActiveTab] = useState('ai') // 'ai' | 'manual'
+
     return (
         <div className="modal-overlay" onClick={(e) => {
             if (e.target.className === 'modal-overlay') onClose();
@@ -238,21 +344,205 @@ const CreatePostModal = ({ onClose, onSuccess }) => {
                 <div className="modal-header">
                     <div className="header-title">
                         <h2>Novo Conteúdo B2B</h2>
-                        <span className="subtitle">Assistente de Criação</span>
+                        <span className="subtitle">Escolha como criar seu post</span>
                     </div>
                     <button className="close-btn" onClick={onClose} aria-label="Fechar">
                         <X size={24} />
                     </button>
                 </div>
 
-                <div className="modal-body" style={{ padding: '2rem' }}>
-                    <ProgressBar />
+                {/* TABS HEADER */}
+                <div style={{ padding: '0 2rem', borderBottom: '1px solid #e2e8f0', display: 'flex', gap: '2rem' }}>
+                    <button
+                        onClick={() => setActiveTab('ai')}
+                        style={{
+                            padding: '1rem 0',
+                            background: 'none',
+                            border: 'none',
+                            borderBottom: activeTab === 'ai' ? '2px solid #7c3aed' : '2px solid transparent',
+                            color: activeTab === 'ai' ? '#7c3aed' : '#64748b',
+                            fontWeight: activeTab === 'ai' ? 600 : 500,
+                            cursor: 'pointer',
+                            display: 'flex', alignItems: 'center', gap: '8px'
+                        }}
+                    >
+                        <Sparkles size={18} /> ✨ Criar com IA
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('manual')}
+                        style={{
+                            padding: '1rem 0',
+                            background: 'none',
+                            border: 'none',
+                            borderBottom: activeTab === 'manual' ? '2px solid #7c3aed' : '2px solid transparent',
+                            color: activeTab === 'manual' ? '#7c3aed' : '#64748b',
+                            fontWeight: activeTab === 'manual' ? 600 : 500,
+                            cursor: 'pointer',
+                            display: 'flex', alignItems: 'center', gap: '8px'
+                        }}
+                    >
+                        <User size={18} /> ✍️ Criar Manualmente
+                    </button>
+                </div>
 
-                    {/* --- STEP 1: BRIEFING --- */}
-                    {step === 1 && (
-                        <form onSubmit={handleGenerateDraft}>
+                <div className="modal-body" style={{ padding: '2rem' }}>
+
+                    {/* --- TAB: AI WIZARD --- */}
+                    {activeTab === 'ai' && (
+                        <>
+                            <ProgressBar />
+
+                            {/* --- STEP 1: BRIEFING --- */}
+                            {step === 1 && (
+                                <form onSubmit={handleGenerateDraft}>
+                                    <div className="modern-form-group">
+                                        <label className="input-label">1. Selecione o Cliente</label>
+                                        <div className="input-wrapper">
+                                            <Building2 className="input-icon" size={18} />
+                                            {loadingClients ? (
+                                                <div style={{ padding: '0.8rem' }}>Carregando...</div>
+                                            ) : (
+                                                <select
+                                                    value={selectedClientId}
+                                                    onChange={handleClientChange}
+                                                    className="modern-input"
+                                                    required
+                                                >
+                                                    <option value="" disabled>Selecione...</option>
+                                                    {clients.map(c => (
+                                                        <option key={c.id} value={c.id}>
+                                                            {c.name}
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    <div className="modern-form-group">
+                                        <label className="input-label">2. Tema Central do Post</label>
+                                        <textarea
+                                            value={tema} onChange={e => setTema(e.target.value)}
+                                            placeholder="Sobre o que vamos falar hoje?"
+                                            className="modern-textarea" rows={2} required
+                                        />
+                                    </div>
+
+                                    <div className="modern-form-group">
+                                        <label className="input-label">3. Público-Alvo</label>
+                                        <input
+                                            type="text" value={publico} onChange={e => setPublico(e.target.value)}
+                                            placeholder="Quem vai ler?" className="modern-input" required
+                                        />
+                                    </div>
+
+                                    {errorMsg && <p className="error-text">{errorMsg}</p>}
+
+                                    <div className="modal-footer">
+                                        <button type="button" className="btn-cancel" onClick={onClose}>Cancelar</button>
+                                        <button type="submit" className="btn-generate-primary" disabled={loading}>
+                                            {loading ? <><Loader2 className="spinner" /> Gerando Rascunho...</> : <><Sparkles size={18} /> Gerar Rascunho com IA</>}
+                                        </button>
+                                    </div>
+                                </form>
+                            )}
+
+                            {/* --- STEP 2: REVIEW --- */}
+                            {step === 2 && (
+                                <div className="fade-in">
+                                    <label className="input-label" style={{ marginBottom: '1rem', display: 'block' }}>Edite o Rascunho Sugerido:</label>
+                                    <textarea
+                                        value={generatedText}
+                                        onChange={e => setGeneratedText(e.target.value)}
+                                        className="modern-textarea"
+                                        style={{ minHeight: '300px', fontSize: '1rem', lineHeight: '1.6' }}
+                                    />
+
+                                    <div className="modal-footer" style={{ marginTop: '1.5rem' }}>
+                                        <button className="btn-cancel" onClick={() => setStep(1)}>Voltar</button>
+                                        <button className="btn-generate-primary" onClick={() => setStep(3)}>
+                                            Aprovar Texto e Avançar
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* --- STEP 3: FINALIZE --- */}
+                            {step === 3 && (
+                                <div className="fade-in">
+                                    <div style={{ marginBottom: '2rem' }}>
+                                        <label className="input-label">Deseja anexar imagens? (Carrossel)</label>
+                                        <div className={`upload-wrapper ${selectedFiles.length > 0 ? 'has-file' : ''}`} style={{ marginTop: '0.5rem', minHeight: '120px', flexDirection: 'column', alignItems: 'flex-start', padding: '1rem' }}>
+                                            <input
+                                                type="file"
+                                                accept="image/*"
+                                                multiple
+                                                onChange={handleFileChange}
+                                                className="file-input-hidden"
+                                            />
+
+                                            {selectedFiles.length === 0 ? (
+                                                <div className="upload-content-empty" style={{ width: '100%', justifyContent: 'center', height: '100%' }}>
+                                                    <UploadCloud size={24} className="upload-icon-empty" />
+                                                    <span className="upload-text">Clique para Upload de Imagens (Múltiplas)</span>
+                                                </div>
+                                            ) : (
+                                                <div style={{ width: '100%' }}>
+                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                                                        <span className="file-name" style={{ fontSize: '0.85rem', color: '#64748b' }}>
+                                                            {selectedFiles.length} imagem(ns) selecionada(s)
+                                                        </span>
+                                                        <button
+                                                            onClick={(e) => { e.stopPropagation(); setSelectedFiles([]) }}
+                                                            className="btn-remove-file"
+                                                            title="Limpar tudo"
+                                                        >
+                                                            <X size={16} />
+                                                        </button>
+                                                    </div>
+
+                                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(80px, 1fr))', gap: '0.5rem' }}>
+                                                        {selectedFiles.map((file, index) => (
+                                                            <div key={index} style={{ position: 'relative', aspectRatio: '1/1', borderRadius: '8px', overflow: 'hidden', border: '1px solid #e2e8f0' }}>
+                                                                <img
+                                                                    src={URL.createObjectURL(file)}
+                                                                    alt={`Preview ${index}`}
+                                                                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                                                />
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    <div style={{ background: '#f8fafc', padding: '1rem', borderRadius: '8px', border: '1px solid #e2e8f0', marginBottom: '1rem' }}>
+                                        <h4 style={{ fontSize: '0.9rem', fontWeight: 600, color: '#64748b', marginBottom: '0.5rem' }}>Resumo:</h4>
+                                        <div style={{ fontSize: '0.9rem', color: '#334155' }}>
+                                            <strong>Cliente:</strong> {clienteName} <br />
+                                            <strong>Tema:</strong> {tema}
+                                        </div>
+                                    </div>
+
+                                    {errorMsg && <p className="error-text">{errorMsg}</p>}
+
+                                    <div className="modal-footer">
+                                        <button className="btn-cancel" onClick={() => setStep(2)}>Voltar</button>
+                                        <button className="btn-generate-primary" onClick={handleFinalSave} disabled={loading}>
+                                            {loading ? <><Loader2 className="spinner" /> Salvando...</> : "💾 Salvar Post Final"}
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                        </>
+                    )}
+
+                    {/* --- TAB: MANUAL MODE --- */}
+                    {activeTab === 'manual' && (
+                        <form onSubmit={handleManualSave} className="fade-in">
                             <div className="modern-form-group">
-                                <label className="input-label">1. Selecione o Cliente</label>
+                                <label className="input-label">Selecione o Cliente</label>
                                 <div className="input-wrapper">
                                     <Building2 className="input-icon" size={18} />
                                     {loadingClients ? (
@@ -276,62 +566,34 @@ const CreatePostModal = ({ onClose, onSuccess }) => {
                             </div>
 
                             <div className="modern-form-group">
-                                <label className="input-label">2. Tema Central do Post</label>
-                                <textarea
-                                    value={tema} onChange={e => setTema(e.target.value)}
-                                    placeholder="Sobre o que vamos falar hoje?"
-                                    className="modern-textarea" rows={2} required
+                                <label className="input-label">Tema / Título Interno</label>
+                                <input
+                                    type="text"
+                                    value={tema} // Shared state with AI flow
+                                    onChange={e => setTema(e.target.value)}
+                                    placeholder="Ex: Lançamento Black Friday"
+                                    className="modern-input"
                                 />
                             </div>
 
                             <div className="modern-form-group">
-                                <label className="input-label">3. Público-Alvo</label>
-                                <input
-                                    type="text" value={publico} onChange={e => setPublico(e.target.value)}
-                                    placeholder="Quem vai ler?" className="modern-input" required
+                                <label className="input-label">Legenda / Texto do Post</label>
+                                <textarea
+                                    value={generatedText} // Reusing this state to keep things simple
+                                    onChange={e => setGeneratedText(e.target.value)}
+                                    placeholder="Escreva a legenda do post aqui..."
+                                    className="modern-textarea"
+                                    rows={8}
+                                    required
                                 />
                             </div>
 
-                            {errorMsg && <p className="error-text">{errorMsg}</p>}
-
-                            <div className="modal-footer">
-                                <button type="button" className="btn-cancel" onClick={onClose}>Cancelar</button>
-                                <button type="submit" className="btn-generate-primary" disabled={loading}>
-                                    {loading ? <><Loader2 className="spinner" /> Gerando Rascunho...</> : <><Sparkles size={18} /> Gerar Rascunho com IA</>}
-                                </button>
-                            </div>
-                        </form>
-                    )}
-
-                    {/* --- STEP 2: REVIEW --- */}
-                    {step === 2 && (
-                        <div className="fade-in">
-                            <label className="input-label" style={{ marginBottom: '1rem', display: 'block' }}>Edite o Rascunho Sugerido:</label>
-                            <textarea
-                                value={generatedText}
-                                onChange={e => setGeneratedText(e.target.value)}
-                                className="modern-textarea"
-                                style={{ minHeight: '300px', fontSize: '1rem', lineHeight: '1.6' }}
-                            />
-
-                            <div className="modal-footer" style={{ marginTop: '1.5rem' }}>
-                                <button className="btn-cancel" onClick={() => setStep(1)}>Voltar</button>
-                                <button className="btn-generate-primary" onClick={() => setStep(3)}>
-                                    Aprovar Texto e Avançar
-                                </button>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* --- STEP 3: FINALIZE --- */}
-                    {step === 3 && (
-                        <div className="fade-in">
                             <div style={{ marginBottom: '2rem' }}>
-                                <label className="input-label">Deseja anexar imagens? (Carrossel)</label>
+                                <label className="input-label">Anexar Mídia (Imagens/Vídeos)</label>
                                 <div className={`upload-wrapper ${selectedFiles.length > 0 ? 'has-file' : ''}`} style={{ marginTop: '0.5rem', minHeight: '120px', flexDirection: 'column', alignItems: 'flex-start', padding: '1rem' }}>
                                     <input
                                         type="file"
-                                        accept="image/*"
+                                        accept="image/*,video/*"
                                         multiple
                                         onChange={handleFileChange}
                                         className="file-input-hidden"
@@ -340,23 +602,23 @@ const CreatePostModal = ({ onClose, onSuccess }) => {
                                     {selectedFiles.length === 0 ? (
                                         <div className="upload-content-empty" style={{ width: '100%', justifyContent: 'center', height: '100%' }}>
                                             <UploadCloud size={24} className="upload-icon-empty" />
-                                            <span className="upload-text">Clique para Upload de Imagens (Múltiplas)</span>
+                                            <span className="upload-text">Clique para selecionar arquivos</span>
                                         </div>
                                     ) : (
                                         <div style={{ width: '100%' }}>
                                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
                                                 <span className="file-name" style={{ fontSize: '0.85rem', color: '#64748b' }}>
-                                                    {selectedFiles.length} imagem(ns) selecionada(s)
+                                                    {selectedFiles.length} arquivo(s)
                                                 </span>
                                                 <button
                                                     onClick={(e) => { e.stopPropagation(); setSelectedFiles([]) }}
                                                     className="btn-remove-file"
                                                     title="Limpar tudo"
+                                                    type="button"
                                                 >
                                                     <X size={16} />
                                                 </button>
                                             </div>
-
                                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(80px, 1fr))', gap: '0.5rem' }}>
                                                 {selectedFiles.map((file, index) => (
                                                     <div key={index} style={{ position: 'relative', aspectRatio: '1/1', borderRadius: '8px', overflow: 'hidden', border: '1px solid #e2e8f0' }}>
@@ -373,23 +635,15 @@ const CreatePostModal = ({ onClose, onSuccess }) => {
                                 </div>
                             </div>
 
-                            <div style={{ background: '#f8fafc', padding: '1rem', borderRadius: '8px', border: '1px solid #e2e8f0', marginBottom: '1rem' }}>
-                                <h4 style={{ fontSize: '0.9rem', fontWeight: 600, color: '#64748b', marginBottom: '0.5rem' }}>Resumo:</h4>
-                                <div style={{ fontSize: '0.9rem', color: '#334155' }}>
-                                    <strong>Cliente:</strong> {clienteName} <br />
-                                    <strong>Tema:</strong> {tema}
-                                </div>
-                            </div>
-
                             {errorMsg && <p className="error-text">{errorMsg}</p>}
 
                             <div className="modal-footer">
-                                <button className="btn-cancel" onClick={() => setStep(2)}>Voltar</button>
-                                <button className="btn-generate-primary" onClick={handleFinalSave} disabled={loading}>
-                                    {loading ? <><Loader2 className="spinner" /> Salvando...</> : "💾 Salvar Post Final"}
+                                <button type="button" className="btn-cancel" onClick={onClose}>Cancelar</button>
+                                <button type="submit" className="btn-generate-primary" disabled={loading}>
+                                    {loading ? <><Loader2 className="spinner" /> Salvando...</> : "💾 Salvar Rascunho Manual"}
                                 </button>
                             </div>
-                        </div>
+                        </form>
                     )}
 
                 </div>
