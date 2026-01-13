@@ -17,7 +17,8 @@ import {
     MessageSquare,
     Image as ImageIcon,
     Clock,
-    MoreHorizontal
+    MoreHorizontal,
+    FileText
 } from 'lucide-react'
 import ContentCalendar from '../components/ContentCalendar'
 
@@ -635,7 +636,15 @@ const ClientInsightsPage = () => {
                                     <div className="card-image-wrapper">
                                         {coverImage ? (
                                             <>
-                                                <img src={coverImage} className="card-image" alt="Capa" />
+                                                {coverImage.toLowerCase().includes('.pdf') ? (
+                                                    <div className="card-placeholder" style={{ background: '#f8fafc', flexDirection: 'column', gap: '8px' }}>
+                                                        <FileText size={48} color="#ef4444" />
+                                                        <span style={{ fontSize: '0.9rem', fontWeight: 600, color: '#64748b' }}>PDF Document</span>
+                                                    </div>
+                                                ) : (
+                                                    <img src={coverImage} className="card-image" alt="Capa" />
+                                                )}
+
                                                 {extraImages > 0 && (
                                                     <div className="image-count-badge">
                                                         <ImageIcon size={12} /> +{extraImages} fotos

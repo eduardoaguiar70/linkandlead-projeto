@@ -3,6 +3,37 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../services/supabaseClient'
 import { useAuth } from '../contexts/AuthContext'
 import { Send, Check, AlertTriangle, ArrowLeft, Loader2, Image as ImageIcon, MessageSquare, ThumbsUp, MessageCircle } from 'lucide-react'
+import { pdfjs, Document, Page } from 'react-pdf'
+import 'react-pdf/dist/Page/AnnotationLayer.css';
+import 'react-pdf/dist/Page/TextLayer.css';
+
+// Worker setup
+pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
+
+// Sub-component for PDF Carousel
+const PdfCarousel = ({ url }) => {
+  const [numPages, setNumPages] = useState(null);
+
+  function onDocumentLoadSuccess({ numPages }) {
+    setNumPages(numPages);
+  }
+
+  return (
+    <Document file={url} onLoadSuccess={onDocumentLoadSuccess} className="flex gap-2">
+      {Array.from(new Array(numPages), (el, index) => (
+        <div key={`page_${index + 1}`} style={{ scrollSnapAlign: 'center', display: 'flex', justifyContent: 'center' }}>
+          <Page
+            pageNumber={index + 1}
+            renderTextLayer={false}
+            renderAnnotationLayer={false}
+            height={600}
+            canvasBackground="white"
+          />
+        </div>
+      ))}
+    </Document>
+  );
+}
 
 // --- CUSTOM CSS STYLES (Vertical Feed + Compact Fixed Footer) ---
 const pageStyles = `
@@ -428,21 +459,41 @@ const PostFeedbackPage = () => {
           <div className="post-media" style={{ position: 'relative', background: '#000', minHeight: '300px', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
             {images.length > 0 ? (
               <div style={{ display: 'flex', overflowX: 'auto', width: '100%', scrollSnapType: 'x mandatory', gap: '4px' }}>
-                {images.map((url, idx) => (
-                  <img
-                    key={idx}
-                    src={url}
-                    alt={`Slide ${idx}`}
-                    style={{
-                      flex: '0 0 100%',
-                      width: '100%',
-                      height: 'auto',
-                      maxHeight: '600px',
-                      objectFit: 'contain',
-                      scrollSnapAlign: 'start'
-                    }}
-                  />
-                ))}
+                {images.map((url, idx) => {
+                  const isPdf = url.toLowerCase().includes('.pdf')
+                  return (
+                    <div
+                      key={idx}
+                      style={{
+                        flex: '0 0 100%',
+                        width: '100%',
+                        height: '600px',
+                        scrollSnapAlign: 'start',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        background: '#f1f5f9'
+                      }}
+                    >
+                      {isPdf ? (
+                        <div style={{ width: '100%', height: '100%', overflowY: 'hidden', overflowX: 'auto', display: 'flex', scrollSnapType: 'x mandatory' }}>
+                          <PdfCarousel url={url} />
+                        </div>
+                      ) : (
+                        <img
+                          src={url}
+                          alt={`Slide ${idx}`}
+                          style={{
+                            width: '100%',
+                            height: 'auto',
+                            maxHeight: '600px',
+                            objectFit: 'contain'
+                          }}
+                        />
+                      )}
+                    </div>
+                  )
+                })}
               </div>
             ) : (
               <div className="media-placeholder">

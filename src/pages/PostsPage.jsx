@@ -11,9 +11,11 @@ import {
     AlertCircle,
     Filter,
     Pencil,
-    MessageCircle
+    MessageCircle,
+    CalendarClock
 } from 'lucide-react'
 import EditPostModal from '../components/EditPostModal'
+import SchedulePostModal from '../components/SchedulePostModal'
 import './PostsPage.css'
 
 const PostsPage = () => {
@@ -26,12 +28,12 @@ const PostsPage = () => {
             'WAITING_APPROVAL': 'Aguardando Aprovação',
             'CHANGES_REQUESTED': 'Alteração Solicitada',
             'APPROVED': 'Aprovado',
-            // Redundancy
             'waiting_approval': 'Aguardando Aprovação',
             'changes_requested': 'Alteração Solicitada',
             'approved': 'Aprovado',
             'postado': 'Postado',
-            'POSTADO': 'Postado'
+            'POSTADO': 'Postado',
+            'AGENDADO': 'Agendado'
         }
 
         return map[status] || map[status.toUpperCase()] || map[status.toLowerCase()] || status
@@ -43,6 +45,7 @@ const PostsPage = () => {
     const [loadingPosts, setLoadingPosts] = useState(true)
     const [statusFilter, setStatusFilter] = useState('Todos')
     const [editingPost, setEditingPost] = useState(null)
+    const [schedulingPost, setSchedulingPost] = useState(null)
     const [searchParams] = useSearchParams()
     const clientFilter = searchParams.get('client')
 
@@ -173,6 +176,7 @@ const PostsPage = () => {
         if (s === 'APPROVED' || s === 'APROVADO' || s.includes('APPROV')) return 'badge-success'
         if (s === 'CHANGES_REQUESTED' || s.includes('CHANGE') || s.includes('REVI')) return 'badge-warning'
         if (s.includes('POSTADO')) return 'badge-purple'
+        if (s === 'AGENDADO') return 'badge-purple' // Or another distinctive color like badge-primary
         return 'badge-info'
     }
 
@@ -305,6 +309,14 @@ const PostsPage = () => {
                                                     >
                                                         <Trash2 size={18} />
                                                     </button>
+                                                    <button
+                                                        className="icon-btn"
+                                                        title="Agendar Postagem"
+                                                        onClick={() => setSchedulingPost(post)}
+                                                        style={{ color: '#8b5cf6' }}
+                                                    >
+                                                        <CalendarClock size={18} />
+                                                    </button>
                                                 </div>
                                             </td>
                                         </tr>
@@ -329,6 +341,17 @@ const PostsPage = () => {
                     onSuccess={() => {
                         fetchPosts()
                         setEditingPost(null)
+                    }}
+                />
+            )}
+
+            {schedulingPost && (
+                <SchedulePostModal
+                    post={schedulingPost}
+                    onClose={() => setSchedulingPost(null)}
+                    onSuccess={() => {
+                        fetchPosts()
+                        setSchedulingPost(null)
                     }}
                 />
             )}

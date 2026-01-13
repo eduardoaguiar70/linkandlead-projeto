@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { generateContent } from '../services/api'
 import { supabase } from '../services/supabaseClient'
-import { X, Loader2, Building2, Briefcase, Sparkles, User, AlertCircle, Image as ImageIcon, UploadCloud } from 'lucide-react'
+import { X, Loader2, Building2, Briefcase, Sparkles, User, AlertCircle, Image as ImageIcon, UploadCloud, FileText } from 'lucide-react'
 import './CreatePostModal.css'
 
 const CreatePostModal = ({ onClose, onSuccess }) => {
@@ -475,7 +475,7 @@ const CreatePostModal = ({ onClose, onSuccess }) => {
                                         <div className={`upload-wrapper ${selectedFiles.length > 0 ? 'has-file' : ''}`} style={{ marginTop: '0.5rem', minHeight: '120px', flexDirection: 'column', alignItems: 'flex-start', padding: '1rem' }}>
                                             <input
                                                 type="file"
-                                                accept="image/*"
+                                                accept="image/*,video/*,application/pdf"
                                                 multiple
                                                 onChange={handleFileChange}
                                                 className="file-input-hidden"
@@ -503,12 +503,21 @@ const CreatePostModal = ({ onClose, onSuccess }) => {
 
                                                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(80px, 1fr))', gap: '0.5rem' }}>
                                                         {selectedFiles.map((file, index) => (
-                                                            <div key={index} style={{ position: 'relative', aspectRatio: '1/1', borderRadius: '8px', overflow: 'hidden', border: '1px solid #e2e8f0' }}>
-                                                                <img
-                                                                    src={URL.createObjectURL(file)}
-                                                                    alt={`Preview ${index}`}
-                                                                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                                                                />
+                                                            <div key={index} style={{ position: 'relative', aspectRatio: '1/1', borderRadius: '8px', overflow: 'hidden', border: '1px solid #e2e8f0', background: '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                                                {file.type === 'application/pdf' ? (
+                                                                    <div style={{ textAlign: 'center', padding: '0.25rem' }}>
+                                                                        <FileText size={32} color="#ef4444" style={{ margin: '0 auto 4px' }} />
+                                                                        <span style={{ display: 'block', fontSize: '10px', color: '#64748b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '70px' }}>
+                                                                            {file.name}
+                                                                        </span>
+                                                                    </div>
+                                                                ) : (
+                                                                    <img
+                                                                        src={URL.createObjectURL(file)}
+                                                                        alt={`Preview ${index}`}
+                                                                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                                                    />
+                                                                )}
                                                             </div>
                                                         ))}
                                                     </div>
@@ -593,7 +602,7 @@ const CreatePostModal = ({ onClose, onSuccess }) => {
                                 <div className={`upload-wrapper ${selectedFiles.length > 0 ? 'has-file' : ''}`} style={{ marginTop: '0.5rem', minHeight: '120px', flexDirection: 'column', alignItems: 'flex-start', padding: '1rem' }}>
                                     <input
                                         type="file"
-                                        accept="image/*,video/*"
+                                        accept="image/*,video/*,application/pdf"
                                         multiple
                                         onChange={handleFileChange}
                                         className="file-input-hidden"
@@ -621,12 +630,21 @@ const CreatePostModal = ({ onClose, onSuccess }) => {
                                             </div>
                                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(80px, 1fr))', gap: '0.5rem' }}>
                                                 {selectedFiles.map((file, index) => (
-                                                    <div key={index} style={{ position: 'relative', aspectRatio: '1/1', borderRadius: '8px', overflow: 'hidden', border: '1px solid #e2e8f0' }}>
-                                                        <img
-                                                            src={URL.createObjectURL(file)}
-                                                            alt={`Preview ${index}`}
-                                                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                                                        />
+                                                    <div key={index} style={{ position: 'relative', aspectRatio: '1/1', borderRadius: '8px', overflow: 'hidden', border: '1px solid #e2e8f0', background: '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                                        {file.type === 'application/pdf' ? (
+                                                            <div style={{ textAlign: 'center', padding: '0.25rem' }}>
+                                                                <FileText size={32} color="#ef4444" style={{ margin: '0 auto 4px' }} />
+                                                                <span style={{ display: 'block', fontSize: '10px', color: '#64748b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '70px' }}>
+                                                                    {file.name}
+                                                                </span>
+                                                            </div>
+                                                        ) : (
+                                                            <img
+                                                                src={URL.createObjectURL(file)}
+                                                                alt={`Preview ${index}`}
+                                                                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                                            />
+                                                        )}
                                                     </div>
                                                 ))}
                                             </div>
