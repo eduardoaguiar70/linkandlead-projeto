@@ -18,7 +18,8 @@ import {
     Image as ImageIcon,
     Clock,
     MoreHorizontal,
-    FileText
+    FileText,
+    CalendarClock
 } from 'lucide-react'
 import ContentCalendar from '../components/ContentCalendar'
 
@@ -577,9 +578,10 @@ const ClientInsightsPage = () => {
     const handleQuestionResponse = (qId) => setQuestions(prev => prev.filter(q => q.id !== qId))
     const getStatusStyle = (status) => {
         const s = (status || '').toUpperCase()
-        if (s === 'APPROVED' || s === 'APROVADO' || s.includes('APPROV')) return { bg: '#dcfce7', color: '#166534', label: 'Aprovado', icon: <CheckCircle2 size={12} /> }
-        if (s === 'WAITING_APPROVAL' || s.includes('WAITING') || s.includes('PEND')) return { bg: '#fef3c7', color: '#b45309', label: 'Aguardando Aprovação', icon: <Play size={12} /> }
-        if (s === 'CHANGES_REQUESTED' || s.includes('CHANGE') || s.includes('REVI')) return { bg: '#f3e8ff', color: '#7e22ce', label: 'Alteração Solicitada', icon: <Mic size={12} /> }
+        if (s === 'WAITING_APPROVAL' || s === 'PENDING') return { bg: '#fef3c7', color: '#b45309', label: 'Aguardando Aprovação', icon: <Clock size={12} /> }
+        if (s === 'APPROVED' || s === 'APROVADO') return { bg: '#dcfce7', color: '#166534', label: 'Aprovado', icon: <CheckCircle2 size={12} /> }
+        if (s === 'CHANGES_REQUESTED' || s.includes('REVI')) return { bg: '#f3e8ff', color: '#7e22ce', label: 'Alteração Solicitada', icon: <Mic size={12} /> }
+        if (s === 'POSTADO') return { bg: '#e0f2fe', color: '#0369a1', label: 'Publicado', icon: <Send size={12} /> }
         return { bg: '#f1f5f9', color: '#64748b', label: 'Status: ' + status, icon: <AlertCircle size={12} /> }
     }
 
@@ -601,6 +603,17 @@ const ClientInsightsPage = () => {
         )
     }
 
+    // --- Filtering Logic ---
+    const pendingPosts = posts.filter(p => {
+        const s = (p.status || '').toUpperCase()
+        return (s === 'WAITING_APPROVAL' || s === 'CHANGES_REQUESTED') && s !== 'POSTADO'
+    })
+
+    const scheduledPosts = posts.filter(p => {
+        const s = (p.status || '').toUpperCase()
+        return (s === 'APPROVED' || s === 'AGENDADO' || s === 'APROVADO') && s !== 'POSTADO'
+    })
+
     const displayName = clientData?.name || contextName || 'Cliente';
 
     // SUCCESS RENDER
@@ -617,85 +630,78 @@ const ClientInsightsPage = () => {
             </div>
 
             {/* Section: Posts Grid (MOVED TO TOP) */}
-            <div style={{ marginBottom: '4rem' }}>
-                <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#334155', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <ImageIcon size={20} /> Galeria de Conteúdo
-                </h3>
+            {/* --- SEÇÃO: POSTAGENS PENDENTES --- */}
+            <div className="mb-12">
+                <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+                    <div className="w-2 h-8 bg-orange-500 rounded-full"></div>
+                    Postagens Pendentes ({pendingPosts.length})
+                </h2>
 
-                {posts.length > 0 ? (
-                    <div className="insights-grid">
-                        {posts.map(post => {
-                            const statusBadge = getStatusStyle(post.status)
-                            const images = getImagesFromPost(post)
-                            const coverImage = images[0]
-                            const extraImages = images.length - 1
-
-                            return (
-                                <div id={`post-${post.id}`} key={post.id} className="insight-card group" onClick={() => window.location.href = `/post-feedback/${post.id}`}>
-                                    {/* Image Top */}
-                                    <div className="card-image-wrapper">
-                                        {coverImage ? (
-                                            <>
-                                                {coverImage.toLowerCase().includes('.pdf') ? (
-                                                    <div className="card-placeholder" style={{ background: '#f8fafc', flexDirection: 'column', gap: '8px' }}>
-                                                        <FileText size={48} color="#ef4444" />
-                                                        <span style={{ fontSize: '0.9rem', fontWeight: 600, color: '#64748b' }}>PDF Document</span>
-                                                    </div>
-                                                ) : (
-                                                    <img src={coverImage} className="card-image" alt="Capa" />
-                                                )}
-
-                                                {extraImages > 0 && (
-                                                    <div className="image-count-badge">
-                                                        <ImageIcon size={12} /> +{extraImages} fotos
-                                                    </div>
-                                                )}
-                                            </>
-                                        ) : (
-                                            <div className="card-placeholder">
-                                                <ImageIcon size={48} className="opacity-20" />
-                                            </div>
-                                        )}
-                                        <div className="status-badge-float" style={{ background: statusBadge.bg, color: statusBadge.color }}>
-                                            {statusBadge.label}
-                                        </div>
-                                    </div>
-
-                                    {/* Content */}
-                                    <div className="card-body">
-                                        <h3 className="card-title">{post.tema || post.titulo_hook || "Sem título definido"}</h3>
-                                        <div className="card-meta">
-                                            <Clock size={14} />
-                                            {new Date(post.created_at).toLocaleDateString('pt-BR')}
-                                        </div>
-
-                                        <div className="card-actions">
-                                            <button
-                                                className={`btn-action ${statusBadge.label === 'Aprovado' ? 'btn-outline' : 'btn-primary'}`}
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    window.location.href = `/post-feedback/${post.id}`;
-                                                }}
-                                            >
-                                                {statusBadge.label === 'Aprovado' ? (
-                                                    <>Ver Detalhes <ChevronRight size={16} /></>
-                                                ) : (
-                                                    <>Revisar e Aprovar <Play size={16} /></>
-                                                )}
-                                            </button>
-                                        </div>
-                                    </div>
+                <div className="flex flex-col gap-3">
+                    {pendingPosts.length > 0 ? (
+                        pendingPosts.map(post => (
+                            <div key={post.id} className="bg-white border border-gray-200 rounded-lg p-4 flex items-center justify-between shadow-sm hover:shadow-md transition-all">
+                                <div className="flex-1 pr-4">
+                                    <h3 className="font-semibold text-gray-800 text-lg mb-1 line-clamp-1">{post.tema || 'Sem Título'}</h3>
+                                    <p className="text-sm text-gray-500 flex items-center gap-2">
+                                        <Clock size={14} />
+                                        {post.data_criacao ? new Date(post.data_criacao).toLocaleDateString('pt-BR') : 'Data N/A'}
+                                        <span className="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full font-medium ml-2">
+                                            {getStatusStyle(post.status).label}
+                                        </span>
+                                    </p>
                                 </div>
-                            )
-                        })}
-                    </div>
-                ) : (
-                    <div style={{ textAlign: 'center', padding: '4rem', background: 'white', borderRadius: '20px', border: '1px dashed #cbd5e1' }}>
-                        <CheckCircle2 size={48} className="text-gray-400 mx-auto mb-4" />
-                        <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#1e293b' }}>Nenhum post encontrado!</h3>
-                        <p style={{ color: '#64748b' }}>Verifique se o cliente "{displayName}" tem posts cadastrados.</p>
-                    </div>
-                )}
+                                <button
+                                    onClick={() => window.location.href = `/post-feedback/${post.id}`}
+                                    className="bg-gray-900 text-white px-6 py-2 rounded-lg font-medium text-sm hover:bg-gray-800 transition-colors shrink-0"
+                                >
+                                    Verificar
+                                </button>
+                            </div>
+                        ))
+                    ) : (
+                        <div className="text-center py-8 bg-gray-50 rounded-lg border border-dashed border-gray-300">
+                            <p className="text-gray-500">Nenhuma postagem pendente no momento.</p>
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            {/* --- SEÇÃO: POSTAGENS AGENDADAS / APROVADAS --- */}
+            <div style={{ marginBottom: '4rem' }}>
+                <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+                    <div className="w-2 h-8 bg-green-500 rounded-full"></div>
+                    Postagens Agendadas ({scheduledPosts.length})
+                </h2>
+
+                <div className="flex flex-col gap-3">
+                    {scheduledPosts.length > 0 ? (
+                        scheduledPosts.map(post => (
+                            <div key={post.id} className="bg-white border border-gray-200 rounded-lg p-4 flex items-center justify-between shadow-sm hover:shadow-md transition-all">
+                                <div className="flex-1 pr-4">
+                                    <h3 className="font-semibold text-gray-800 text-lg mb-1 line-clamp-1">{post.tema || 'Sem Título'}</h3>
+                                    <p className="text-sm text-gray-500 flex items-center gap-2">
+                                        <CalendarClock size={14} />
+                                        {post.data_agendamento ? new Date(post.data_agendamento).toLocaleDateString('pt-BR') : 'Agendamento N/A'}
+                                        <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium ml-2">
+                                            {getStatusStyle(post.status).label}
+                                        </span>
+                                    </p>
+                                </div>
+                                <button
+                                    onClick={() => window.location.href = `/post-feedback/${post.id}`}
+                                    className="bg-white border border-gray-300 text-gray-700 px-6 py-2 rounded-lg font-medium text-sm hover:bg-gray-50 transition-colors shrink-0"
+                                >
+                                    Ver Detalhes
+                                </button>
+                            </div>
+                        ))
+                    ) : (
+                        <div className="text-center py-8 bg-gray-50 rounded-lg border border-dashed border-gray-300">
+                            <p className="text-gray-500">Nenhuma postagem agendada no momento.</p>
+                        </div>
+                    )}
+                </div>
             </div>
 
             {/* Section: Questions (Pending) */}

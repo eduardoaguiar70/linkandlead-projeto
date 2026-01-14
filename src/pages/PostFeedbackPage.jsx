@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../services/supabaseClient'
 import { useAuth } from '../contexts/AuthContext'
-import { Send, Check, AlertTriangle, ArrowLeft, Loader2, Image as ImageIcon, MessageSquare, ThumbsUp, MessageCircle } from 'lucide-react'
+import { Send, Check, AlertTriangle, ArrowLeft, Loader2, Image as ImageIcon, MessageSquare, ThumbsUp, MessageCircle, MessageSquarePlus } from 'lucide-react'
 import { pdfjs, Document, Page } from 'react-pdf'
 import 'react-pdf/dist/Page/AnnotationLayer.css';
 import 'react-pdf/dist/Page/TextLayer.css';
@@ -356,7 +356,8 @@ const PostFeedbackPage = () => {
   const inputRef = useRef(null)
 
   const isAdmin = profile?.role === 'admin'
-  const isClient = profile?.role === 'client'
+  // Magic Link Logic: If not admin, assume it's the client (Public Access)
+  const isClient = !isAdmin
 
   useEffect(() => { commentsEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [comments])
 
@@ -375,24 +376,67 @@ const PostFeedbackPage = () => {
     return () => { supabase.removeChannel(channel) }
   }, [id])
 
+  const handleQuoteParagraph = (text) => {
+    const maxLen = 100
+    const truncated = text.length > maxLen ? text.substring(0, maxLen) + '...' : text
+    const quote = `> "${truncated}"\n\n`
+
+    // Append or set message
+    setMessageText(prev => (prev ? prev + '\n' + quote : quote))
+
+    // Scroll and Focus
+    commentsEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    setTimeout(() => {
+      inputRef.current?.focus()
+    }, 300)
+  }
+
   const handleSendMessage = async () => {
-    if (!messageText.trim() || !user) return
+    if (!messageText.trim()) return
     setSending(true)
     try {
       const authorName = isAdmin ? 'Link&Lead' : (post?.nome_cliente || 'Cliente')
-      await supabase.from('post_comments').insert([{ post_id: id, content: messageText, role: isAdmin ? 'admin' : 'client', author_name: authorName }])
+
+      const payload = {
+        post_id: id,
+        content: messageText,
+        role: isAdmin ? 'admin' : 'client',
+        author_name: authorName
+        // user_id is NOT sent for guests/clients as it doesn't exist in the table schema or is optional
+      }
+
+      await supabase.from('post_comments').insert([payload])
       setMessageText('')
     } catch (err) { alert('Erro ao enviar.') } finally { setSending(false) }
   }
 
   const handleUpdateStatus = async (newStatus) => {
     if (!isClient) return
+
+    let finalStatus = newStatus
+    let successMessage = 'Post Aprovado! 🚀'
+
+    // Smart Approval Logic
+    if (newStatus === 'APPROVED') {
+      if (post.data_agendamento) {
+        finalStatus = 'AGENDADO'
+        const date = new Date(post.data_agendamento).toLocaleString('pt-BR')
+        successMessage = `Post aprovado e agendado automaticamente para ${date}! 📅`
+      } else {
+        successMessage = 'Post aprovado! Aguardando definição de data pela agência. ✅'
+      }
+    }
+
     try {
-      await supabase.from('tabela_projetofred1').update({ status: newStatus }).eq('id', id)
-      setPost({ ...post, status: newStatus })
-      if (newStatus === 'APPROVED') alert('Post Aprovado! 🚀')
-      else inputRef.current?.focus()
-    } catch (err) { alert('Erro.') }
+      await supabase.from('tabela_projetofred1').update({ status: finalStatus }).eq('id', id)
+      setPost({ ...post, status: finalStatus })
+
+      if (newStatus === 'APPROVED' || finalStatus === 'AGENDADO') {
+        alert(successMessage)
+      } else {
+        inputRef.current?.focus()
+      }
+    } catch (err) { alert('Erro ao atualizar status.') }
   }
 
   const handleImageUpload = async (e) => {
@@ -416,7 +460,19 @@ const PostFeedbackPage = () => {
   if (!post) return <div>404 Post Not Found</div>
 
   const normalizedStatus = (post.status || '').toUpperCase()
-  const statusObj = normalizedStatus === 'APPROVED' || normalizedStatus.includes('APPROV') ? { cls: 'status-approved', txt: 'Aprovado' } : normalizedStatus === 'CHANGES_REQUESTED' || normalizedStatus.includes('REVI') || normalizedStatus.includes('CHANGE') ? { cls: 'status-changes', txt: 'Revisão Solicitada' } : { cls: 'status-pending', txt: 'Pendente' }
+  let statusObj = { cls: 'status-pending', txt: 'Pendente' }
+
+  if (normalizedStatus === 'APPROVED' || normalizedStatus === 'APROVADO') {
+    statusObj = { cls: 'status-approved', txt: 'Aprovado' }
+  } else if (normalizedStatus === 'WAITING_APPROVAL' || normalizedStatus === 'PENDING') {
+    statusObj = { cls: 'status-pending', txt: 'Aguardando Aprovação' }
+  } else if (normalizedStatus === 'CHANGES_REQUESTED' || normalizedStatus.includes('REVI')) {
+    statusObj = { cls: 'status-changes', txt: 'Revisão Solicitada' }
+  } else if (normalizedStatus === 'AGENDADO') {
+    statusObj = { cls: 'status-approved', txt: 'Agendado' } // Reusing approved style for scheduled
+  } else if (normalizedStatus === 'POSTADO') {
+    statusObj = { cls: 'status-approved', txt: 'Publicado' }
+  }
 
   // Helper to get array
   const images = Array.isArray(post.sugestao_imagem) ? post.sugestao_imagem : post.sugestao_imagem ? [post.sugestao_imagem] : []
@@ -441,7 +497,12 @@ const PostFeedbackPage = () => {
             </div>
             <div className="preview-meta">
               <h3>{post.nome_cliente || 'Nome do Cliente'}</h3>
-              <p className="preview-subtext">Post Preview • {new Date(post.created_at).toLocaleDateString()}</p>
+              <p className="preview-subtext">
+                {post.data_agendamento
+                  ? `Post Agendado para ${new Date(post.data_agendamento).toLocaleDateString('pt-BR')}`
+                  : 'Post ainda não agendado'
+                }
+              </p>
             </div>
             <div style={{ marginLeft: 'auto' }}>
               <div className={`status-banner ${statusObj.cls}`}>
@@ -452,7 +513,24 @@ const PostFeedbackPage = () => {
 
           {/* Text Content */}
           <div className="post-content-text">
-            {post.corpo_post}
+            {post.corpo_post && post.corpo_post.split(/\r?\n/).map((paragraph, idx) => {
+              // If it's an empty line, render a small spacer to simulate a paragraph break
+              if (!paragraph.trim()) return <div key={idx} style={{ height: '0.5rem' }} />
+
+              return (
+                <div key={idx} className="group relative p-1 -mx-1 hover:bg-gray-50 rounded transition-colors flex items-start">
+                  <p className="flex-1 whitespace-pre-wrap leading-relaxed">{paragraph}</p>
+                  <button
+                    onClick={() => handleQuoteParagraph(paragraph)}
+                    className="ml-2 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-all text-blue-500 bg-white border border-blue-100 shadow-sm p-1 rounded-md hover:bg-blue-50 hover:text-blue-700 flex-shrink-0"
+                    title="Citar este trecho"
+                    style={{ marginTop: '0px' }}
+                  >
+                    <MessageSquarePlus size={14} />
+                  </button>
+                </div>
+              )
+            })}
           </div>
 
           {/* Media Content */}
@@ -539,10 +617,36 @@ const PostFeedbackPage = () => {
         </div>
       </div>
 
-      {/* --- 3. FIXED COMPACT FOOTER --- */}
-      <div className="fixed-footer">
+      {/* --- 4. STICKY ACTION BAR (Client Only & Pending) --- */}
+      {isClient && (normalizedStatus === 'WAITING_APPROVAL' || normalizedStatus === 'PENDING') && (
+        <div className="fixed bottom-0 left-0 right-0 w-full bg-white border-t border-gray-200 z-50 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] mb-[70px]">
+          <div className="max-w-[700px] mx-auto px-4 py-4 flex justify-between gap-4">
+            <button
+              className="flex-1 px-4 py-3 rounded-xl border border-gray-300 text-gray-600 font-bold text-sm hover:bg-gray-50 transition-colors"
+              onClick={() => {
+                commentsEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+                setTimeout(() => {
+                  inputRef.current?.focus()
+                  setMessageText("Solicito ajuste em: ")
+                }, 300)
+              }}
+            >
+              Solicitar Alteração
+            </button>
+
+            <button
+              className="flex-1 px-4 py-3 rounded-xl bg-green-600 text-white font-bold text-sm hover:bg-green-700 shadow-md transition-transform active:scale-95 flex items-center justify-center gap-2"
+              onClick={() => handleUpdateStatus('APPROVED')}
+            >
+              Aprovar Post <Check size={18} />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* --- 5. ALWAYS VISIBLE CHAT FOOTER --- */}
+      <div className="fixed-footer" style={{ zIndex: 40 }}>
         <div className="footer-content">
-          {/* Chat Input */}
           <div className="input-wrapper">
             <input
               ref={inputRef}
@@ -556,20 +660,11 @@ const PostFeedbackPage = () => {
               {sending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
             </button>
           </div>
-
-          {/* Actions (Only Client) */}
-          {isClient && (
-            <div className="approval-actions">
-              <button className="btn-action btn-request" onClick={() => handleUpdateStatus('CHANGES_REQUESTED')}>
-                Solicitar Alteração
-              </button>
-              <button className="btn-action btn-approve" onClick={() => handleUpdateStatus('APPROVED')}>
-                Aprovar e Publicar
-              </button>
-            </div>
-          )}
         </div>
       </div>
+
+      {/* Helper Spacer to prevent content from being hidden behind footer */}
+      <div style={{ height: '100px' }}></div>
     </div>
   )
 }
