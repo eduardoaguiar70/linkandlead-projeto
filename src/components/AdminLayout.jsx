@@ -9,9 +9,12 @@ import {
     Plus,
     Lightbulb,
     Menu, // Added
-    X // Added
+    X, // Added
+    Briefcase, // Added
+    Database // Added
 } from 'lucide-react'
 import CreatePostModal from './CreatePostModal'
+import ClientSelector from './ClientSelector'
 // Reusing AdminPanel styles as requested/implied for consistency without full CSS refactor
 import '../pages/AdminPanel.css'
 
@@ -63,7 +66,15 @@ const AdminLayout = () => {
                 <div className="logo-area">
                     <img src="/logo-linklead.png" alt="Link&Lead" style={{ maxWidth: '160px', height: 'auto' }} />
                 </div>
-                <nav className="nav-menu">
+                <nav className="nav-menu" style={{ gap: '0.5rem' }}>
+
+                    {/* SECTION 1 */}
+                    <div style={{ padding: '0 1.5rem', marginTop: '1rem', marginBottom: '0.5rem' }}>
+                        <span style={{ fontSize: '0.75rem', fontWeight: '700', color: '#94a3b8', letterSpacing: '0.05em' }}>
+                            GESTÃO CRIATIVA
+                        </span>
+                    </div>
+
                     <Link to="/" className={isActive('/')}>
                         <LayoutDashboard size={20} /> {t('dashboard')}
                     </Link>
@@ -77,36 +88,21 @@ const AdminLayout = () => {
                         <Users size={20} /> {t('clients')}
                     </Link>
 
-                    {/* Language Switcher */}
-                    <div style={{ padding: '0 1.5rem', marginTop: 'auto', marginBottom: '1rem', display: 'flex', gap: '8px' }}>
-                        <button
-                            onClick={() => setLanguage('pt')}
-                            style={{
-                                background: 'none',
-                                border: 'none',
-                                color: language === 'pt' ? '#2563eb' : '#94a3b8',
-                                fontWeight: language === 'pt' ? 'bold' : 'normal',
-                                cursor: 'pointer',
-                                fontSize: '0.9rem'
-                            }}
-                        >
-                            PT 🇧🇷
-                        </button>
-                        <span style={{ color: '#cbd5e1' }}>|</span>
-                        <button
-                            onClick={() => setLanguage('de')}
-                            style={{
-                                background: 'none',
-                                border: 'none',
-                                color: language === 'de' ? '#2563eb' : '#94a3b8',
-                                fontWeight: language === 'de' ? 'bold' : 'normal',
-                                cursor: 'pointer',
-                                fontSize: '0.9rem'
-                            }}
-                        >
-                            DE 🇩🇪
-                        </button>
+                    {/* SECTION 2 */}
+                    <div style={{ padding: '0 1.5rem', marginTop: '1.5rem', marginBottom: '0.5rem' }}>
+                        <span style={{ fontSize: '0.75rem', fontWeight: '700', color: '#94a3b8', letterSpacing: '0.05em' }}>
+                            MÁQUINA DE VENDAS
+                        </span>
                     </div>
+
+                    <Link to="/sales" className={isActive('/sales')}>
+                        <Database size={20} /> Mineração de Base
+                    </Link>
+                    <Link to="/leads" className={isActive('/leads')}>
+                        <Briefcase size={20} /> Gestão de Leads
+                    </Link>
+
+                    <div style={{ marginTop: 'auto' }}></div>
 
                     <button
                         type="button"
@@ -116,7 +112,7 @@ const AdminLayout = () => {
                         }}
                         className="nav-item"
                         style={{
-                            marginTop: '0', // Changed from auto since lang is above
+                            marginTop: '0',
                             background: 'transparent',
                             border: 'none',
                             cursor: 'pointer',
@@ -139,26 +135,44 @@ const AdminLayout = () => {
 
             {/* MAIN CONTENT AREA */}
             <main className="main-content">
+                {/* Sales Context Header */}
+                {(location.pathname.startsWith('/sales') || location.pathname.startsWith('/leads')) && (
+                    <div className="context-header" style={{
+                        padding: '1rem 2rem',
+                        background: 'white',
+                        borderBottom: '1px solid #e2e8f0',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between'
+                    }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                            <span style={{ fontSize: '0.9rem', color: '#64748b' }}>Contexto:</span>
+                            <ClientSelector />
+                        </div>
+                    </div>
+                )}
                 <Outlet />
             </main>
 
             {/* GLOBAL CREATE MODAL */}
-            {showModal && (
-                <CreatePostModal
-                    onClose={() => setShowModal(false)}
-                    onSuccess={() => {
-                        // Ideally we trigger a refresh here. 
-                        // Since we are in Layout, we might need a context or simple page reload for now.
-                        // Or we pass a context method. 
-                        // For simplicity in this request (focus on Layout), I'll just close it.
-                        // The user can refresh individual pages or we rely on React Query (not installed) or Realtime (installed).
-                        // I'll force a soft reload of the current view if possible, or just close.
-                        setShowModal(false)
-                        window.location.reload() // Bruteforce refresh to ensure lists update on all pages
-                    }}
-                />
-            )}
-        </div>
+            {
+                showModal && (
+                    <CreatePostModal
+                        onClose={() => setShowModal(false)}
+                        onSuccess={() => {
+                            // Ideally we trigger a refresh here. 
+                            // Since we are in Layout, we might need a context or simple page reload for now.
+                            // Or we pass a context method. 
+                            // For simplicity in this request (focus on Layout), I'll just close it.
+                            // The user can refresh individual pages or we rely on React Query (not installed) or Realtime (installed).
+                            // I'll force a soft reload of the current view if possible, or just close.
+                            setShowModal(false)
+                            window.location.reload() // Bruteforce refresh to ensure lists update on all pages
+                        }}
+                    />
+                )
+            }
+        </div >
     )
 }
 

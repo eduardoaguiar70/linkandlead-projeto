@@ -1,47 +1,47 @@
-/* Google Fonts - Montserrat */
-@import url('https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,100..900;1,100..900&display=swap');
+/* Google Fonts - Plus Jakarta Sans */
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,200..800;1,200..800&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-
-
 :root {
   /* Brand Typography */
-  --font-main: 'Montserrat', system-ui, -apple-system, sans-serif;
+  --font-main: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
 
-  /* Color Palette - HIGH CONTRAST LIGHT THEME */
-  --color-bg: #ffffff;
-  /* Pure White Background */
+  /* Color Palette - PREMIUM SLATE THEME */
+  --color-bg: #f8fafc;
+  /* Slate 50 */
   --color-surface: #ffffff;
-  /* Pure White Cards */
 
-  /* Text Colors - Accessibility Focus */
-  --color-text-heading: #000000;
-  /* Pure Black for Headers */
-  --color-text-body: #1f2937;
-  /* Gray 800 - Very dark gray for body */
-  --color-text-muted: #4b5563;
-  /* Gray 600 - Secondary text */
+  /* Text Colors */
+  --color-text-heading: #0f172a;
+  /* Slate 900 */
+  --color-text-body: #334155;
+  /* Slate 700 */
+  --color-text-muted: #64748b;
+  /* Slate 500 */
 
   /* Brand Colors */
   --color-primary: #ff4d00;
-  /* Vibrant Brand Orange */
-  --color-primary-hover: #e64a19;
+  --color-primary-hover: #ea4500;
 
-  /* Borders */
+  /* Borders & Shadows */
   --color-border: #e2e8f0;
   /* Slate 200 */
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
 
   /* UI Elements */
-  --radius-sm: 8px;
-  --radius-md: 12px;
+  --radius-sm: 6px;
+  --radius-md: 10px;
   --radius-lg: 16px;
-  --radius-pill: 50px;
+  --radius-pill: 9999px;
 
   /* Spacing */
-  --spacing-container: 1200px;
+  --spacing-container: 1280px;
+  /* Slightly wider */
 }
 
 /* Global Reset & Base */
@@ -52,6 +52,7 @@ body {
   font-family: var(--font-main);
   background-color: var(--color-bg);
   color: var(--color-text-body);
+  /* Font Smoothing for Premium Feel */
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   line-height: 1.6;
@@ -66,21 +67,17 @@ h5,
 h6 {
   color: var(--color-text-heading);
   font-weight: 700;
-  /* Bold */
   margin-top: 0;
   line-height: 1.25;
-}
-
-/* Common Text */
-p {
-  margin-bottom: 1rem;
+  letter-spacing: -0.015em;
+  /* Tighter headings */
 }
 
 /* Buttons (Global Defaults) */
 button {
   font-family: inherit;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* Standard Primary Button Class */
@@ -89,9 +86,10 @@ button {
   color: white;
   border: none;
   padding: 0.75rem 1.5rem;
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius-sm);
+  /* Less pill-like, more pro */
   font-weight: 600;
-  font-size: 0.95rem;
+  font-size: 0.9rem;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -102,7 +100,7 @@ button {
 .btn-primary:hover {
   background-color: var(--color-primary-hover);
   transform: translateY(-1px);
-  box-shadow: 0 6px 8px -1px rgba(255, 77, 0, 0.3);
+  box-shadow: 0 6px 12px -2px rgba(255, 77, 0, 0.25);
 }
 
 /* Inputs & Forms */
@@ -111,36 +109,36 @@ select,
 textarea {
   font-family: inherit;
   background-color: #ffffff;
-  border: 1px solid #cbd5e1;
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
-  padding: 0.75rem 1rem;
-  font-size: 1rem;
-  color: #000000;
-  /* Force black input text */
-  transition: border-color 0.2s;
+  padding: 0.65rem 1rem;
+  font-size: 0.95rem;
+  color: var(--color-text-heading);
+  transition: all 0.2s;
   outline: none;
+  box-shadow: var(--shadow-sm);
 }
 
 input:focus,
 select:focus,
 textarea:focus {
   border-color: var(--color-primary);
-  box-shadow: 0 0 0 3px rgba(255, 77, 0, 0.1);
+  box-shadow: 0 0 0 2px rgba(255, 77, 0, 0.1);
 }
 
 /* Scrollbar */
 ::-webkit-scrollbar {
-  width: 10px;
+  width: 8px;
+  height: 8px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #f1f5f9;
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
   background: #cbd5e1;
-  border-radius: 5px;
-  border: 2px solid #f1f5f9;
+  border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {

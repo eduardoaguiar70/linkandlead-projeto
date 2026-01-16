@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../services/supabaseClient';
 import { useAuth } from '../contexts/AuthContext'; // Import Auth
-import { Pencil, Upload, FileText, X, Check, Link as LinkIcon } from 'lucide-react';
+import { Pencil, Upload, FileText, X, Check, Link as LinkIcon, Info, AlertTriangle, Linkedin } from 'lucide-react';
 
 export default function ClientsPage() {
     const { user } = useAuth(); // Hook Auth
@@ -45,7 +45,8 @@ export default function ClientsPage() {
         description: '',
         tone_of_voice: 'Profissional',
         target_audience_default: '',
-        pain_points: ''
+        pain_points: '',
+        unipile_account_id: ''
     });
 
     useEffect(() => {
@@ -105,7 +106,8 @@ export default function ClientsPage() {
             description: client.description || '',
             tone_of_voice: client.tone_of_voice || 'Profissional',
             target_audience_default: client.target_audience_default || '',
-            pain_points: client.pain_points || ''
+            pain_points: client.pain_points || '',
+            unipile_account_id: client.unipile_account_id || ''
         });
         setFilesToUpload([]);
         setExistingFiles([]);
@@ -120,7 +122,8 @@ export default function ClientsPage() {
             description: '',
             tone_of_voice: 'Profissional',
             target_audience_default: '',
-            pain_points: ''
+            pain_points: '',
+            unipile_account_id: ''
         });
         setFilesToUpload([]);
         setExistingFiles([]);
@@ -230,6 +233,7 @@ export default function ClientsPage() {
                     tone_of_voice: formData.tone_of_voice,
                     target_audience_default: formData.target_audience_default,
                     pain_points: formData.pain_points,
+                    unipile_account_id: formData.unipile_account_id
                     // Add other fields here if needed
                 };
                 console.log("3. Payload montado:", payload);
@@ -319,6 +323,7 @@ export default function ClientsPage() {
                                 <th style={{ padding: '1rem', fontWeight: '600', color: '#4b5563' }}>Empresa</th>
                                 <th style={{ padding: '1rem', fontWeight: '600', color: '#4b5563' }}>Descrição</th>
                                 <th style={{ padding: '1rem', fontWeight: '600', color: '#4b5563' }}>Tom de Voz</th>
+                                <th style={{ padding: '1rem', fontWeight: '600', color: '#4b5563', width: '120px' }}>Conexão</th>
                                 <th style={{ padding: '1rem', fontWeight: '600', color: '#4b5563', textAlign: 'right' }}>Ações</th>
                             </tr>
                         </thead>
@@ -337,6 +342,17 @@ export default function ClientsPage() {
                                             {client.description}
                                         </td>
                                         <td style={{ padding: '1rem', fontSize: '0.875rem' }}>{client.tone_of_voice}</td>
+                                        <td style={{ padding: '1rem' }}>
+                                            {client.unipile_account_id ? (
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#0077b5', fontSize: '0.8rem', fontWeight: '600' }}>
+                                                    <Linkedin size={16} /> OK
+                                                </div>
+                                            ) : (
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#9ca3af', fontSize: '0.8rem' }} title="Pendente Unipile ID">
+                                                    <AlertTriangle size={16} /> Pendente
+                                                </div>
+                                            )}
+                                        </td>
                                         <td style={{ padding: '1rem', textAlign: 'right' }}>
                                             <button
                                                 onClick={() => handleCopyLink(client)}
@@ -429,6 +445,32 @@ export default function ClientsPage() {
                             </button>
                         </div>
                         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+
+                            {/* Unipile ID Section - Priority */}
+                            <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '6px', padding: '1rem' }}>
+                                <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '0.75rem' }}>
+                                    <Info style={{ color: '#2563eb', flexShrink: 0, marginTop: '2px' }} size={20} />
+                                    <div>
+                                        <h4 style={{ margin: '0 0 0.25rem 0', fontSize: '0.9rem', color: '#1e40af' }}>Integração LinkedIn (Obrigatório)</h4>
+                                        <p style={{ margin: 0, fontSize: '0.8rem', color: '#1e3a8a', lineHeight: '1.4' }}>
+                                            ⚠️ Importante: Para obter este ID, você deve primeiro conectar o perfil do LinkedIn deste cliente manualmente através do Dashboard da Unipile. Copie o <strong>'Account ID'</strong> gerado lá e cole abaixo.
+                                        </p>
+                                    </div>
+                                </div>
+                                <div>
+                                    <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.85rem', fontWeight: 'bold', color: '#1e3a8a' }}>
+                                        ID da Conta Unipile (LinkedIn)
+                                    </label>
+                                    <input
+                                        name="unipile_account_id"
+                                        value={formData.unipile_account_id}
+                                        onChange={handleInputChange}
+                                        placeholder="Ex: f7NRx9..."
+                                        style={{ width: '100%', padding: '0.5rem', border: '1px solid #93c5fd', borderRadius: '4px', fontFamily: 'monospace' }}
+                                    />
+                                </div>
+                            </div>
+
                             <div>
                                 <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem' }}>Nome da Empresa</label>
                                 <input

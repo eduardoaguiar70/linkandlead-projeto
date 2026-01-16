@@ -13,6 +13,8 @@ import PostFeedbackPage from './pages/PostFeedbackPage' // New Feedback Loop
 import Login from './pages/Login'
 import ClientsPage from './pages/ClientsPage'
 import IdeasPage from './pages/IdeasPage'
+import LeadsPage from './pages/LeadsPage'
+import SalesHubPage from './pages/SalesHubPage'
 import AdminLayout from './components/AdminLayout'
 
 // Client Portal New (Ideas/Insights)
@@ -20,6 +22,7 @@ import ClientLoginPage from './pages/ClientLoginPage'
 import ClientDashboardLayout from './components/ClientDashboardLayout'
 import ClientInsightsPage from './pages/ClientInsightsPage'
 import { ClientAuthProvider, useClientAuth } from './contexts/ClientAuthContext'
+import { ClientSelectionProvider } from './contexts/ClientSelectionContext'
 import { useParams, useNavigate } from 'react-router-dom'
 
 // Magic Link Handler Component
@@ -157,13 +160,17 @@ function App() {
               {/* Admin Protected Routes */}
               <Route element={
                 <ProtectedRoute allowedRoles={['admin']}>
-                  <AdminLayout />
+                  <ClientSelectionProvider>
+                    <AdminLayout />
+                  </ClientSelectionProvider>
                 </ProtectedRoute>
               }>
                 <Route path="/" element={<AdminPanel />} />
                 <Route path="/posts" element={<PostsPage />} />
                 <Route path="/clients" element={<ClientsPage />} />
                 <Route path="/ideas" element={<IdeasPage />} />
+                <Route path="/leads" element={<LeadsPage />} />
+                <Route path="/sales" element={<SalesHubPage />} />
               </Route>
 
               {/* Fallback */}

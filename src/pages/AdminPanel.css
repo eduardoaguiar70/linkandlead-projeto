@@ -1,10 +1,13 @@
 :root {
-  --primary-color: #0f172a;
-  --accent-color: #2563eb;
-  --sidebar-w: 240px;
-  --header-h: 60px;
-  --bg-body: #f1f5f9;
-  --border-color: #e2e8f0;
+  /* Inherit/Map from index.css */
+  --primary-color: var(--color-text-heading);
+  --accent-color: var(--color-primary);
+  /* Use Brand Orange */
+  --sidebar-w: 260px;
+  /* Slightly wider for better typography */
+  --header-h: 64px;
+  --bg-body: var(--color-bg);
+  --border-color: var(--color-border);
 }
 
 body {
@@ -22,8 +25,8 @@ body {
 /* SIDEBAR - PREMIUM & RESPONSIVE */
 .sidebar {
   width: var(--sidebar-w);
-  background: white;
-  border-right: 1px solid var(--border-color);
+  background: var(--color-surface);
+  border-right: 1px solid var(--color-border);
   display: flex;
   flex-direction: column;
   position: fixed;
@@ -32,59 +35,57 @@ body {
   top: 0;
   z-index: 500;
   transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 4px 0 24px rgba(0, 0, 0, 0.02);
-  /* Soft shadow for depth */
+  box-shadow: 4px 0 24px -4px rgba(0, 0, 0, 0.03);
 }
 
 .logo-area {
-  padding: 1.5rem;
-  border-bottom: 1px solid transparent;
-  /* Cleaner look */
+  padding: 2rem 1.5rem;
   display: flex;
   justify-content: center;
+  align-items: center;
 }
 
 .nav-menu {
-  padding: 1rem;
+  padding: 0 1rem 1rem 1rem;
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.25rem;
+  /* Tighter gap for SaaS look */
+  overflow-y: auto;
 }
 
 .nav-item {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  padding: 0.875rem 1rem;
-  /* More generous touch target */
-  color: #64748b;
+  padding: 0.65rem 0.85rem;
+  color: var(--color-text-muted);
   text-decoration: none;
-  border-radius: 12px;
-  /* Modern rounded corners */
+  border-radius: var(--radius-sm);
   font-weight: 500;
-  transition: all 0.2s;
+  font-size: 0.9rem;
+  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
   border: 1px solid transparent;
-  /* Prevent layout shift on active border */
 }
 
 .nav-item:hover {
-  background-color: #f8fafc;
-  color: #0f172a;
+  background-color: var(--color-bg);
+  /* Slate 50 */
+  color: var(--color-text-heading);
 }
 
 .nav-item.active {
-  background-color: #eff6ff;
-  color: var(--accent-color);
+  background-color: #fff1f2;
+  /* Very light primary tint */
+  color: var(--color-primary);
   font-weight: 600;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
 .sidebar-footer {
   padding: 1.5rem;
-  border-top: 1px solid var(--border-color);
-  background: #f8fafc;
-  /* Distinction for footer */
+  border-top: 1px solid var(--color-border);
+  background: var(--color-surface);
 }
 
 .btn-new-post {
