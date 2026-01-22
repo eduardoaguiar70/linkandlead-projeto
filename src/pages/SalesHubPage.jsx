@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { supabase } from '../services/supabaseClient'
 import { useClientSelection } from '../contexts/ClientSelectionContext'
+import { formatDistanceToNow } from 'date-fns'
+import { ptBR } from 'date-fns/locale' // Ensure locale import
 import './SalesHub.css'
 import {
     Search,
@@ -60,12 +62,43 @@ const SalesHubPage = () => {
         return () => clearTimeout(timer)
     }, [searchTerm])
 
+    // Interactions Logic
+    const [interactions, setInteractions] = useState([])
+    const [interactionsLoading, setInteractionsLoading] = useState(false)
+
+    useEffect(() => {
+        if (!selectedLead) {
+            setInteractions([])
+            return
+        }
+
+        const fetchInteractions = async () => {
+            setInteractionsLoading(true)
+            try {
+                const { data, error } = await supabase
+                    .from('interactions')
+                    .select('*')
+                    .eq('lead_id', selectedLead.id)
+                    .order('interaction_date', { ascending: false })
+
+                if (error) throw error
+                setInteractions(data || [])
+            } catch (err) {
+                console.error('Erro ao buscar interações:', err)
+            } finally {
+                setInteractionsLoading(false)
+            }
+        }
+
+        fetchInteractions()
+    }, [selectedLead])
+
     const handleSync = async () => {
         if (!selectedClientId) return
         setSyncLoading(true)
 
         try {
-            const response = await fetch('https://n8n-n8n-start.kfocge.easypanel.host/webhook-test/sync-connections', {
+            const response = await fetch('https://n8n-n8n-start.kfocge.easypanel.host/webhook/sync-connections', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ client_id: selectedClientId })
@@ -88,6 +121,45 @@ const SalesHubPage = () => {
         setTimeout(() => setNotification(null), 5000)
     }
 
+    const fetchStats = async () => {
+        if (!selectedClientId) return
+
+        try {
+            // 1. Total Leads
+            const { count: totalCount } = await supabase
+                .from('leads')
+                .select('*', { count: 'exact', head: true })
+                .eq('client_id', selectedClientId)
+
+            // 2. Hot Leads (ICP A)
+            const { count: hotCount } = await supabase
+                .from('leads')
+                .select('*', { count: 'exact', head: true })
+                .eq('client_id', selectedClientId)
+                .eq('icp_score', 'A')
+
+            // 3. Recent Interactions (Last 7 Days)
+            // Assuming interactions are linked to leads. We use !inner join to filter by client_id on leads table.
+            const sevenDaysAgo = new Date()
+            sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
+
+            const { count: interactionsCount } = await supabase
+                .from('interactions')
+                .select('*, leads!inner(client_id)', { count: 'exact', head: true })
+                .eq('leads.client_id', selectedClientId)
+                .gte('interaction_date', sevenDaysAgo.toISOString())
+
+            setStats({
+                total: totalCount || 0,
+                hot: hotCount || 0,
+                interactions: interactionsCount || 0
+            })
+
+        } catch (error) {
+            console.error('Erro ao buscar KPIs:', error)
+        }
+    }
+
     // Reset pagination when Client or Search changes
     useEffect(() => {
         if (selectedClientId) {
@@ -95,19 +167,21 @@ const SalesHubPage = () => {
             setPage(0)
             setHasMore(true)
             fetchLeads(0, true)
+            fetchStats() // Fetch KPIs
         } else {
             setLeads([])
             setStats({ total: 0, hot: 0, interactions: 0 })
         }
     }, [selectedClientId, debouncedSearch])
 
-    // Realtime Listener (unchanged logic, just ensuring it stays)
+    // Realtime Listener
     useEffect(() => {
         if (!selectedClientId) return
         const channel = supabase.channel('leads-changes')
             .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'leads', filter: `client_id=eq.${selectedClientId}` }, () => {
                 setNotification({ message: 'Novos leads encontrados!', type: 'success' })
                 fetchLeads(0, true) // Refresh list on new lead
+                fetchStats() // Refresh KPIs
             })
             .subscribe()
         return () => { supabase.removeChannel(channel) }
@@ -127,14 +201,14 @@ const SalesHubPage = () => {
                 .from('leads')
                 .select('*', { count: 'exact' })
                 .eq('client_id', selectedClientId)
-                .order('created_at', { ascending: false })
                 .range(from, to)
 
             if (debouncedSearch) {
                 query = query.or(`nome.ilike.%${debouncedSearch}%,company.ilike.%${debouncedSearch}%`)
             }
 
-            const { data, count, error } = await query
+            // SIMPLIFIED DEBUG MODE: Sort by created_at DESC, no other filters
+            const { data, count, error } = await query.order('created_at', { ascending: false })
 
             if (error) throw error
 
@@ -440,16 +514,41 @@ const SalesHubPage = () => {
                                             <ScoreBadge score={lead.icp_score} reason={lead.icp_reason} />
                                         </td>
                                         <td>
-                                            <span className="status-text">
-                                                {lead.connection_status === 'connected' ? '1º Grau (Conexão)' : 'Seguidor'}
+                                            <span className={`status-text ${lead.status_pipeline === 'Conexão' ? 'status-connected' : ''}`} style={{
+                                                padding: '4px 8px',
+                                                borderRadius: '6px',
+                                                background: lead.status_pipeline === 'Conexão' ? '#dbeafe' : '#f1f5f9',
+                                                color: lead.status_pipeline === 'Conexão' ? '#2563eb' : '#64748b',
+                                                fontWeight: 600,
+                                                fontSize: '0.75rem'
+                                            }}>
+                                                {lead.status_pipeline === 'Conexão' ? 'Conexão' : 'Seguidor'}
                                             </span>
                                         </td>
                                         <td>
-                                            <div style={{ fontSize: '0.85rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                                                {lead.last_interaction ? (
-                                                    <>🔥 {lead.last_interaction}</>
-                                                ) : (
-                                                    <span style={{ color: '#cbd5e1' }}>-</span>
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                                {(() => {
+                                                    const score = lead.engagement_score || 0
+                                                    // New simple rule: > 0 is Fire/Hot, 0 is Gray
+                                                    const isHot = score > 0
+                                                    const color = isHot ? '#dc2626' : '#94a3b8'
+                                                    const icon = isHot ? '🔥' : ''
+
+                                                    if (!isHot) {
+                                                        return <span style={{ color: '#94a3b8', fontSize: '0.9rem' }}>-</span>
+                                                    }
+
+                                                    return (
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 'bold', color }}>
+                                                            <span>{icon}</span>
+                                                            <span>{score} pts</span>
+                                                        </div>
+                                                    )
+                                                })()}
+                                                {lead.engagement_score > 0 && lead.last_interaction && (
+                                                    <span style={{ fontSize: '0.75rem', color: '#64748b' }}>
+                                                        {formatDistanceToNow(new Date(lead.last_interaction), { addSuffix: true, locale: ptBR })}
+                                                    </span>
                                                 )}
                                             </div>
                                         </td>
@@ -474,220 +573,286 @@ const SalesHubPage = () => {
                                     </tr>
                                 )}
                             </tbody>
-                        </table>
+                        </table >
 
                         {/* Sentinel for Infinite Scroll */}
-                        <div ref={observerTarget} style={{ height: '20px', margin: '10px 0', textAlign: 'center' }}>
+                        < div ref={observerTarget} style={{ height: '20px', margin: '10px 0', textAlign: 'center' }}>
                             {loadingMore && (
                                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', color: '#64748b' }}>
                                     <Loader2 className="spinner" size={20} /> Carregando mais leads...
                                 </div>
                             )}
                             {!hasMore && leads.length > 0 && <span style={{ color: '#cbd5e1', fontSize: '0.8rem' }}>Você chegou ao fim da lista.</span>}
-                        </div>
-                    </div>
-                </div>
+                        </div >
+                    </div >
+                </div >
             )}
 
             {/* Action Drawer */}
-            {selectedLead && (
-                <div className="drawer-overlay" onClick={(e) => {
-                    if (e.target === e.currentTarget) setSelectedLead(null)
-                }}>
-                    <div className="drawer-panel">
-                        <div className="drawer-header">
-                            <h2 style={{ fontSize: '1.25rem', fontWeight: 'bold', color: '#1e293b' }}>
-                                Cadência de Venda
-                            </h2>
-                            <button onClick={() => setSelectedLead(null)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
-                                <X size={24} color="#64748b" />
-                            </button>
-                        </div>
-
-                        <div className="drawer-body">
-                            {/* Profile Summary */}
-                            <div className="drawer-section">
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem' }}>
-                                    <div className="avatar-placeholder" style={{ width: 48, height: 48, fontSize: '1.2rem', background: '#3b82f6', color: 'white' }}>
-                                        {selectedLead.nome ? selectedLead.nome.charAt(0) : '?'}
-                                    </div>
-                                    <div>
-                                        <h3 style={{ fontSize: '1.1rem', fontWeight: '700', margin: 0 }}>{selectedLead.nome}</h3>
-                                        <p style={{ margin: 0, color: '#64748b' }}>{selectedLead.headline}</p>
-                                        <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.25rem' }}>
-                                            {selectedLead.location && (
-                                                <span style={{ fontSize: '0.8rem', color: '#94a3b8', display: 'flex', alignItems: 'center', gap: '2px' }}>
-                                                    <MapPin size={12} /> {selectedLead.location}
-                                                </span>
-                                            )}
-                                        </div>
-                                    </div>
-                                </div>
-                                {/* Skills */}
-                                {selectedLead.skills && (
-                                    <div className="drawer-tags" style={{ marginTop: '1rem' }}>
-                                        {(() => {
-                                            try {
-                                                const tags = typeof selectedLead.skills === 'string' ? JSON.parse(selectedLead.skills) : selectedLead.skills
-                                                return tags.slice(0, 5).map((t, i) => {
-                                                    const skillName = typeof t === 'string' ? t : (t.name || 'Skill')
-                                                    return (
-                                                        <span key={i} className="tag"><Hash size={10} style={{ marginRight: 2 }} />{skillName}</span>
-                                                    )
-                                                })
-                                            } catch (e) { return null }
-                                        })()}
-                                    </div>
-                                )}
+            {
+                selectedLead && (
+                    <div className="drawer-overlay" onClick={(e) => {
+                        if (e.target === e.currentTarget) setSelectedLead(null)
+                    }}>
+                        <div className="drawer-panel">
+                            <div className="drawer-header">
+                                <h2 style={{ fontSize: '1.25rem', fontWeight: 'bold', color: '#1e293b' }}>
+                                    Cadência de Venda
+                                </h2>
+                                <button onClick={() => setSelectedLead(null)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
+                                    <X size={24} color="#64748b" />
+                                </button>
                             </div>
 
-                            {/* Work History */}
-                            {selectedLead.work_history && (
+                            <div className="drawer-body">
+                                {/* Profile Summary */}
                                 <div className="drawer-section">
-                                    <h4><Briefcase size={14} style={{ display: 'inline', marginRight: 4 }} /> Experiência Profissional</h4>
-                                    <div className="timeline-list">
-                                        {(() => {
-                                            try {
-                                                const history = typeof selectedLead.work_history === 'string' ? JSON.parse(selectedLead.work_history) : selectedLead.work_history
-                                                return history.slice(0, 3).map((job, idx) => (
-                                                    <div key={idx} className="timeline-item">
-                                                        <div className="timeline-role">{job.role || job.title}</div>
-                                                        <div className="timeline-company">{job.company}</div>
-                                                        <div className="timeline-date">{job.date_range || job.duration}</div>
-                                                    </div>
-                                                ))
-                                            } catch (e) { return <span style={{ color: '#cbd5e1' }}>Dados inválidos</span> }
-                                        })()}
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem' }}>
+                                        <div className="avatar-placeholder" style={{ width: 48, height: 48, fontSize: '1.2rem', background: '#3b82f6', color: 'white' }}>
+                                            {selectedLead.nome ? selectedLead.nome.charAt(0) : '?'}
+                                        </div>
+                                        <div>
+                                            <h3 style={{ fontSize: '1.1rem', fontWeight: '700', margin: 0 }}>{selectedLead.nome}</h3>
+                                            <p style={{ margin: 0, color: '#64748b' }}>{selectedLead.headline}</p>
+                                            <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.25rem' }}>
+                                                {selectedLead.location && (
+                                                    <span style={{ fontSize: '0.8rem', color: '#94a3b8', display: 'flex', alignItems: 'center', gap: '2px' }}>
+                                                        <MapPin size={12} /> {selectedLead.location}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </div>
                                     </div>
-                                </div>
-                            )}
-
-                            {/* Why ICP? */}
-                            <div className="drawer-section">
-                                <h4>Por que é um bom lead? (IA)</h4>
-                                <div className="highlight-box">
-                                    {selectedLead.icp_reason || "Este lead possui cargo de decisão e atua em um setor compatível com sua oferta (Tecnologia/SaaS)."}
-                                </div>
-                            </div>
-
-                            {/* Suggested Message */}
-                            <div className="drawer-section">
-                                <h4>Icebreaker Gerado</h4>
-                                <div className="message-box">
-                                    <button className="copy-icon-btn" title="Copiar" onClick={() => handleCopy(selectedLead.suggested_message)}>
-                                        <Copy size={16} />
-                                    </button>
-                                    <div className="message-text">
-                                        {selectedLead.suggested_message || `Oi ${selectedLead.nome ? selectedLead.nome.split(' ')[0] : ''}, vi que você comentou sobre Reforma Tributária. Também tenho acompanhado as mudanças...\n\nComo está sendo a adaptação aí na ${selectedLead.company}?`}
-                                    </div>
+                                    {/* Skills */}
+                                    {selectedLead.skills && (
+                                        <div className="drawer-tags" style={{ marginTop: '1rem' }}>
+                                            {(() => {
+                                                try {
+                                                    const tags = typeof selectedLead.skills === 'string' ? JSON.parse(selectedLead.skills) : selectedLead.skills
+                                                    return tags.slice(0, 5).map((t, i) => {
+                                                        const skillName = typeof t === 'string' ? t : (t.name || 'Skill')
+                                                        return (
+                                                            <span key={i} className="tag"><Hash size={10} style={{ marginRight: 2 }} />{skillName}</span>
+                                                        )
+                                                    })
+                                                } catch (e) { return null }
+                                            })()}
+                                        </div>
+                                    )}
                                 </div>
 
-                                {/* Strategy Button or Tabs */}
-                                {!selectedLead.icebreaker_options ? (
-                                    <button
-                                        className="strategy-btn"
-                                        onClick={handleGenerateStrategy}
-                                        disabled={strategyLoading}
-                                    >
-                                        {strategyLoading ? <Loader2 className="spinner" size={16} /> : <Sparkles size={16} />}
-                                        {strategyLoading ? 'Gerando estratégias...' : '✨ Gerar Estratégia Avançada (3 Variações)'}
-                                    </button>
-                                ) : (
-                                    <div style={{ animation: 'fadeIn 0.5s ease' }}>
-                                        <div className="strategy-tabs">
-                                            {['Descontraída', 'Moderada', 'Intencional'].map((type) => (
-                                                <button
-                                                    key={type}
-                                                    className={`tab-item ${selectedLead.activeStrategy === type ? 'active' : ''}`}
-                                                    onClick={() => {
-                                                        const key = type === 'Descontraída' ? 'funny' : type === 'Moderada' ? 'moderate' : 'intentional'
-                                                        const newMsg = selectedLead.icebreaker_options[key]
-                                                        setSelectedLead({
-                                                            ...selectedLead,
-                                                            activeStrategy: type,
-                                                            suggested_message: newMsg
-                                                        })
-                                                    }}
-                                                >
-                                                    {type}
-                                                </button>
-                                            ))}
+                                {/* Work History */}
+                                {selectedLead.work_history && (
+                                    <div className="drawer-section">
+                                        <h4><Briefcase size={14} style={{ display: 'inline', marginRight: 4 }} /> Experiência Profissional</h4>
+                                        <div className="timeline-list">
+                                            {(() => {
+                                                try {
+                                                    const history = typeof selectedLead.work_history === 'string' ? JSON.parse(selectedLead.work_history) : selectedLead.work_history
+                                                    return history.slice(0, 3).map((job, idx) => (
+                                                        <div key={idx} className="timeline-item">
+                                                            <div className="timeline-role">{job.role || job.title}</div>
+                                                            <div className="timeline-company">{job.company}</div>
+                                                            <div className="timeline-date">{job.date_range || job.duration}</div>
+                                                        </div>
+                                                    ))
+                                                } catch (e) { return <span style={{ color: '#cbd5e1' }}>Dados inválidos</span> }
+                                            })()}
                                         </div>
                                     </div>
                                 )}
+
+                                {/* Why ICP? */}
+                                <div className="drawer-section">
+                                    <h4>Por que é um bom lead? (IA)</h4>
+                                    <div className="highlight-box">
+                                        {selectedLead.icp_reason || "Este lead possui cargo de decisão e atua em um setor compatível com sua oferta (Tecnologia/SaaS)."}
+                                    </div>
+                                </div>
+
+                                {/* Suggested Message */}
+                                <div className="drawer-section">
+                                    <h4>Icebreaker Gerado</h4>
+                                    <div className="message-box">
+                                        <button className="copy-icon-btn" title="Copiar" onClick={() => handleCopy(selectedLead.suggested_message)}>
+                                            <Copy size={16} />
+                                        </button>
+                                        <div className="message-text">
+                                            {selectedLead.suggested_message || `Oi ${selectedLead.nome ? selectedLead.nome.split(' ')[0] : ''}, vi que você comentou sobre Reforma Tributária. Também tenho acompanhado as mudanças...\n\nComo está sendo a adaptação aí na ${selectedLead.company}?`}
+                                        </div>
+                                    </div>
+
+                                    {/* Strategy Button or Tabs */}
+                                    {!selectedLead.icebreaker_options ? (
+                                        <button
+                                            className="strategy-btn"
+                                            onClick={handleGenerateStrategy}
+                                            disabled={strategyLoading}
+                                        >
+                                            {strategyLoading ? <Loader2 className="spinner" size={16} /> : <Sparkles size={16} />}
+                                            {strategyLoading ? 'Gerando estratégias...' : '✨ Gerar Estratégia Avançada (3 Variações)'}
+                                        </button>
+                                    ) : (
+                                        <div style={{ animation: 'fadeIn 0.5s ease' }}>
+                                            <div className="strategy-tabs">
+                                                {['Descontraída', 'Moderada', 'Intencional'].map((type) => (
+                                                    <button
+                                                        key={type}
+                                                        className={`tab-item ${selectedLead.activeStrategy === type ? 'active' : ''}`}
+                                                        onClick={() => {
+                                                            const key = type === 'Descontraída' ? 'funny' : type === 'Moderada' ? 'moderate' : 'intentional'
+                                                            const newMsg = selectedLead.icebreaker_options[key]
+                                                            setSelectedLead({
+                                                                ...selectedLead,
+                                                                activeStrategy: type,
+                                                                suggested_message: newMsg
+                                                            })
+                                                        }}
+                                                    >
+                                                        {type}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Interaction History Timeline */}
+                                <div className="drawer-section">
+                                    <h4><MessageCircle size={14} style={{ display: 'inline', marginRight: 4 }} /> Histórico de Interações</h4>
+                                    <div className="timeline-container" style={{ marginTop: '1rem', position: 'relative', paddingLeft: '1rem', borderLeft: '2px solid #e2e8f0' }}>
+                                        {interactionsLoading ? (
+                                            <div style={{ padding: '1rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                <Loader2 size={16} className="spinner" /> Carregando histórico...
+                                            </div>
+                                        ) : interactions.length === 0 ? (
+                                            <div style={{ padding: '1rem 0', color: '#94a3b8', fontStyle: 'italic', fontSize: '0.9rem' }}>
+                                                Nenhuma interação recente.
+                                            </div>
+                                        ) : (
+                                            interactions.map(interaction => (
+                                                <div key={interaction.id} className="timeline-node" style={{ marginBottom: '1.5rem', position: 'relative' }}>
+                                                    {/* Dot */}
+                                                    <div style={{
+                                                        position: 'absolute',
+                                                        left: '-1.35rem',
+                                                        top: '0.25rem',
+                                                        width: '10px',
+                                                        height: '10px',
+                                                        borderRadius: '50%',
+                                                        background: interaction.direction === 'inbound' ? '#22c55e' : '#3b82f6',
+                                                        border: '2px solid white',
+                                                        boxShadow: '0 0 0 1px #cbd5e1'
+                                                    }} />
+
+                                                    {/* Date */}
+                                                    <div style={{ fontSize: '0.75rem', color: '#64748b', marginBottom: '0.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                        <span>{new Date(interaction.interaction_date).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
+                                                        <span style={{
+                                                            fontSize: '0.65rem',
+                                                            padding: '2px 6px',
+                                                            borderRadius: '4px',
+                                                            background: interaction.direction === 'inbound' ? '#dcfce7' : '#dbeafe',
+                                                            color: interaction.direction === 'inbound' ? '#166534' : '#1e40af',
+                                                            fontWeight: 'bold',
+                                                            textTransform: 'uppercase'
+                                                        }}>
+                                                            {interaction.direction === 'inbound' ? 'Resposta' : 'Enviada'}
+                                                        </span>
+                                                    </div>
+
+                                                    {/* Content Bubble */}
+                                                    <div style={{
+                                                        background: '#f8fafc',
+                                                        border: '1px solid #e2e8f0',
+                                                        borderRadius: '8px',
+                                                        padding: '0.75rem',
+                                                        fontSize: '0.9rem',
+                                                        color: '#334155',
+                                                        lineHeight: '1.4'
+                                                    }}>
+                                                        {interaction.content}
+                                                    </div>
+                                                </div>
+                                            ))
+                                        )}
+                                    </div>
+                                </div>
+
                             </div>
 
-                        </div>
+                            <div className="drawer-footer">
+                                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '0.75rem' }}>
+                                    <button
+                                        className="primary-btn"
+                                        onClick={handleAutoSend}
+                                        disabled={sendingMessage}
+                                        style={{ background: sendingMessage ? '#93c5fd' : '#0a66c2' }} // LinkedIn Blue
+                                    >
+                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
+                                            {sendingMessage ? <Loader2 size={18} className="spinner" /> : <img src="https://upload.wikimedia.org/wikipedia/commons/c/ca/LinkedIn_logo_initials.png" alt="In" style={{ width: 16, height: 16, filter: 'brightness(0) invert(1)' }} />}
+                                            {sendingMessage ? 'Enviando mensagem...' : 'Enviar no LinkedIn Automaticamente'}
+                                        </div>
+                                    </button>
+                                    <button
+                                        className="secondary-btn"
+                                        onClick={() => {
+                                            handleCopy(selectedLead.suggested_message || '')
+                                            handleStatusChange(selectedLead.id, 'contacted')
+                                            setSelectedLead(null)
+                                        }}
+                                        disabled={sendingMessage}
+                                    >
+                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
+                                            <Copy size={18} /> Copiar
+                                        </div>
+                                    </button>
+                                </div>
 
-                        <div className="drawer-footer">
-                            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '0.75rem' }}>
-                                <button
-                                    className="primary-btn"
-                                    onClick={handleAutoSend}
-                                    disabled={sendingMessage}
-                                    style={{ background: sendingMessage ? '#93c5fd' : '#0a66c2' }} // LinkedIn Blue
-                                >
-                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
-                                        {sendingMessage ? <Loader2 size={18} className="spinner" /> : <img src="https://upload.wikimedia.org/wikipedia/commons/c/ca/LinkedIn_logo_initials.png" alt="In" style={{ width: 16, height: 16, filter: 'brightness(0) invert(1)' }} />}
-                                        {sendingMessage ? 'Enviando mensagem...' : 'Enviar no LinkedIn Automaticamente'}
-                                    </div>
-                                </button>
-                                <button
-                                    className="secondary-btn"
-                                    onClick={() => {
-                                        handleCopy(selectedLead.suggested_message || '')
-                                        handleStatusChange(selectedLead.id, 'contacted')
-                                        setSelectedLead(null)
-                                    }}
-                                    disabled={sendingMessage}
-                                >
-                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
-                                        <Copy size={18} /> Copiar
-                                    </div>
-                                </button>
-                            </div>
-
-                            <div style={{ display: 'flex', gap: '1rem' }}>
-                                <button className="secondary-btn" title="Agendar Follow-up">
-                                    <Calendar size={18} style={{ display: 'block', margin: '0 auto' }} />
-                                </button>
-                                <button
-                                    className="secondary-btn"
-                                    style={{ color: '#ef4444', borderColor: '#fecaca' }}
-                                    onClick={() => {
-                                        handleStatusChange(selectedLead.id, 'disqualified')
-                                        setSelectedLead(null)
-                                    }}
-                                >
-                                    Descartar
-                                </button>
+                                <div style={{ display: 'flex', gap: '1rem' }}>
+                                    <button className="secondary-btn" title="Agendar Follow-up">
+                                        <Calendar size={18} style={{ display: 'block', margin: '0 auto' }} />
+                                    </button>
+                                    <button
+                                        className="secondary-btn"
+                                        style={{ color: '#ef4444', borderColor: '#fecaca' }}
+                                        onClick={() => {
+                                            handleStatusChange(selectedLead.id, 'disqualified')
+                                            setSelectedLead(null)
+                                        }}
+                                    >
+                                        Descartar
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>
-                </div>
-            )}
+                )
+            }
             {/* Toast Notification */}
-            {notification && (
-                <div style={{
-                    position: 'fixed',
-                    bottom: '24px',
-                    right: '24px',
-                    background: notification.type === 'success' ? '#22c55e' : (notification.type === 'info' ? '#3b82f6' : '#ef4444'),
-                    color: 'white',
-                    padding: '12px 24px',
-                    borderRadius: '8px',
-                    boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '12px',
-                    zIndex: 9999,
-                    animation: 'slideIn 0.3s ease'
-                }}>
-                    {notification.type === 'error' ? <X size={20} /> : <Check size={20} />}
-                    <span style={{ fontWeight: 600 }}>{notification.message}</span>
-                </div>
-            )}
-        </div>
+            {
+                notification && (
+                    <div style={{
+                        position: 'fixed',
+                        bottom: '24px',
+                        right: '24px',
+                        background: notification.type === 'success' ? '#22c55e' : (notification.type === 'info' ? '#3b82f6' : '#ef4444'),
+                        color: 'white',
+                        padding: '12px 24px',
+                        borderRadius: '8px',
+                        boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '12px',
+                        zIndex: 9999,
+                        animation: 'slideIn 0.3s ease'
+                    }}>
+                        {notification.type === 'error' ? <X size={20} /> : <Check size={20} />}
+                        <span style={{ fontWeight: 600 }}>{notification.message}</span>
+                    </div>
+                )
+            }
+        </div >
     )
 }
 // Add simple spinner animation style if not global

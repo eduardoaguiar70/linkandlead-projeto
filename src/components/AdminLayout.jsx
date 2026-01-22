@@ -11,7 +11,10 @@ import {
     Menu, // Added
     X, // Added
     Briefcase, // Added
-    Database // Added
+    Database, // Added
+    ChevronDown,
+    ChevronRight,
+    MessageCircle, // Added
 } from 'lucide-react'
 import CreatePostModal from './CreatePostModal'
 import ClientSelector from './ClientSelector'
@@ -32,6 +35,17 @@ const AdminLayout = () => {
     }
 
     const toggleSidebar = () => setSidebarOpen(!isSidebarOpen)
+
+    const [expandedGroups, setExpandedGroups] = useState({
+        creative: true,
+        sales: true
+    })
+
+    const toggleGroup = (group) => {
+        setExpandedGroups(prev => ({ ...prev, [group]: !prev[group] }))
+    }
+
+
 
     return (
         <div className="dashboard-layout">
@@ -68,39 +82,69 @@ const AdminLayout = () => {
                 </div>
                 <nav className="nav-menu" style={{ gap: '0.5rem' }}>
 
-                    {/* SECTION 1 */}
-                    <div style={{ padding: '0 1.5rem', marginTop: '1rem', marginBottom: '0.5rem' }}>
-                        <span style={{ fontSize: '0.75rem', fontWeight: '700', color: '#94a3b8', letterSpacing: '0.05em' }}>
+                    {/* GROUP 1: Gestão Criativa */}
+                    <div className="nav-group">
+                        <button
+                            onClick={() => toggleGroup('creative')}
+                            style={{
+                                width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                                background: 'transparent', border: 'none', color: '#94a3b8',
+                                padding: '0.5rem 1.5rem', cursor: 'pointer', fontSize: '0.75rem', fontWeight: '700', letterSpacing: '0.05em'
+                            }}
+                        >
                             GESTÃO CRIATIVA
-                        </span>
+                            {expandedGroups.creative ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                        </button>
+
+                        {expandedGroups.creative && (
+                            <div className="nav-group-items" style={{ animation: 'fadeIn 0.2s' }}>
+                                <Link to="/" className={isActive('/')}>
+                                    <LayoutDashboard size={20} /> {t('dashboard')}
+                                </Link>
+                                <Link to="/posts" className={isActive('/posts')}>
+                                    <FileText size={20} /> {t('posts')}
+                                </Link>
+                                <Link to="/ideas" className={isActive('/ideas')}>
+                                    <Lightbulb size={20} /> {t('ideas')}
+                                </Link>
+                            </div>
+                        )}
                     </div>
 
-                    <Link to="/" className={isActive('/')}>
-                        <LayoutDashboard size={20} /> {t('dashboard')}
-                    </Link>
-                    <Link to="/posts" className={isActive('/posts')}>
-                        <FileText size={20} /> {t('posts')}
-                    </Link>
-                    <Link to="/ideas" className={isActive('/ideas')}>
-                        <Lightbulb size={20} /> {t('ideas')}
-                    </Link>
-                    <Link to="/clients" className={isActive('/clients')}>
-                        <Users size={20} /> {t('clients')}
-                    </Link>
-
-                    {/* SECTION 2 */}
-                    <div style={{ padding: '0 1.5rem', marginTop: '1.5rem', marginBottom: '0.5rem' }}>
-                        <span style={{ fontSize: '0.75rem', fontWeight: '700', color: '#94a3b8', letterSpacing: '0.05em' }}>
+                    {/* GROUP 2: Máquina de Vendas */}
+                    <div className="nav-group">
+                        <button
+                            onClick={() => toggleGroup('sales')}
+                            style={{
+                                width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                                background: 'transparent', border: 'none', color: '#94a3b8',
+                                padding: '0.5rem 1.5rem', marginTop: '1rem', cursor: 'pointer', fontSize: '0.75rem', fontWeight: '700', letterSpacing: '0.05em'
+                            }}
+                        >
                             MÁQUINA DE VENDAS
-                        </span>
-                    </div>
+                            {expandedGroups.sales ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                        </button>
 
-                    <Link to="/sales" className={isActive('/sales')}>
-                        <Database size={20} /> Mineração de Base
-                    </Link>
-                    <Link to="/leads" className={isActive('/leads')}>
-                        <Briefcase size={20} /> Gestão de Leads
-                    </Link>
+                        {expandedGroups.sales && (
+                            <div className="nav-group-items" style={{ animation: 'fadeIn 0.2s' }}>
+                                <Link to="/sales" className={isActive('/sales')}>
+                                    <Database size={20} /> Mineração de Base
+                                </Link>
+                                <Link to="/sales/inbox" className={isActive('/sales/inbox')}>
+                                    <div style={{ position: 'relative' }}>
+                                        <MessageCircle size={20} />
+                                    </div>
+                                    Inbox Inteligente
+                                </Link>
+                                <Link to="/leads" className={isActive('/leads')}>
+                                    <Briefcase size={20} /> Gestão de Leads
+                                </Link>
+                                <Link to="/clients" className={isActive('/clients')}>
+                                    <Users size={20} /> Gerenciar Clientes
+                                </Link>
+                            </div>
+                        )}
+                    </div>
 
                     <div style={{ marginTop: 'auto' }}></div>
 
