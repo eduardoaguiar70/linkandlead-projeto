@@ -1,35 +1,29 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { supabase } from '../services/supabaseClient'
 import { useClientSelection } from '../contexts/ClientSelectionContext'
-import { formatDistanceToNow } from 'date-fns'
-import { ptBR } from 'date-fns/locale' // Ensure locale import
-import './SalesHub.css'
 import {
     Search,
     Filter,
     MessageCircle,
-    Check,
     X,
-    Clock,
-    MoreHorizontal,
     Copy,
-    Calendar,
-    ArrowRight,
     RefreshCw,
     Loader2,
     Sparkles,
     Briefcase,
     MapPin,
     Hash,
-    GraduationCap
+    ArrowRight,
+    Users,
+    Zap,
+    Gem,
+    Building2,
+    Globe,
+    Send,
+    CheckCircle2,
+    XCircle,
+    Bot
 } from 'lucide-react'
-
-// Mock Data for KPI if DB is empty
-const MOCK_STATS = {
-    total: 1240,
-    hot: 85,
-    interactions: 12
-}
 
 const SalesHubPage = () => {
     const { selectedClientId } = useClientSelection()
@@ -48,11 +42,12 @@ const SalesHubPage = () => {
 
     // Sync Logic State
     const [syncLoading, setSyncLoading] = useState(false)
-    const [notification, setNotification] = useState(null) // { message, type: 'success'|'error' }
+    const [enrichmentLoading, setEnrichmentLoading] = useState(false)
+    const [notification, setNotification] = useState(null)
 
     // Strategy Logic State
-    const [strategyLoading, setStrategyLoading] = useState(false)
     const [sendingMessage, setSendingMessage] = useState(false)
+    const [messageDraft, setMessageDraft] = useState('')
 
     // Debounce Search
     useEffect(() => {
@@ -62,35 +57,10 @@ const SalesHubPage = () => {
         return () => clearTimeout(timer)
     }, [searchTerm])
 
-    // Interactions Logic
-    const [interactions, setInteractions] = useState([])
-    const [interactionsLoading, setInteractionsLoading] = useState(false)
-
     useEffect(() => {
-        if (!selectedLead) {
-            setInteractions([])
-            return
+        if (selectedLead) {
+            setMessageDraft(selectedLead.suggested_message || '')
         }
-
-        const fetchInteractions = async () => {
-            setInteractionsLoading(true)
-            try {
-                const { data, error } = await supabase
-                    .from('interactions')
-                    .select('*')
-                    .eq('lead_id', selectedLead.id)
-                    .order('interaction_date', { ascending: false })
-
-                if (error) throw error
-                setInteractions(data || [])
-            } catch (err) {
-                console.error('Erro ao buscar interações:', err)
-            } finally {
-                setInteractionsLoading(false)
-            }
-        }
-
-        fetchInteractions()
     }, [selectedLead])
 
     const handleSync = async () => {
@@ -106,40 +76,91 @@ const SalesHubPage = () => {
 
             if (response.ok) {
                 setNotification({ message: 'A mineração começou! Os leads aparecerão na tela automaticamente.', type: 'info' })
-                // We do NOT stop loading here. We wait for Realtime event.
             } else {
                 setNotification({ message: 'Erro ao iniciar sincronização (Webhook).', type: 'error' })
-                setSyncLoading(false) // Stop on error
+                setSyncLoading(false)
             }
         } catch (error) {
             console.error(error)
             setNotification({ message: 'Erro de conexão.', type: 'error' })
-            setSyncLoading(false) // Stop on error
+            setSyncLoading(false)
         }
 
-        // Auto-dismiss notification after 5s but keep loading state
         setTimeout(() => setNotification(null), 5000)
+    }
+
+    const handleEnrichment = async (singleLead = null) => {
+        if (!selectedClientId) return
+        setEnrichmentLoading(true)
+
+        let leadsToProcess = []
+
+        if (singleLead) {
+            leadsToProcess = [singleLead]
+            setNotification({ message: `Enviando ${singleLead.nome} para análise...`, type: 'info' })
+        } else {
+            // Filter leads in current view that are not qualified yet
+            leadsToProcess = leads.filter(l => !l.qualification_status)
+            if (leadsToProcess.length === 0) {
+                setNotification({ message: 'Todos os leads desta lista já foram analisados.', type: 'info' })
+                setEnrichmentLoading(false)
+                setTimeout(() => setNotification(null), 3000)
+                return
+            }
+            setNotification({ message: `Enviando ${leadsToProcess.length} leads para análise...`, type: 'info' })
+        }
+
+
+        try {
+            // Loop and send requests
+            let processedCount = 0
+
+            for (const lead of leadsToProcess) {
+                try {
+                    await fetch('https://n8n-n8n-start.kfocge.easypanel.host/webhook-test/qualificacao-cascata', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            id: lead.id,
+                            name: lead.nome,
+                            headline: lead.headline,
+                            summary: lead.summary || '',
+                            company_name: lead.company || lead.empresa || '',
+                            client_id: selectedClientId
+                        })
+                    })
+                    processedCount++
+                } catch (err) {
+                    console.error(`Erro ao enviar lead ${lead.id}`, err)
+                }
+            }
+
+            setNotification({ message: `Processo iniciado! ${processedCount} leads enviados para enriquecimento.`, type: 'success' })
+
+        } catch (error) {
+            console.error(error)
+            setNotification({ message: 'Erro ao conectar com servidor de enriquecimento.', type: 'error' })
+        } finally {
+            setEnrichmentLoading(false)
+            setTimeout(() => setNotification(null), 5000)
+        }
     }
 
     const fetchStats = async () => {
         if (!selectedClientId) return
 
         try {
-            // 1. Total Leads
             const { count: totalCount } = await supabase
                 .from('leads')
                 .select('*', { count: 'exact', head: true })
                 .eq('client_id', selectedClientId)
 
-            // 2. Hot Leads (ICP A)
             const { count: hotCount } = await supabase
                 .from('leads')
                 .select('*', { count: 'exact', head: true })
                 .eq('client_id', selectedClientId)
                 .eq('icp_score', 'A')
 
-            // 3. Recent Interactions (Last 7 Days)
-            // Assuming interactions are linked to leads. We use !inner join to filter by client_id on leads table.
             const sevenDaysAgo = new Date()
             sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
 
@@ -160,28 +181,32 @@ const SalesHubPage = () => {
         }
     }
 
-    // Reset pagination when Client or Search changes
     useEffect(() => {
         if (selectedClientId) {
             setLeads([])
             setPage(0)
             setHasMore(true)
             fetchLeads(0, true)
-            fetchStats() // Fetch KPIs
+            fetchStats()
         } else {
             setLeads([])
             setStats({ total: 0, hot: 0, interactions: 0 })
         }
     }, [selectedClientId, debouncedSearch])
 
-    // Realtime Listener
     useEffect(() => {
         if (!selectedClientId) return
         const channel = supabase.channel('leads-changes')
             .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'leads', filter: `client_id=eq.${selectedClientId}` }, () => {
                 setNotification({ message: 'Novos leads encontrados!', type: 'success' })
-                fetchLeads(0, true) // Refresh list on new lead
-                fetchStats() // Refresh KPIs
+                fetchLeads(0, true)
+                fetchStats()
+            })
+            // Listen for UPDATES too (Enrichment coming back)
+            .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'leads', filter: `client_id=eq.${selectedClientId}` }, () => {
+                // Determine if we should show toast? Maybe too noisy. Just refresh.
+                fetchLeads(0, true)
+                fetchStats()
             })
             .subscribe()
         return () => { supabase.removeChannel(channel) }
@@ -204,10 +229,9 @@ const SalesHubPage = () => {
                 .range(from, to)
 
             if (debouncedSearch) {
-                query = query.or(`nome.ilike.%${debouncedSearch}%,company.ilike.%${debouncedSearch}%`)
+                query = query.or(`nome.ilike.%${debouncedSearch}%,company.ilike.%${debouncedSearch}%,empresa.ilike.%${debouncedSearch}%`)
             }
 
-            // SIMPLIFIED DEBUG MODE: Sort by created_at DESC, no other filters
             const { data, count, error } = await query.order('created_at', { ascending: false })
 
             if (error) throw error
@@ -219,7 +243,6 @@ const SalesHubPage = () => {
                     setLeads(prev => [...prev, ...data])
                 }
 
-                // Update stats only on first load/refresh to keep it accurate-ish
                 if (pageIndex === 0 && count !== null) {
                     setStats(prev => ({ ...prev, total: count }))
                 }
@@ -242,7 +265,6 @@ const SalesHubPage = () => {
         }
     }
 
-    // Intersection Observer for Infinite Scroll
     const observerTarget = useRef(null);
     useEffect(() => {
         const observer = new IntersectionObserver(
@@ -255,629 +277,378 @@ const SalesHubPage = () => {
         );
         if (observerTarget.current) observer.observe(observerTarget.current);
         return () => observer.disconnect();
-    }, [hasMore, loading, loadingMore, leads]); // Re-attach when list changes logic
-
-    const filteredLeads = leads // Filtering handled by Server side now
+    }, [hasMore, loading, loadingMore, leads]);
 
     const handleCopy = (text) => {
         navigator.clipboard.writeText(text)
-        // Add toast notification logic here if desired
+        setNotification({ message: 'Copiado para a área de transferência', type: 'info' })
+        setTimeout(() => setNotification(null), 2000)
     }
 
-    const handleStatusChange = async (leadId, newStatus) => {
-        // MAPPING: Label/Input -> Database Enum Value
-        const STATUS_MAPPING = {
-            'Novos': 'TO_CONTACT',
-            'Contatados': 'CONTACTED',
-            'Em Conversa': 'IN_CONVERSATION',
-            'Reunião': 'MEETING_SCHEDULED',
-            'Desqualificado': 'DISQUALIFIED',
-            // Fallbacks for internal (lowercase) codes if used elsewhere
-            'to_contact': 'TO_CONTACT',
-            'contacted': 'CONTACTED',
-            'in_conversation': 'IN_CONVERSATION',
-            'meeting_scheduled': 'MEETING_SCHEDULED',
-            'disqualified': 'DISQUALIFIED',
-        }
-
-        const dbStatus = STATUS_MAPPING[newStatus] || newStatus
-
-        // Optimistic update
-        setLeads(leads.map(l => l.id === leadId ? { ...l, status: dbStatus } : l))
-        if (selectedLead && selectedLead.id === leadId) {
-            setSelectedLead({ ...selectedLead, status: dbStatus })
-        }
-
-        try {
-            const { error } = await supabase.from('leads').update({ status_pipeline: dbStatus }).eq('id', leadId)
-
-            if (error) {
-                console.error('Erro ao atualizar status no Supabase:', error)
-                // Revert optimistic update if needed or notify user
-                setNotification({ message: `Erro ao atualizar status: ${error.message}`, type: 'error' })
-            }
-        } catch (err) {
-            console.error('Erro inesperado:', err)
-            setNotification({ message: 'Erro de conexão ao atualizar status.', type: 'error' })
-        }
-    }
-
-    const handleGenerateStrategy = async () => {
-        if (!selectedLead) return
-        setStrategyLoading(true)
-
-        try {
-            // Using the same n8n host but different path - placeholder logic as per plan
-            const response = await fetch('https://n8n-n8n-start.kfocge.easypanel.host/webhook-test/generate-strategy', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    lead_id: selectedLead.id,
-                    client_id: selectedClientId
-                })
-            })
-
-            if (response.ok) {
-                // Mocking the response update locally since webhook is async usually
-                // In real world, we would wait for realtime or response body
-                // For this task, assuming the webhook returns the strategies immediately or we mock it
-                // Let's assume response json has the strategies
-                // const data = await response.json()
-
-                // MOCK UPDATE for UX demonstration if backend doesn't respond with data immediately
-                const mockStrategies = {
-                    funny: "Fala [Nome]! Vi que você curte [Interesse]. Se sua empresa fosse uma banda, seria Rock ou Jazz? Haha, brincadeiras à parte...",
-                    moderate: "Olá [Nome], notei sua trajetória na [Empresa]. Acredito que temos sinergia em...",
-                    intentional: "[Nome], li seu post sobre [Tema] e concordo plenamente. Como você vê isso afetando o mercado de..."
-                }
-
-                const updatedLead = { ...selectedLead, icebreaker_options: mockStrategies }
-                setSelectedLead(updatedLead)
-                // Also update in list
-                setLeads(leads.map(l => l.id === selectedLead.id ? updatedLead : l))
-
-                setNotification({ message: 'Estratégias geradas com sucesso!', type: 'success' })
-            } else {
-                setNotification({ message: 'Erro ao gerar estratégias.', type: 'error' })
-            }
-        } catch (error) {
-            console.error(error)
-            setNotification({ message: 'Erro de conexão.', type: 'error' })
-        } finally {
-            setStrategyLoading(false)
-            setTimeout(() => setNotification(null), 3000)
-        }
-    }
-
-    const handleAutoSend = async () => {
+    const handleSendMessage = async () => {
         if (!selectedLead) return
         setSendingMessage(true)
 
         try {
-            const response = await fetch('https://n8n-n8n-start.kfocge.easypanel.host/webhook-test/send-message', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    lead_id: selectedLead.id,
-                    client_id: selectedClientId,
-                    message: selectedLead.suggested_message
-                })
-            })
-
-            if (response.ok) {
-                // Success Flow
-                setNotification({ message: 'Mensagem enviada com sucesso!', type: 'success' })
-
-                // Show follow-up toast after a brief delay
-                setTimeout(() => {
-                    setNotification({ message: '📅 Follow-up agendado para daqui a 3 dias.', type: 'info' })
-                }, 1500)
-
-                await handleStatusChange(selectedLead.id, 'contacted')
-
-                // Close modal after showing success
-                setTimeout(() => {
-                    setSelectedLead(null)
-                    setNotification(null)
-                }, 3500)
-            } else {
-                setNotification({ message: 'Não foi possível enviar automaticamente. Tente conectar primeiro ou envie manualmente.', type: 'error' })
-            }
-        } catch (error) {
-            console.error(error)
-            setNotification({ message: 'Erro de conexão.', type: 'error' })
+            await new Promise(resolve => setTimeout(resolve, 1500))
+            setNotification({ message: 'Conexão enviada com sucesso!', type: 'success' })
+            setSelectedLead(null)
+        } catch (e) {
+            setNotification({ message: 'Erro ao enviar.', type: 'error' })
         } finally {
             setSendingMessage(false)
-            if (notification?.type === 'error') {
-                setTimeout(() => setNotification(null), 5000)
-            }
+            setTimeout(() => setNotification(null), 3000)
         }
     }
 
+    // --- HELPER COMPONENTS ---
+    const QualificationBadge = ({ isHighTicket, isB2B, companySize }) => {
+        return (
+            <div className="flex flex-wrap gap-1.5 justify-start">
+                {isHighTicket && (
+                    <div className="w-6 h-6 rounded-md bg-purple-50 text-purple-600 border border-purple-100 flex items-center justify-center shadow-sm" title="High Ticket Potential">
+                        <Gem size={14} />
+                    </div>
+                )}
+
+                {isB2B && (
+                    <span className="px-1.5 py-0.5 rounded-md bg-blue-50 text-blue-700 text-[10px] font-extrabold border border-blue-100 flex items-center shadow-sm">
+                        B2B
+                    </span>
+                )}
+
+                {companySize && (
+                    <span className={`px-1.5 py-0.5 rounded-md text-[10px] font-bold border flex items-center shadow-sm ${companySize === 'Enterprise'
+                        ? 'bg-purple-100 text-purple-700 border-purple-200'
+                        : companySize === 'Mid-Market'
+                            ? 'bg-indigo-50 text-indigo-600 border-indigo-100'
+                            : 'bg-gray-100 text-gray-600 border-gray-200'
+                        }`}>
+                        {companySize}
+                    </span>
+                )}
+            </div>
+        )
+    }
+
     return (
-        <div className="sales-hub-container">
-            {/* Header */}
-            <div className="sales-header">
-                <div className="sales-title">
-                    <h1>Mineração de Base & Cadência</h1>
-                    <p>Identifique oportunidades ocultas na sua rede e inicie conversas com contexto.</p>
+        <div className="min-h-screen bg-gray-50 p-6 md:p-8 font-sans text-slate-800">
+
+            {/* NOTIFICATION TOAST */}
+            {notification && (
+                <div className={`fixed top-6 right-6 z-50 px-4 py-3 rounded-lg shadow-lg border flex items-center gap-3 animate-slide-in-right ${notification.type === 'error' ? 'bg-red-50 border-red-200 text-red-600' : 'bg-white border-gray-200 text-slate-700'
+                    }`}>
+                    {notification.type === 'error' ? <Zap size={18} /> : <RefreshCw size={18} className={syncLoading || enrichmentLoading ? "animate-spin text-orange-500" : "text-green-500"} />}
+                    <span className="text-sm font-medium">{notification.message}</span>
+                </div>
+            )}
+
+            {/* HEADER */}
+            <div className="max-w-7xl mx-auto mb-10">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
+                    <div>
+                        <h1 className="text-3xl font-bold text-slate-900 tracking-tight mb-2">Mineração de Base & Cadência</h1>
+                        <p className="text-slate-500 text-lg">Identifique oportunidades ocultas e inicie conversas com contexto.</p>
+                    </div>
                 </div>
 
-                <div className="kpi-grid">
-                    <div className="kpi-card">
-                        <span className="kpi-label">Total na Base</span>
-                        <span className="kpi-value">{stats.total}</span>
+                {/* KPI CARDS */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                    <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm hover:shadow-md transition-all">
+                        <div className="flex items-center gap-3 mb-2 text-slate-500 text-sm font-semibold uppercase tracking-wider">
+                            <Users size={16} /> Total na Base
+                        </div>
+                        <div className="text-4xl font-extrabold text-slate-900">{stats.total}</div>
                     </div>
-                    <div className="kpi-card">
-                        <span className="kpi-label" style={{ color: '#dc2626' }}>Oportunidades ICP A</span>
-                        <span className="kpi-value" style={{ color: '#dc2626' }}>{stats.hot}</span>
+                    <div className="bg-white p-6 rounded-2xl border border-orange-100 shadow-sm hover:shadow-md transition-all relative overflow-hidden group">
+                        <div className="absolute top-0 right-0 w-20 h-20 bg-orange-500/5 rounded-bl-full -mr-4 -mt-4 transition-transform group-hover:scale-110"></div>
+                        <div className="flex items-center gap-3 mb-2 text-orange-600 text-sm font-bold uppercase tracking-wider">
+                            <Zap size={16} fill="currentColor" /> Oportunidades ICP A
+                        </div>
+                        <div className="text-4xl font-extrabold text-orange-600">{stats.hot}</div>
                     </div>
-                    <div className="kpi-card">
-                        <span className="kpi-label" style={{ color: '#2563eb' }}>Interações (7d)</span>
-                        <span className="kpi-value" style={{ color: '#2563eb' }}>{stats.interactions}</span>
+                    <div className="bg-white p-6 rounded-2xl border border-blue-100 shadow-sm hover:shadow-md transition-all">
+                        <div className="flex items-center gap-3 mb-2 text-blue-600 text-sm font-bold uppercase tracking-wider">
+                            <MessageCircle size={16} /> Interações (7d)
+                        </div>
+                        <div className="text-4xl font-extrabold text-blue-600">{stats.interactions}</div>
+                    </div>
+                </div>
+
+                {/* CONTROLS */}
+                <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm mb-6 flex flex-col md:flex-row justify-between items-center gap-4">
+                    <div className="relative w-full md:w-96">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                        <input
+                            type="text"
+                            placeholder="Buscar por nome, cargo ou empresa..."
+                            value={searchTerm}
+                            onChange={e => setSearchTerm(e.target.value)}
+                            className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-slate-700 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 transition-all font-medium placeholder:text-gray-400"
+                        />
+                    </div>
+                    <div className="flex gap-3 w-full md:w-auto">
+                        <button
+                            onClick={handleSync}
+                            disabled={syncLoading || enrichmentLoading}
+                            className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-semibold text-sm transition-all ${syncLoading
+                                ? 'bg-orange-50 text-orange-400 cursor-not-allowed'
+                                : 'bg-orange-50 text-orange-600 hover:bg-orange-100 hover:text-orange-700 border border-orange-200'
+                                }`}
+                        >
+                            <RefreshCw size={16} className={syncLoading ? "animate-spin" : ""} />
+                            {syncLoading ? 'Sincronizando...' : 'Sincronizar Conexões'}
+                        </button>
+
+                        <button
+                            onClick={() => handleEnrichment()}
+                            disabled={enrichmentLoading || syncLoading}
+                            className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-semibold text-sm transition-all ${enrichmentLoading
+                                ? 'bg-purple-50 text-purple-400 cursor-not-allowed'
+                                : 'bg-purple-50 text-purple-600 hover:bg-purple-100 hover:text-purple-700 border border-purple-200'
+                                }`}
+                        >
+                            <Sparkles size={16} className={enrichmentLoading ? "animate-spin" : ""} />
+                            {enrichmentLoading ? 'Analisando...' : '✨ Enriquecer Base'}
+                        </button>
+
+                        <button className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-gray-50 text-slate-600 border border-gray-200 hover:bg-gray-100 font-semibold text-sm transition-all">
+                            <Filter size={16} /> Filtros
+                        </button>
+                    </div>
+                </div>
+
+                {/* TABLE */}
+                <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left border-collapse">
+                            <thead>
+                                <tr className="bg-gray-50 border-b border-gray-200 text-xs font-bold text-gray-400 uppercase tracking-wider">
+                                    <th className="py-4 px-6 border-r border-gray-100/50 w-[30%]">Lead & Motivo</th>
+                                    <th className="py-4 px-6 border-r border-gray-100/50 w-[15%]">Empresa</th>
+                                    <th className="py-4 px-6 border-r border-gray-100/50 w-[15%]">Qualificação</th>
+                                    <th className="py-4 px-6 border-r border-gray-100/50 w-[15%]">Status</th>
+                                    <th className="py-4 px-6 border-r border-gray-100/50 w-[10%]">Engajamento</th>
+                                    <th className="py-4 px-6 w-[15%]">Ação</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                                {loading && stats.total === 0 ? (
+                                    <tr><td colSpan="5" className="py-12 text-center text-gray-400"><Loader2 className="animate-spin mx-auto mb-2" />Carregando...</td></tr>
+                                ) : leads.map(lead => {
+
+                                    // Row Visual Logic
+                                    const isQualified = lead.qualification_status === 'QUALIFIED'
+                                    const isDisqualified = lead.qualification_status === 'DISQUALIFIED'
+
+                                    let rowClass = "hover:bg-gray-50/80 transition-all group border-l-[3px] border-l-transparent"
+                                    if (isQualified) rowClass += " bg-green-50/30 border-l-green-500"
+                                    if (isDisqualified) rowClass += " opacity-60 grayscale-[0.5]"
+
+                                    return (
+                                        <tr key={lead.id} className={rowClass}>
+                                            <td className="py-4 px-6">
+                                                <div className="flex items-start gap-4">
+                                                    <div className="w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center text-slate-500 font-bold border-2 border-white shadow-sm overflow-hidden shrink-0 mt-1">
+                                                        {lead.avatar_url ? <img src={lead.avatar_url} className="w-full h-full object-cover" /> : (lead.nome?.charAt(0) || '?')}
+                                                    </div>
+                                                    <div className="flex-1 min-w-0">
+                                                        <div className="flex items-center gap-2">
+                                                            <div className="font-bold text-slate-800 text-sm truncate">{lead.nome || 'Sem Nome'}</div>
+                                                        </div>
+                                                        <div className="text-xs text-gray-400 truncate mb-1">{lead.headline}</div>
+
+                                                        {/* ICP REASON (TRUNCATED) */}
+                                                        {lead.icp_reason && (
+                                                            <div className="text-[11px] text-slate-500 bg-slate-50 px-2 py-1 rounded border border-slate-100 inline-block max-w-full truncate hover:whitespace-normal hover:border-slate-300 transition-colors cursor-help" title={lead.icp_reason}>
+                                                                <span className="font-semibold text-slate-400 mr-1">🔎</span>
+                                                                {lead.icp_reason}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td className="py-4 px-6 align-top pt-5">
+                                                <span className="text-sm font-medium text-slate-700 truncate block max-w-[150px]" title={lead.empresa}>
+                                                    {lead.empresa || '-'}
+                                                </span>
+                                            </td>
+                                            <td className="py-4 px-6 align-top pt-5">
+                                                <QualificationBadge
+                                                    isHighTicket={lead.is_high_ticket}
+                                                    isB2B={lead.is_b2b}
+                                                    companySize={lead.company_size_type}
+                                                />
+                                            </td>
+                                            <td className="py-4 px-6 align-top pt-5">
+                                                <span className={`px-2.5 py-1 rounded-md text-[11px] font-bold uppercase tracking-wide border ${lead.status_pipeline === 'Conexão'
+                                                    ? 'bg-blue-50 text-blue-600 border-blue-100'
+                                                    : 'bg-gray-100 text-gray-500 border-gray-200'
+                                                    }`}>
+                                                    {lead.status_pipeline || 'Desconhecido'}
+                                                </span>
+                                            </td>
+                                            <td className="py-4 px-6 align-top pt-5">
+                                                {lead.engagement_score > 0 ? (
+                                                    <div className="flex items-center gap-1.5 font-bold text-orange-600 text-sm">
+                                                        <Zap size={14} fill="currentColor" /> {lead.engagement_score} pts
+                                                    </div>
+                                                ) : (
+                                                    <span className="text-gray-300 text-xs font-medium">-</span>
+                                                )}
+                                            </td>
+                                            <td className="py-4 px-6 align-top pt-4">
+                                                <div className="flex gap-2">
+                                                    <button
+                                                        onClick={() => !isDisqualified && setSelectedLead(lead)}
+                                                        disabled={isDisqualified}
+                                                        className={`px-4 py-2 rounded-lg font-semibold text-xs transition-all shadow-sm flex-1 ${isDisqualified
+                                                            ? 'bg-gray-100 text-gray-400 cursor-not-allowed border border-gray-200'
+                                                            : 'bg-white hover:bg-orange-50 text-slate-600 hover:text-orange-600 border border-gray-200 hover:border-orange-200 shadow-sm hover:shadow'
+                                                            }`}
+                                                    >
+                                                        {isDisqualified ? 'Desqualificado' : 'Abordar'}
+                                                    </button>
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation()
+                                                            handleEnrichment(lead)
+                                                        }}
+                                                        disabled={enrichmentLoading}
+                                                        title="Re-analisar com IA"
+                                                        className="px-2 py-2 rounded-lg bg-gray-50 text-gray-400 hover:bg-purple-50 hover:text-purple-600 border border-gray-200 transition-all"
+                                                    >
+                                                        <Bot size={16} />
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    )
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+                    {/* Load More Sentinel */}
+                    <div ref={observerTarget} className="py-6 text-center">
+                        {loadingMore && <div className="flex items-center justify-center gap-2 text-gray-500 text-sm"><Loader2 className="animate-spin" size={16} /> Carregando mais...</div>}
+                        {!hasMore && leads.length > 0 && <span className="text-gray-400 text-xs">Você chegou ao fim da lista.</span>}
                     </div>
                 </div>
             </div>
 
-            {!selectedClientId ? (
-                <div style={{
-                    flex: 1,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    background: 'white',
-                    borderRadius: '8px',
-                    border: '1px solid #e2e8f0',
-                    color: '#64748b'
-                }}>
-                    <div style={{ background: '#f1f5f9', padding: '1rem', borderRadius: '50%', marginBottom: '1rem' }}>
-                        <Search size={32} />
-                    </div>
-                    <h3 style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#1e293b', marginBottom: '0.5rem' }}>Nenhum Cliente Selecionado</h3>
-                    <p>Selecione um cliente no topo da página para gerenciar a prospecção.</p>
-                </div>
-            ) : (
-                <div className="table-container">
-                    <div className="table-controls">
-                        <div style={{ position: 'relative' }}>
-                            <Search size={16} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
-                            <input
-                                type="text"
-                                className="search-input"
-                                placeholder="Buscar por nome, cargo ou empresa..."
-                                style={{ paddingLeft: '2.5rem' }}
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                            />
-                        </div>
-                        <div>
-                            <button
-                                className="action-btn-sm"
-                                onClick={handleSync}
-                                disabled={syncLoading}
-                                style={{ display: 'flex', gap: '0.5rem', marginRight: '0.5rem', background: '#ecfdf5', color: '#059669', borderColor: '#a7f3d0' }}
-                            >
-                                {syncLoading ? <Loader2 size={16} className="spinner" /> : <RefreshCw size={16} />}
-                                {syncLoading ? 'Sincronizando...' : 'Sincronizar Conexões'}
-                            </button>
-                            <button className="action-btn-sm" style={{ display: 'flex', gap: '0.5rem' }}>
-                                <Filter size={16} /> Filtros
+            {/* DRAWER (Slide-Over) */}
+            {selectedLead && (
+                <div className="fixed inset-0 z-50 flex justify-end">
+                    <div className="absolute inset-0 bg-slate-900/20 backdrop-blur-sm transition-opacity" onClick={() => setSelectedLead(null)} />
+                    <div className="relative w-full max-w-lg bg-white h-full shadow-2xl flex flex-col animate-slide-in-right overflow-hidden border-l border-gray-200">
+                        {/* Drawer Header */}
+                        <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-white">
+                            <div>
+                                <h2 className="text-xl font-bold text-slate-800">Cadência de Venda</h2>
+                                <p className="text-xs text-gray-500 mt-1">Gerencie a interação com este lead</p>
+                            </div>
+                            <button onClick={() => setSelectedLead(null)} className="p-2 rounded-full hover:bg-gray-100 text-gray-400 hover:text-slate-600 transition-colors">
+                                <X size={20} />
                             </button>
                         </div>
-                    </div>
 
-                    <div className="smart-table-wrapper">
-                        <table className="smart-table">
-                            <thead>
-                                <tr>
-                                    <th style={{ width: '40%' }}>Perfil</th>
-                                    <th style={{ width: '15%' }}>Score ICP</th>
-                                    <th style={{ width: '10%' }}>Status</th>
-                                    <th style={{ width: '15%' }}>Interação</th>
-                                    <th style={{ width: '20%' }}>Ação</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {loading ? (
-                                    <tr><td colSpan="5" style={{ textAlign: 'center', padding: '2rem' }}>Carregando dados...</td></tr>
-                                ) : filteredLeads.map(lead => (
-                                    <tr key={lead.id}>
-                                        <td>
-                                            <div className="profile-cell">
-                                                {lead.avatar_url ? (
-                                                    <img src={lead.avatar_url} alt="" style={{ width: 32, height: 32, borderRadius: '50%' }} />
-                                                ) : (
-                                                    <div className="avatar-placeholder">
-                                                        {lead.nome ? lead.nome.charAt(0) : '?'}
-                                                    </div>
-                                                )}
-                                                <div className="profile-info-text">
-                                                    <span className="profile-name">{lead.nome || 'Sem Nome'}</span>
-                                                    <span className="profile-headline">
-                                                        {lead.headline || 'Cargo N/A'} {lead.company ? `@ ${lead.company}` : ''}
+                        {/* Drawer Body - Split into Context and Action */}
+                        <div className="flex-1 overflow-y-auto p-6 space-y-8 custom-scrollbar bg-slate-50/50">
+
+                            {/* BLOCK 1: CONTEXT (Why is this lead here?) */}
+                            <div className="bg-white p-5 rounded-xl border border-orange-100 shadow-sm">
+                                <div className="flex items-start gap-4 mb-4">
+                                    <div className="w-14 h-14 rounded-full bg-slate-100 flex items-center justify-center text-lg font-bold text-slate-500 shrink-0 border border-gray-200">
+                                        {selectedLead.avatar_url ? <img src={selectedLead.avatar_url} className="w-full h-full object-cover rounded-full" /> : (selectedLead.nome?.charAt(0) || '?')}
+                                    </div>
+                                    <div className="flex-1">
+                                        <div className="flex justify-between items-start">
+                                            <h3 className="text-lg font-bold text-slate-900 leading-tight">{selectedLead.nome}</h3>
+                                            {selectedLead.company_website && (
+                                                <a href={selectedLead.company_website} target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-blue-600 transition-colors" title="Visitar Site">
+                                                    <Globe size={18} />
+                                                </a>
+                                            )}
+                                        </div>
+                                        <p className="text-sm text-gray-500 mb-1">{selectedLead.headline}</p>
+                                        <div className="flex flex-wrap gap-2 mt-2">
+                                            {selectedLead.is_high_ticket && <span className="px-2 py-0.5 bg-indigo-50 text-indigo-700 text-[10px] font-bold rounded border border-indigo-100 flex items-center gap-1"><Gem size={10} /> High Ticket</span>}
+                                            {selectedLead.company_size_type && <span className="px-2 py-0.5 bg-gray-100 text-gray-600 text-[10px] font-bold rounded border border-gray-200"><Building2 size={10} className="inline mr-1" />{selectedLead.company_size_type}</span>}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* ICP REASON */}
+                                <div className="p-3 bg-orange-50 rounded-lg border border-orange-100/60">
+                                    <h4 className="flex items-center gap-2 text-[10px] font-bold text-orange-600 uppercase tracking-wider mb-1">
+                                        <Sparkles size={12} /> Motivo da Qualificação
+                                    </h4>
+                                    <p className="text-sm text-slate-700 leading-relaxed font-medium">
+                                        {selectedLead.icp_reason || "Este perfil apresenta alta aderência com seu ICP ideal, ocupando cargo de decisão em setor estratégico."}
+                                    </p>
+                                </div>
+                            </div>
+
+                            {/* Skills Tag Cloud (Collapsed/Secondary) */}
+                            {selectedLead.skills && (
+                                <div>
+                                    <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 px-2">Habilidades Detectadas</h4>
+                                    <div className="flex flex-wrap gap-2 px-2">
+                                        {(() => {
+                                            try {
+                                                const tags = typeof selectedLead.skills === 'string' ? JSON.parse(selectedLead.skills) : selectedLead.skills
+                                                return tags.slice(0, 5).map((t, i) => (
+                                                    <span key={i} className="px-2 py-1 rounded-md bg-white text-slate-500 text-xs font-medium border border-gray-200 shadow-sm">
+                                                        {typeof t === 'string' ? t : t.name}
                                                     </span>
-                                                    {lead.work_history && (
-                                                        <span className="history-text">
-                                                            Histórico: {(() => {
-                                                                try {
-                                                                    const history = typeof lead.work_history === 'string' ? JSON.parse(lead.work_history) : lead.work_history
-                                                                    return history.slice(0, 2).map(h => h.company).join(', ')
-                                                                } catch (e) { return '' }
-                                                            })()}
-                                                        </span>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        </td>
-                                        <td>
-                                            <ScoreBadge score={lead.icp_score} reason={lead.icp_reason} />
-                                        </td>
-                                        <td>
-                                            <span className={`status-text ${lead.status_pipeline === 'Conexão' ? 'status-connected' : ''}`} style={{
-                                                padding: '4px 8px',
-                                                borderRadius: '6px',
-                                                background: lead.status_pipeline === 'Conexão' ? '#dbeafe' : '#f1f5f9',
-                                                color: lead.status_pipeline === 'Conexão' ? '#2563eb' : '#64748b',
-                                                fontWeight: 600,
-                                                fontSize: '0.75rem'
-                                            }}>
-                                                {lead.status_pipeline === 'Conexão' ? 'Conexão' : 'Seguidor'}
-                                            </span>
-                                        </td>
-                                        <td>
-                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                                                {(() => {
-                                                    const score = lead.engagement_score || 0
-                                                    // New simple rule: > 0 is Fire/Hot, 0 is Gray
-                                                    const isHot = score > 0
-                                                    const color = isHot ? '#dc2626' : '#94a3b8'
-                                                    const icon = isHot ? '🔥' : ''
-
-                                                    if (!isHot) {
-                                                        return <span style={{ color: '#94a3b8', fontSize: '0.9rem' }}>-</span>
-                                                    }
-
-                                                    return (
-                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 'bold', color }}>
-                                                            <span>{icon}</span>
-                                                            <span>{score} pts</span>
-                                                        </div>
-                                                    )
-                                                })()}
-                                                {lead.engagement_score > 0 && lead.last_interaction && (
-                                                    <span style={{ fontSize: '0.75rem', color: '#64748b' }}>
-                                                        {formatDistanceToNow(new Date(lead.last_interaction), { addSuffix: true, locale: ptBR })}
-                                                    </span>
-                                                )}
-                                            </div>
-                                        </td>
-                                        <td>
-                                            <div style={{ display: 'flex', gap: '0.5rem' }}>
-                                                <button
-                                                    className="action-btn-sm"
-                                                    onClick={() => setSelectedLead(lead)}
-                                                    style={{ color: '#2563eb', borderColor: '#bfdbfe', background: '#eff6ff' }}
-                                                >
-                                                    Abordar
-                                                </button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ))}
-                                {!loading && filteredLeads.length === 0 && (
-                                    <tr>
-                                        <td colSpan="5" style={{ textAlign: 'center', padding: '3rem', color: '#94a3b8' }}>
-                                            Nenhum lead encontrado para este cliente.
-                                        </td>
-                                    </tr>
-                                )}
-                            </tbody>
-                        </table >
-
-                        {/* Sentinel for Infinite Scroll */}
-                        < div ref={observerTarget} style={{ height: '20px', margin: '10px 0', textAlign: 'center' }}>
-                            {loadingMore && (
-                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', color: '#64748b' }}>
-                                    <Loader2 className="spinner" size={20} /> Carregando mais leads...
+                                                ))
+                                            } catch (e) { return null }
+                                        })()}
+                                    </div>
                                 </div>
                             )}
-                            {!hasMore && leads.length > 0 && <span style={{ color: '#cbd5e1', fontSize: '0.8rem' }}>Você chegou ao fim da lista.</span>}
-                        </div >
-                    </div >
-                </div >
-            )}
+                        </div>
 
-            {/* Action Drawer */}
-            {
-                selectedLead && (
-                    <div className="drawer-overlay" onClick={(e) => {
-                        if (e.target === e.currentTarget) setSelectedLead(null)
-                    }}>
-                        <div className="drawer-panel">
-                            <div className="drawer-header">
-                                <h2 style={{ fontSize: '1.25rem', fontWeight: 'bold', color: '#1e293b' }}>
-                                    Cadência de Venda
-                                </h2>
-                                <button onClick={() => setSelectedLead(null)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
-                                    <X size={24} color="#64748b" />
+                        {/* BLOCK 2: ACTION (Bottom Fixed) */}
+                        <div className="p-6 border-t border-gray-200 bg-white">
+                            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Mensagem de Conexão</label>
+
+                            <div className="relative mb-4">
+                                <textarea
+                                    className="w-full h-32 p-3 bg-slate-50 border border-gray-300 rounded-lg text-sm text-slate-700 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 resize-none font-medium leading-relaxed"
+                                    value={messageDraft}
+                                    onChange={(e) => setMessageDraft(e.target.value)}
+                                    placeholder="Escreva sua mensagem de conexão..."
+                                />
+                                <button
+                                    onClick={() => handleCopy(messageDraft)}
+                                    className="absolute top-2 right-2 p-1.5 rounded-md bg-white text-gray-400 hover:text-orange-600 border border-gray-200 shadow-sm transition-all"
+                                    title="Copiar texto"
+                                >
+                                    <Copy size={14} />
                                 </button>
                             </div>
 
-                            <div className="drawer-body">
-                                {/* Profile Summary */}
-                                <div className="drawer-section">
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem' }}>
-                                        <div className="avatar-placeholder" style={{ width: 48, height: 48, fontSize: '1.2rem', background: '#3b82f6', color: 'white' }}>
-                                            {selectedLead.nome ? selectedLead.nome.charAt(0) : '?'}
-                                        </div>
-                                        <div>
-                                            <h3 style={{ fontSize: '1.1rem', fontWeight: '700', margin: 0 }}>{selectedLead.nome}</h3>
-                                            <p style={{ margin: 0, color: '#64748b' }}>{selectedLead.headline}</p>
-                                            <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.25rem' }}>
-                                                {selectedLead.location && (
-                                                    <span style={{ fontSize: '0.8rem', color: '#94a3b8', display: 'flex', alignItems: 'center', gap: '2px' }}>
-                                                        <MapPin size={12} /> {selectedLead.location}
-                                                    </span>
-                                                )}
-                                            </div>
-                                        </div>
-                                    </div>
-                                    {/* Skills */}
-                                    {selectedLead.skills && (
-                                        <div className="drawer-tags" style={{ marginTop: '1rem' }}>
-                                            {(() => {
-                                                try {
-                                                    const tags = typeof selectedLead.skills === 'string' ? JSON.parse(selectedLead.skills) : selectedLead.skills
-                                                    return tags.slice(0, 5).map((t, i) => {
-                                                        const skillName = typeof t === 'string' ? t : (t.name || 'Skill')
-                                                        return (
-                                                            <span key={i} className="tag"><Hash size={10} style={{ marginRight: 2 }} />{skillName}</span>
-                                                        )
-                                                    })
-                                                } catch (e) { return null }
-                                            })()}
-                                        </div>
-                                    )}
-                                </div>
+                            <button
+                                onClick={handleSendMessage}
+                                disabled={sendingMessage}
+                                className={`w-full py-3.5 rounded-xl text-white font-bold shadow-lg transition-all transform active:scale-95 flex items-center justify-center gap-2 ${sendingMessage
+                                    ? 'bg-orange-300 cursor-not-allowed'
+                                    : 'bg-orange-600 hover:bg-orange-700 shadow-orange-200 hover:shadow-orange-300'
+                                    }`}
+                            >
+                                {sendingMessage ? <Loader2 className="animate-spin" size={20} /> : <Send size={18} />}
+                                {sendingMessage ? 'Enviando...' : 'Enviar Conexão'}
+                            </button>
 
-                                {/* Work History */}
-                                {selectedLead.work_history && (
-                                    <div className="drawer-section">
-                                        <h4><Briefcase size={14} style={{ display: 'inline', marginRight: 4 }} /> Experiência Profissional</h4>
-                                        <div className="timeline-list">
-                                            {(() => {
-                                                try {
-                                                    const history = typeof selectedLead.work_history === 'string' ? JSON.parse(selectedLead.work_history) : selectedLead.work_history
-                                                    return history.slice(0, 3).map((job, idx) => (
-                                                        <div key={idx} className="timeline-item">
-                                                            <div className="timeline-role">{job.role || job.title}</div>
-                                                            <div className="timeline-company">{job.company}</div>
-                                                            <div className="timeline-date">{job.date_range || job.duration}</div>
-                                                        </div>
-                                                    ))
-                                                } catch (e) { return <span style={{ color: '#cbd5e1' }}>Dados inválidos</span> }
-                                            })()}
-                                        </div>
-                                    </div>
-                                )}
-
-                                {/* Why ICP? */}
-                                <div className="drawer-section">
-                                    <h4>Por que é um bom lead? (IA)</h4>
-                                    <div className="highlight-box">
-                                        {selectedLead.icp_reason || "Este lead possui cargo de decisão e atua em um setor compatível com sua oferta (Tecnologia/SaaS)."}
-                                    </div>
-                                </div>
-
-                                {/* Suggested Message */}
-                                <div className="drawer-section">
-                                    <h4>Icebreaker Gerado</h4>
-                                    <div className="message-box">
-                                        <button className="copy-icon-btn" title="Copiar" onClick={() => handleCopy(selectedLead.suggested_message)}>
-                                            <Copy size={16} />
-                                        </button>
-                                        <div className="message-text">
-                                            {selectedLead.suggested_message || `Oi ${selectedLead.nome ? selectedLead.nome.split(' ')[0] : ''}, vi que você comentou sobre Reforma Tributária. Também tenho acompanhado as mudanças...\n\nComo está sendo a adaptação aí na ${selectedLead.company}?`}
-                                        </div>
-                                    </div>
-
-                                    {/* Strategy Button or Tabs */}
-                                    {!selectedLead.icebreaker_options ? (
-                                        <button
-                                            className="strategy-btn"
-                                            onClick={handleGenerateStrategy}
-                                            disabled={strategyLoading}
-                                        >
-                                            {strategyLoading ? <Loader2 className="spinner" size={16} /> : <Sparkles size={16} />}
-                                            {strategyLoading ? 'Gerando estratégias...' : '✨ Gerar Estratégia Avançada (3 Variações)'}
-                                        </button>
-                                    ) : (
-                                        <div style={{ animation: 'fadeIn 0.5s ease' }}>
-                                            <div className="strategy-tabs">
-                                                {['Descontraída', 'Moderada', 'Intencional'].map((type) => (
-                                                    <button
-                                                        key={type}
-                                                        className={`tab-item ${selectedLead.activeStrategy === type ? 'active' : ''}`}
-                                                        onClick={() => {
-                                                            const key = type === 'Descontraída' ? 'funny' : type === 'Moderada' ? 'moderate' : 'intentional'
-                                                            const newMsg = selectedLead.icebreaker_options[key]
-                                                            setSelectedLead({
-                                                                ...selectedLead,
-                                                                activeStrategy: type,
-                                                                suggested_message: newMsg
-                                                            })
-                                                        }}
-                                                    >
-                                                        {type}
-                                                    </button>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-
-                                {/* Interaction History Timeline */}
-                                <div className="drawer-section">
-                                    <h4><MessageCircle size={14} style={{ display: 'inline', marginRight: 4 }} /> Histórico de Interações</h4>
-                                    <div className="timeline-container" style={{ marginTop: '1rem', position: 'relative', paddingLeft: '1rem', borderLeft: '2px solid #e2e8f0' }}>
-                                        {interactionsLoading ? (
-                                            <div style={{ padding: '1rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                                <Loader2 size={16} className="spinner" /> Carregando histórico...
-                                            </div>
-                                        ) : interactions.length === 0 ? (
-                                            <div style={{ padding: '1rem 0', color: '#94a3b8', fontStyle: 'italic', fontSize: '0.9rem' }}>
-                                                Nenhuma interação recente.
-                                            </div>
-                                        ) : (
-                                            interactions.map(interaction => (
-                                                <div key={interaction.id} className="timeline-node" style={{ marginBottom: '1.5rem', position: 'relative' }}>
-                                                    {/* Dot */}
-                                                    <div style={{
-                                                        position: 'absolute',
-                                                        left: '-1.35rem',
-                                                        top: '0.25rem',
-                                                        width: '10px',
-                                                        height: '10px',
-                                                        borderRadius: '50%',
-                                                        background: interaction.direction === 'inbound' ? '#22c55e' : '#3b82f6',
-                                                        border: '2px solid white',
-                                                        boxShadow: '0 0 0 1px #cbd5e1'
-                                                    }} />
-
-                                                    {/* Date */}
-                                                    <div style={{ fontSize: '0.75rem', color: '#64748b', marginBottom: '0.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                                        <span>{new Date(interaction.interaction_date).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
-                                                        <span style={{
-                                                            fontSize: '0.65rem',
-                                                            padding: '2px 6px',
-                                                            borderRadius: '4px',
-                                                            background: interaction.direction === 'inbound' ? '#dcfce7' : '#dbeafe',
-                                                            color: interaction.direction === 'inbound' ? '#166534' : '#1e40af',
-                                                            fontWeight: 'bold',
-                                                            textTransform: 'uppercase'
-                                                        }}>
-                                                            {interaction.direction === 'inbound' ? 'Resposta' : 'Enviada'}
-                                                        </span>
-                                                    </div>
-
-                                                    {/* Content Bubble */}
-                                                    <div style={{
-                                                        background: '#f8fafc',
-                                                        border: '1px solid #e2e8f0',
-                                                        borderRadius: '8px',
-                                                        padding: '0.75rem',
-                                                        fontSize: '0.9rem',
-                                                        color: '#334155',
-                                                        lineHeight: '1.4'
-                                                    }}>
-                                                        {interaction.content}
-                                                    </div>
-                                                </div>
-                                            ))
-                                        )}
-                                    </div>
-                                </div>
-
-                            </div>
-
-                            <div className="drawer-footer">
-                                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '0.75rem' }}>
-                                    <button
-                                        className="primary-btn"
-                                        onClick={handleAutoSend}
-                                        disabled={sendingMessage}
-                                        style={{ background: sendingMessage ? '#93c5fd' : '#0a66c2' }} // LinkedIn Blue
-                                    >
-                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
-                                            {sendingMessage ? <Loader2 size={18} className="spinner" /> : <img src="https://upload.wikimedia.org/wikipedia/commons/c/ca/LinkedIn_logo_initials.png" alt="In" style={{ width: 16, height: 16, filter: 'brightness(0) invert(1)' }} />}
-                                            {sendingMessage ? 'Enviando mensagem...' : 'Enviar no LinkedIn Automaticamente'}
-                                        </div>
-                                    </button>
-                                    <button
-                                        className="secondary-btn"
-                                        onClick={() => {
-                                            handleCopy(selectedLead.suggested_message || '')
-                                            handleStatusChange(selectedLead.id, 'contacted')
-                                            setSelectedLead(null)
-                                        }}
-                                        disabled={sendingMessage}
-                                    >
-                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
-                                            <Copy size={18} /> Copiar
-                                        </div>
-                                    </button>
-                                </div>
-
-                                <div style={{ display: 'flex', gap: '1rem' }}>
-                                    <button className="secondary-btn" title="Agendar Follow-up">
-                                        <Calendar size={18} style={{ display: 'block', margin: '0 auto' }} />
-                                    </button>
-                                    <button
-                                        className="secondary-btn"
-                                        style={{ color: '#ef4444', borderColor: '#fecaca' }}
-                                        onClick={() => {
-                                            handleStatusChange(selectedLead.id, 'disqualified')
-                                            setSelectedLead(null)
-                                        }}
-                                    >
-                                        Descartar
-                                    </button>
-                                </div>
-                            </div>
+                            <p className="text-center text-[10px] text-gray-400 mt-2">
+                                Esta ação enviará um convite de conexão via LinkedIn.
+                            </p>
                         </div>
                     </div>
-                )
-            }
-            {/* Toast Notification */}
-            {
-                notification && (
-                    <div style={{
-                        position: 'fixed',
-                        bottom: '24px',
-                        right: '24px',
-                        background: notification.type === 'success' ? '#22c55e' : (notification.type === 'info' ? '#3b82f6' : '#ef4444'),
-                        color: 'white',
-                        padding: '12px 24px',
-                        borderRadius: '8px',
-                        boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '12px',
-                        zIndex: 9999,
-                        animation: 'slideIn 0.3s ease'
-                    }}>
-                        {notification.type === 'error' ? <X size={20} /> : <Check size={20} />}
-                        <span style={{ fontWeight: 600 }}>{notification.message}</span>
-                    </div>
-                )
-            }
-        </div >
-    )
-}
-// Add simple spinner animation style if not global
-const style = document.createElement('style');
-style.textContent = `
-  @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-  .spinner { animation: spin 1s linear infinite; }
-  @keyframes slideIn { from { transform: translateY(100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-`;
-document.head.appendChild(style);
-
-const ScoreBadge = ({ score, reason }) => {
-    if (!score) return <span style={{ color: '#cbd5e1' }}>N/A</span>
-
-    let className = 'badge-score'
-    if (score === 'A') className += ' score-a'
-    else if (score === 'B') className += ' score-b'
-    else className += ' score-c'
-
-    const label = score === 'A' ? 'Alta Prioridade' : score === 'B' ? 'Média' : 'Baixa'
-
-    return (
-        <span className={className} title={reason || 'Sem motivo identificado'}>
-            {score === 'A' ? '🔥' : score === 'B' ? '⚠️' : '❄️'} {label}
-        </span>
+                </div>
+            )}
+        </div>
     )
 }
 

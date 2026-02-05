@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { generateContent } from '../services/api'
 import { supabase } from '../services/supabaseClient'
-import { X, Loader2, Building2, Briefcase, Sparkles, User, AlertCircle, Image as ImageIcon, UploadCloud, FileText } from 'lucide-react'
-import './CreatePostModal.css'
+import { X, Loader2, Building2, Briefcase, Sparkles, User, AlertCircle, Image as ImageIcon, UploadCloud, FileText, CheckCircle2 } from 'lucide-react'
 
 const CreatePostModal = ({ onClose, onSuccess }) => {
     // Clients List
@@ -21,32 +20,31 @@ const CreatePostModal = ({ onClose, onSuccess }) => {
     const [publico, setPublico] = useState('')
 
     // Content State
-    // Content State
     const [generatedText, setGeneratedText] = useState('')
-    const [currentPostId, setCurrentPostId] = useState(null) // NEW: Track created post ID
+    const [currentPostId, setCurrentPostId] = useState(null)
     const [selectedFiles, setSelectedFiles] = useState([])
 
     // Process State
-    const [loading, setLoading] = useState(false) // Generic loading for actions
+    const [loading, setLoading] = useState(false)
     const [errorMsg, setErrorMsg] = useState(null)
+
+    // New Tab State
+    const [activeTab, setActiveTab] = useState('ai') // 'ai' | 'manual'
 
     // Fetch clients on mount
     useEffect(() => {
         const fetchClients = async () => {
             try {
-                // CHANGED: Fetch from 'clients' table instead of 'profiles'
                 const { data, error } = await supabase
                     .from('clients')
-                    .select('*') // Fetch all fields (name, description, tone_of_voice, etc.)
+                    .select('*')
                     .order('name')
 
                 if (error) throw error
-                // Filter out any without name (just in case)
                 const validClients = (data || []).filter(c => c.name)
-                console.log("Clients Fetched from 'clients' table:", validClients)
                 setClients(validClients)
             } catch (err) {
-                console.error('Erro ao buscar clientes (tabela clients):', err)
+                console.error('Erro ao buscar clientes:', err)
             } finally {
                 setLoadingClients(false)
             }
@@ -56,15 +54,13 @@ const CreatePostModal = ({ onClose, onSuccess }) => {
 
     const handleClientChange = (e) => {
         const uuid = e.target.value
-        console.log("Selected Client ID:", uuid)
         setSelectedClientId(uuid)
 
         const clientData = clients.find(c => String(c.id) === uuid)
         if (clientData) {
-            setClienteName(clientData.name) // CHANGED: nome_empresa -> name
+            setClienteName(clientData.name)
             setSelectedClientData(clientData)
         } else {
-            console.warn("Client data not found for ID:", uuid)
             setClienteName('')
             setSelectedClientData(null)
         }
@@ -80,10 +76,8 @@ const CreatePostModal = ({ onClose, onSuccess }) => {
         setErrorMsg(null)
 
         try {
-            // Call API (n8n wrapper)
             const data = await generateContent(clienteName, tema, publico, selectedClientData, null)
 
-            // Heuristic to extract text from generic JSON response
             let text = ""
             if (typeof data === 'string') text = data
             else if (data.text) text = data.text
@@ -95,14 +89,8 @@ const CreatePostModal = ({ onClose, onSuccess }) => {
 
             setGeneratedText(text.replace(/^"|"$/g, '').replace(/\\n/g, '\n'))
 
-            // NEW: Capture and store the Post ID if returned
-            if (data.id) {
-                console.log("Draft created with ID:", data.id)
-                setCurrentPostId(data.id)
-            } else if (data.record_id) {
-                console.log("Draft created with ID:", data.record_id)
-                setCurrentPostId(data.record_id)
-            }
+            if (data.id) setCurrentPostId(data.id)
+            else if (data.record_id) setCurrentPostId(data.record_id)
 
             setStep(2)
         } catch (err) {
@@ -113,10 +101,8 @@ const CreatePostModal = ({ onClose, onSuccess }) => {
         }
     }
 
-    // --- STEP 3: FINAL SAVE ---
-    const handleFinalSave = async () => {
-        console.log("Attempting Save. Client UUID:", selectedClientId)
-
+    // --- FINAL SAVE (Shared Logic) ---
+    const performSave = async (isManual = false) => {
         if (!selectedClientId) {
             alert("Erro: ID do cliente não identificado")
             return
@@ -126,13 +112,22 @@ const CreatePostModal = ({ onClose, onSuccess }) => {
         setErrorMsg(null)
 
         try {
+            // Validate client name for manual flow
+            let finalClientName = clienteName
+            if (isManual && !finalClientName) {
+                const { data: clientData } = await supabase
+                    .from('clients')
+                    .select('name')
+                    .eq('id', selectedClientId)
+                    .single()
+                finalClientName = clientData?.name
+            }
+
+            if (!finalClientName) throw new Error("Nome do cliente não encontrado")
+
+            // Upload Images
             let finalImageUrls = []
-
-            // 1. Upload Images if exist
             if (selectedFiles.length > 0) {
-                console.log(`Uploading ${selectedFiles.length} images...`)
-
-                // Map all uploads to promises
                 const uploadPromises = selectedFiles.map(async (file) => {
                     const fileExt = file.name.split('.').pop()
                     const sanitizedName = file.name.replace(/[^a-zA-Z0-9]/g, '_')
@@ -150,48 +145,36 @@ const CreatePostModal = ({ onClose, onSuccess }) => {
 
                     return publicUrlData.publicUrl
                 })
-
-                // Wait for all uploads
                 finalImageUrls = await Promise.all(uploadPromises)
             }
 
-            // 2. Insert or Update logic
+            // Payload
             const payload = {
                 id_client: selectedClientId,
-                nome_cliente: clienteName,
-                tema: tema,
-                publico: publico,
+                nome_cliente: finalClientName,
+                tema: tema || 'Post Manual',
+                publico: publico || 'Geral',
                 corpo_post: generatedText,
-                sugestao_imagem: finalImageUrls, // Save array of URLs
+                sugestao_imagem: finalImageUrls,
                 status: 'waiting_approval'
             }
-            console.log("Save Payload:", payload)
 
-            if (currentPostId) {
-                // UPDATE existing record
-                console.log("Updating existing post:", currentPostId)
-                const { error: dbError } = await supabase
-                    .from('tabela_projetofred1')
-                    .update(payload)
-                    .eq('id', currentPostId)
-
-                if (dbError) throw dbError
+            // Insert or Update
+            if (currentPostId && !isManual) {
+                const { error } = await supabase.from('tabela_projetofred1').update(payload).eq('id', currentPostId)
+                if (error) throw error
             } else {
-                // INSERT new record (Fallback)
-                console.log("Inserting new post")
-                const { error: dbError } = await supabase
-                    .from('tabela_projetofred1')
-                    .insert([payload])
-
-                if (dbError) throw dbError
+                const { error, data } = await supabase.from('tabela_projetofred1').insert([payload]).select()
+                if (error) throw error
+                // Basic check
+                if (data && data[0] && !data[0].nome_cliente) {
+                    alert("Aviso: Banco de dados pode ter ignorado o nome do cliente.")
+                }
             }
 
             alert("Post salvo com sucesso!")
-            if (onSuccess) {
-                onSuccess()
-            } else {
-                onClose()
-            }
+            if (onSuccess) onSuccess()
+            else onClose()
 
         } catch (err) {
             console.error("Save Error:", err)
@@ -204,342 +187,181 @@ const CreatePostModal = ({ onClose, onSuccess }) => {
     const handleFileChange = (e) => {
         if (e.target.files && e.target.files.length > 0) {
             const newFiles = Array.from(e.target.files)
-
-            // Validate files
             const validFiles = newFiles.filter(file => {
                 if (file.size > 50 * 1024 * 1024) {
-                    alert(`Arquivo ${file.name} excede o limite de 50MB e foi ignorado.`)
+                    alert(`Arquivo ${file.name} excede 50MB.`)
                     return false
                 }
                 return true
             })
-
-            if (validFiles.length > 0) {
-                setSelectedFiles(prev => [...prev, ...validFiles])
-            }
+            if (validFiles.length > 0) setSelectedFiles(prev => [...prev, ...validFiles])
         }
     }
 
-    // --- MANUAL SAVING LOGIC ---
-    const handleManualSave = async (e) => {
-        e.preventDefault()
-        if (!selectedClientId) return alert("Por favor, selecione um cliente.")
-
-        // FIX: Direct DB Lookup to guarantee fresh data
-        let finalClientName = ''
-        try {
-            const { data: clientData, error: clientError } = await supabase
-                .from('clients')
-                .select('*') // Fetch ALL columns to check for name/nome/company_name variations
-                .eq('id', selectedClientId)
-                .single()
-
-            if (clientError) throw clientError
-
-            // Try all possible name fields
-            finalClientName =
-                clientData?.name ||
-                clientData?.nome ||
-                clientData?.company_name ||
-                clientData?.nome_empresa
-
-        } catch (fetchErr) {
-            console.error("Erro ao buscar nome do cliente:", fetchErr)
-            // Fallback to state if DB fetch fails (unlikely)
-            const selectedClientObj = clients.find(c => String(c.id) === String(selectedClientId))
-            finalClientName = selectedClientObj?.name || clienteName
-        }
-
-        if (!finalClientName) {
-            return alert("Erro Crítico: Não foi possível identificar o nome do cliente. Por favor, recarregue a página.")
-        }
-
-        console.log("Saving Manual Post (DB Verified):", { id: selectedClientId, name: finalClientName })
-
-        setLoading(true)
-        setErrorMsg(null)
-
-        try {
-            let finalImageUrls = []
-
-            // 1. Upload Images if exist (Reused logic)
-            if (selectedFiles.length > 0) {
-                const uploadPromises = selectedFiles.map(async (file) => {
-                    const fileExt = file.name.split('.').pop()
-                    const sanitizedName = file.name.replace(/[^a-zA-Z0-9]/g, '_')
-                    const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}_${sanitizedName}.${fileExt}`
-
-                    const { error: uploadError } = await supabase.storage
-                        .from('post-images')
-                        .upload(fileName, file)
-
-                    if (uploadError) throw uploadError
-
-                    const { data: publicUrlData } = supabase.storage
-                        .from('post-images')
-                        .getPublicUrl(fileName)
-
-                    return publicUrlData.publicUrl
-                })
-                finalImageUrls = await Promise.all(uploadPromises)
-            }
-
-            // 2. Insert Record
-            const payload = {
-                id_client: selectedClientId,
-                nome_cliente: finalClientName, // Validated Name
-                tema: tema || 'Post Manual', // Fallback theme name
-                publico: publico || 'Geral', // Fallback audience
-                corpo_post: generatedText, // Reusing this state for the manual text body
-                sugestao_imagem: finalImageUrls,
-                status: 'waiting_approval'
-            }
-
-            console.log("DEBUG: Posting Payload:", payload)
-
-            const { data: insertData, error: dbError } = await supabase
-                .from('tabela_projetofred1')
-                .insert([payload])
-                .select() // Request return of inserted data to verify
-
-            if (dbError) throw dbError
-
-            console.log("DEBUG: Database Returned:", insertData)
-
-            // Check if DB wiped the name
-            if (insertData && insertData[0] && !insertData[0].nome_cliente) {
-                alert("ALERTA: O post foi salvo, mas o Banco de Dados parece ter ignorado o nome do cliente. Verifique se existe alguma 'Trigger' ou politica RLS bloqueando essa coluna.")
-            }
-
-            alert("Post manual salvo com sucesso!")
-            if (onSuccess) onSuccess()
-            else onClose()
-
-        } catch (err) {
-            console.error("Erro manual:", err)
-            setErrorMsg("Erro ao salvar: " + err.message)
-        } finally {
-            setLoading(false)
-        }
-    }
-
-    // --- UI Renderers ---
+    // --- UI COMPONENTS ---
     const ProgressBar = () => (
-        <div style={{ display: 'flex', gap: '8px', marginBottom: '1.5rem', alignItems: 'center' }}>
+        <div className="flex items-center gap-2 mb-8">
             {[1, 2, 3].map(s => (
-                <div key={s} style={{ flex: 1, height: '4px', background: s <= step ? '#f97316' : '#e2e8f0', borderRadius: '2px', transition: 'all 0.3s' }}></div>
+                <div key={s} className="flex-1 h-1 rounded-full overflow-hidden bg-white/10">
+                    <div
+                        className={`h-full transition-all duration-300 ${s <= step ? 'bg-primary' : 'bg-transparent'}`}
+                        style={{ width: s <= step ? '100%' : '0%' }}
+                    />
+                </div>
             ))}
-            <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#64748b' }}>Passo {step}/3</span>
+            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider ml-2">Passo {step}/3</span>
         </div>
     )
 
-    // New Tab State
-    const [activeTab, setActiveTab] = useState('ai') // 'ai' | 'manual'
+    const ModernInput = ({ label, icon: Icon, ...props }) => (
+        <div className="mb-6">
+            <label className="block text-sm font-medium text-gray-400 mb-2 ml-1">{label}</label>
+            <div className="relative group">
+                <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 group-focus-within:text-primary transition-colors pointer-events-none">
+                    {Icon && <Icon size={18} />}
+                </div>
+                {props.type === 'textarea' ? (
+                    <textarea
+                        {...props}
+                        className="w-full bg-white/5 border border-glass-border rounded-xl pl-10 pr-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition-all min-h-[100px] resize-y"
+                    />
+                ) : (
+                    <input
+                        {...props}
+                        className="w-full bg-white/5 border border-glass-border rounded-xl pl-10 pr-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition-all"
+                    />
+                )}
+            </div>
+        </div>
+    )
 
+    // --- RENDER ---
     return (
-        <div className="modal-overlay" onClick={(e) => {
-            if (e.target.className === 'modal-overlay') onClose();
-        }}>
-            <div className="modal-content modern-modal" style={{ maxWidth: '800px' }}>
-                <div className="modal-header">
-                    <div className="header-title">
-                        <h2>Novo Conteúdo B2B</h2>
-                        <span className="subtitle">Escolha como criar seu post</span>
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4 pt-16" onClick={(e) => e.target === e.currentTarget && onClose()}>
+            <div className="bg-[#0f0f0f] border border-glass-border w-full max-w-2xl max-h-[85vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-fade-in-up">
+
+                {/* HEADER */}
+                <div className="p-6 border-b border-glass-border flex justify-between items-center bg-white/[0.02]">
+                    <div>
+                        <h2 className="text-xl font-bold text-white mb-0.5">Novo Conteúdo B2B</h2>
+                        <p className="text-xs font-medium text-transparent bg-clip-text bg-gradient-to-r from-primary to-orange-400 uppercase tracking-wider">Criar Novo Post</p>
                     </div>
-                    <button className="close-btn" onClick={onClose} aria-label="Fechar">
-                        <X size={24} />
+                    <button onClick={onClose} className="p-2 rounded-full hover:bg-white/10 text-gray-400 hover:text-white transition-colors">
+                        <X size={20} />
                     </button>
                 </div>
 
-                {/* TABS HEADER */}
-                <div style={{ padding: '0 2rem', borderBottom: '1px solid #e2e8f0', display: 'flex', gap: '2rem' }}>
+                {/* TABS */}
+                <div className="flex border-b border-glass-border bg-black/20">
                     <button
                         onClick={() => setActiveTab('ai')}
-                        style={{
-                            padding: '1rem 0',
-                            background: 'none',
-                            border: 'none',
-                            borderBottom: activeTab === 'ai' ? '2px solid #7c3aed' : '2px solid transparent',
-                            color: activeTab === 'ai' ? '#7c3aed' : '#64748b',
-                            fontWeight: activeTab === 'ai' ? 600 : 500,
-                            cursor: 'pointer',
-                            display: 'flex', alignItems: 'center', gap: '8px'
-                        }}
+                        className={`flex-1 py-4 text-sm font-medium flex items-center justify-center gap-2 transition-colors relative ${activeTab === 'ai' ? 'text-white' : 'text-gray-500 hover:text-gray-300'}`}
                     >
-                        <Sparkles size={18} /> ✨ Criar com IA
+                        <Sparkles size={16} className={activeTab === 'ai' ? 'text-primary' : ''} />
+                        Criar com IA
+                        {activeTab === 'ai' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary shadow-[0_0_10px_rgba(255,77,0,0.5)]" />}
                     </button>
                     <button
                         onClick={() => setActiveTab('manual')}
-                        style={{
-                            padding: '1rem 0',
-                            background: 'none',
-                            border: 'none',
-                            borderBottom: activeTab === 'manual' ? '2px solid #7c3aed' : '2px solid transparent',
-                            color: activeTab === 'manual' ? '#7c3aed' : '#64748b',
-                            fontWeight: activeTab === 'manual' ? 600 : 500,
-                            cursor: 'pointer',
-                            display: 'flex', alignItems: 'center', gap: '8px'
-                        }}
+                        className={`flex-1 py-4 text-sm font-medium flex items-center justify-center gap-2 transition-colors relative ${activeTab === 'manual' ? 'text-white' : 'text-gray-500 hover:text-gray-300'}`}
                     >
-                        <User size={18} /> ✍️ Criar Manualmente
+                        <FileText size={16} className={activeTab === 'manual' ? 'text-primary' : ''} />
+                        Manual
+                        {activeTab === 'manual' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary shadow-[0_0_10px_rgba(255,77,0,0.5)]" />}
                     </button>
                 </div>
 
-                <div className="modal-body" style={{ padding: '2rem' }}>
+                {/* BODY */}
+                <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
 
-                    {/* --- TAB: AI WIZARD --- */}
+                    {/* --- AI MODE --- */}
                     {activeTab === 'ai' && (
                         <>
                             <ProgressBar />
 
-                            {/* --- STEP 1: BRIEFING --- */}
+                            {/* STEP 1 */}
                             {step === 1 && (
                                 <form onSubmit={handleGenerateDraft}>
-                                    <div className="modern-form-group">
-                                        <label className="input-label">1. Selecione o Cliente</label>
-                                        <div className="input-wrapper">
-                                            <Building2 className="input-icon" size={18} />
-                                            {loadingClients ? (
-                                                <div style={{ padding: '0.8rem' }}>Carregando...</div>
-                                            ) : (
-                                                <select
-                                                    value={selectedClientId}
-                                                    onChange={handleClientChange}
-                                                    className="modern-input"
-                                                    required
-                                                >
-                                                    <option value="" disabled>Selecione...</option>
-                                                    {clients.map(c => (
-                                                        <option key={c.id} value={c.id}>
-                                                            {c.name}
-                                                        </option>
-                                                    ))}
-                                                </select>
-                                            )}
+                                    <div className="mb-6">
+                                        <label className="block text-sm font-medium text-gray-400 mb-2 ml-1">Selecione o Cliente</label>
+                                        <div className="relative">
+                                            <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none"><Building2 size={18} /></div>
+                                            <select
+                                                value={selectedClientId}
+                                                onChange={handleClientChange}
+                                                className="w-full bg-white/5 border border-glass-border rounded-xl pl-10 pr-4 py-3 text-white appearance-none focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition-all"
+                                                required
+                                            >
+                                                <option value="" className="bg-charcoal text-gray-500">Selecione...</option>
+                                                {clients.map(c => <option key={c.id} value={c.id} className="bg-charcoal text-white">{c.name}</option>)}
+                                            </select>
                                         </div>
                                     </div>
 
-                                    <div className="modern-form-group">
-                                        <label className="input-label">2. Tema Central do Post</label>
-                                        <textarea
-                                            value={tema} onChange={e => setTema(e.target.value)}
-                                            placeholder="Sobre o que vamos falar hoje?"
-                                            className="modern-textarea" rows={2} required
-                                        />
-                                    </div>
+                                    <ModernInput
+                                        label="Tema Central"
+                                        icon={Briefcase}
+                                        type="textarea"
+                                        placeholder="Sobre o que vamos falar hoje?"
+                                        value={tema} onChange={e => setTema(e.target.value)} required
+                                    />
 
-                                    <div className="modern-form-group">
-                                        <label className="input-label">3. Público-Alvo</label>
-                                        <input
-                                            type="text" value={publico} onChange={e => setPublico(e.target.value)}
-                                            placeholder="Quem vai ler?" className="modern-input" required
-                                        />
-                                    </div>
+                                    <ModernInput
+                                        label="Público-Alvo"
+                                        icon={User}
+                                        placeholder="CEO, Marketing Managers..."
+                                        value={publico} onChange={e => setPublico(e.target.value)} required
+                                    />
 
-                                    {errorMsg && <p className="error-text">{errorMsg}</p>}
+                                    {errorMsg && <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm flex items-center gap-2"><AlertCircle size={16} /> {errorMsg}</div>}
 
-                                    <div className="modal-footer">
-                                        <button type="button" className="btn-cancel" onClick={onClose}>Cancelar</button>
-                                        <button type="submit" className="btn-generate-primary" disabled={loading}>
-                                            {loading ? <><Loader2 className="spinner" /> Gerando Rascunho...</> : <><Sparkles size={18} /> Gerar Rascunho com IA</>}
+                                    <div className="flex gap-4 pt-4">
+                                        <button type="button" onClick={onClose} className="flex-1 px-4 py-3 rounded-xl border border-glass-border text-gray-400 hover:bg-white/5 hover:text-white transition-all font-medium">Cancelar</button>
+                                        <button type="submit" disabled={loading} className="flex-[2] btn-primary">
+                                            {loading ? <Loader2 className="animate-spin" /> : <><Sparkles size={18} /> Gerar Rascunho</>}
                                         </button>
                                     </div>
                                 </form>
                             )}
 
-                            {/* --- STEP 2: REVIEW --- */}
+                            {/* STEP 2 */}
                             {step === 2 && (
-                                <div className="fade-in">
-                                    <label className="input-label" style={{ marginBottom: '1rem', display: 'block' }}>Edite o Rascunho Sugerido:</label>
+                                <div className="animate-fade-in-up">
+                                    <label className="block text-sm font-medium text-gray-400 mb-2 ml-1">Rascunho Gerado (Edite à vontade):</label>
                                     <textarea
                                         value={generatedText}
                                         onChange={e => setGeneratedText(e.target.value)}
-                                        className="modern-textarea"
-                                        style={{ minHeight: '300px', fontSize: '1rem', lineHeight: '1.6' }}
+                                        className="w-full bg-white/5 border border-glass-border rounded-xl p-4 text-gray-200 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition-all min-h-[300px] leading-relaxed resize-y mb-6 font-mono text-sm"
                                     />
 
-                                    <div className="modal-footer" style={{ marginTop: '1.5rem' }}>
-                                        <button className="btn-cancel" onClick={() => setStep(1)}>Voltar</button>
-                                        <button className="btn-generate-primary" onClick={() => setStep(3)}>
-                                            Aprovar Texto e Avançar
+                                    <div className="flex gap-4">
+                                        <button onClick={() => setStep(1)} className="flex-1 px-4 py-3 rounded-xl border border-glass-border text-gray-400 hover:bg-white/5 hover:text-white transition-all font-medium">Voltar e Ajustar</button>
+                                        <button onClick={() => setStep(3)} className="flex-[2] btn-primary">
+                                            Aprovar Texto <CheckCircle2 size={18} />
                                         </button>
                                     </div>
                                 </div>
                             )}
 
-                            {/* --- STEP 3: FINALIZE --- */}
+                            {/* STEP 3 */}
                             {step === 3 && (
-                                <div className="fade-in">
-                                    <div style={{ marginBottom: '2rem' }}>
-                                        <label className="input-label">Deseja anexar imagens? (Carrossel)</label>
-                                        <div className={`upload-wrapper ${selectedFiles.length > 0 ? 'has-file' : ''}`} style={{ marginTop: '0.5rem', minHeight: '120px', flexDirection: 'column', alignItems: 'flex-start', padding: '1rem' }}>
-                                            <input
-                                                type="file"
-                                                accept="image/*,video/*,application/pdf"
-                                                multiple
-                                                onChange={handleFileChange}
-                                                className="file-input-hidden"
-                                            />
+                                <div className="animate-fade-in-up">
+                                    <FormMediaUpload selectedFiles={selectedFiles} setSelectedFiles={setSelectedFiles} handleFileChange={handleFileChange} />
 
-                                            {selectedFiles.length === 0 ? (
-                                                <div className="upload-content-empty" style={{ width: '100%', justifyContent: 'center', height: '100%' }}>
-                                                    <UploadCloud size={24} className="upload-icon-empty" />
-                                                    <span className="upload-text">Clique para Upload de Imagens (Múltiplas)</span>
-                                                </div>
-                                            ) : (
-                                                <div style={{ width: '100%' }}>
-                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                                                        <span className="file-name" style={{ fontSize: '0.85rem', color: '#64748b' }}>
-                                                            {selectedFiles.length} imagem(ns) selecionada(s)
-                                                        </span>
-                                                        <button
-                                                            onClick={(e) => { e.stopPropagation(); setSelectedFiles([]) }}
-                                                            className="btn-remove-file"
-                                                            title="Limpar tudo"
-                                                        >
-                                                            <X size={16} />
-                                                        </button>
-                                                    </div>
-
-                                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(80px, 1fr))', gap: '0.5rem' }}>
-                                                        {selectedFiles.map((file, index) => (
-                                                            <div key={index} style={{ position: 'relative', aspectRatio: '1/1', borderRadius: '8px', overflow: 'hidden', border: '1px solid #e2e8f0', background: '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                                                {file.type === 'application/pdf' ? (
-                                                                    <div style={{ textAlign: 'center', padding: '0.25rem' }}>
-                                                                        <FileText size={32} color="#ef4444" style={{ margin: '0 auto 4px' }} />
-                                                                        <span style={{ display: 'block', fontSize: '10px', color: '#64748b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '70px' }}>
-                                                                            {file.name}
-                                                                        </span>
-                                                                    </div>
-                                                                ) : (
-                                                                    <img
-                                                                        src={URL.createObjectURL(file)}
-                                                                        alt={`Preview ${index}`}
-                                                                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                                                                    />
-                                                                )}
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                            )}
+                                    <div className="bg-white/5 border border-glass-border rounded-xl p-4 mb-6">
+                                        <h4 className="text-sm font-bold text-gray-300 mb-2 uppercase tracking-wider">Resumo</h4>
+                                        <div className="text-sm text-gray-400 space-y-1">
+                                            <p><span className="text-gray-500">Cliente:</span> {clienteName}</p>
+                                            <p><span className="text-gray-500">Tema:</span> {tema}</p>
                                         </div>
                                     </div>
 
-                                    <div style={{ background: '#f8fafc', padding: '1rem', borderRadius: '8px', border: '1px solid #e2e8f0', marginBottom: '1rem' }}>
-                                        <h4 style={{ fontSize: '0.9rem', fontWeight: 600, color: '#64748b', marginBottom: '0.5rem' }}>Resumo:</h4>
-                                        <div style={{ fontSize: '0.9rem', color: '#334155' }}>
-                                            <strong>Cliente:</strong> {clienteName} <br />
-                                            <strong>Tema:</strong> {tema}
-                                        </div>
-                                    </div>
+                                    {errorMsg && <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm flex items-center gap-2"><AlertCircle size={16} /> {errorMsg}</div>}
 
-                                    {errorMsg && <p className="error-text">{errorMsg}</p>}
-
-                                    <div className="modal-footer">
-                                        <button className="btn-cancel" onClick={() => setStep(2)}>Voltar</button>
-                                        <button className="btn-generate-primary" onClick={handleFinalSave} disabled={loading}>
-                                            {loading ? <><Loader2 className="spinner" /> Salvando...</> : "💾 Salvar Post Final"}
+                                    <div className="flex gap-4">
+                                        <button onClick={() => setStep(2)} className="flex-1 px-4 py-3 rounded-xl border border-glass-border text-gray-400 hover:bg-white/5 hover:text-white transition-all font-medium">Voltar</button>
+                                        <button onClick={() => performSave(false)} disabled={loading} className="flex-[2] btn-primary">
+                                            {loading ? <Loader2 className="animate-spin" /> : "💾 Salvar Post Final"}
                                         </button>
                                     </div>
                                 </div>
@@ -547,118 +369,48 @@ const CreatePostModal = ({ onClose, onSuccess }) => {
                         </>
                     )}
 
-                    {/* --- TAB: MANUAL MODE --- */}
+                    {/* --- MANUAL MODE --- */}
                     {activeTab === 'manual' && (
-                        <form onSubmit={handleManualSave} className="fade-in">
-                            <div className="modern-form-group">
-                                <label className="input-label">Selecione o Cliente</label>
-                                <div className="input-wrapper">
-                                    <Building2 className="input-icon" size={18} />
-                                    {loadingClients ? (
-                                        <div style={{ padding: '0.8rem' }}>Carregando...</div>
-                                    ) : (
-                                        <select
-                                            value={selectedClientId}
-                                            onChange={handleClientChange}
-                                            className="modern-input"
-                                            required
-                                        >
-                                            <option value="" disabled>Selecione...</option>
-                                            {clients.map(c => (
-                                                <option key={c.id} value={c.id}>
-                                                    {c.name}
-                                                </option>
-                                            ))}
-                                        </select>
-                                    )}
+                        <form onSubmit={(e) => { e.preventDefault(); performSave(true); }} className="animate-fade-in-up">
+                            <div className="mb-6">
+                                <label className="block text-sm font-medium text-gray-400 mb-2 ml-1">Selecione o Cliente</label>
+                                <div className="relative">
+                                    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none"><Building2 size={18} /></div>
+                                    <select
+                                        value={selectedClientId}
+                                        onChange={handleClientChange}
+                                        className="w-full bg-white/5 border border-glass-border rounded-xl pl-10 pr-4 py-3 text-white appearance-none focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition-all"
+                                        required
+                                    >
+                                        <option value="" className="bg-charcoal text-gray-500">Selecione...</option>
+                                        {clients.map(c => <option key={c.id} value={c.id} className="bg-charcoal text-white">{c.name}</option>)}
+                                    </select>
                                 </div>
                             </div>
 
-                            <div className="modern-form-group">
-                                <label className="input-label">Tema / Título Interno</label>
-                                <input
-                                    type="text"
-                                    value={tema} // Shared state with AI flow
-                                    onChange={e => setTema(e.target.value)}
-                                    placeholder="Ex: Lançamento Black Friday"
-                                    className="modern-input"
-                                />
-                            </div>
+                            <ModernInput
+                                label="Título / Tema"
+                                icon={Briefcase}
+                                placeholder="Ex: Campanha de Verão"
+                                value={tema} onChange={e => setTema(e.target.value)}
+                            />
 
-                            <div className="modern-form-group">
-                                <label className="input-label">Legenda / Texto do Post</label>
-                                <textarea
-                                    value={generatedText} // Reusing this state to keep things simple
-                                    onChange={e => setGeneratedText(e.target.value)}
-                                    placeholder="Escreva a legenda do post aqui..."
-                                    className="modern-textarea"
-                                    rows={8}
-                                    required
-                                />
-                            </div>
+                            <ModernInput
+                                label="Texto do Post"
+                                icon={FileText}
+                                type="textarea"
+                                placeholder="Escreva o conteúdo aqui..."
+                                value={generatedText} onChange={e => setGeneratedText(e.target.value)} required
+                            />
 
-                            <div style={{ marginBottom: '2rem' }}>
-                                <label className="input-label">Anexar Mídia (Imagens/Vídeos)</label>
-                                <div className={`upload-wrapper ${selectedFiles.length > 0 ? 'has-file' : ''}`} style={{ marginTop: '0.5rem', minHeight: '120px', flexDirection: 'column', alignItems: 'flex-start', padding: '1rem' }}>
-                                    <input
-                                        type="file"
-                                        accept="image/*,video/*,application/pdf"
-                                        multiple
-                                        onChange={handleFileChange}
-                                        className="file-input-hidden"
-                                    />
+                            <FormMediaUpload selectedFiles={selectedFiles} setSelectedFiles={setSelectedFiles} handleFileChange={handleFileChange} />
 
-                                    {selectedFiles.length === 0 ? (
-                                        <div className="upload-content-empty" style={{ width: '100%', justifyContent: 'center', height: '100%' }}>
-                                            <UploadCloud size={24} className="upload-icon-empty" />
-                                            <span className="upload-text">Clique para selecionar arquivos</span>
-                                        </div>
-                                    ) : (
-                                        <div style={{ width: '100%' }}>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                                                <span className="file-name" style={{ fontSize: '0.85rem', color: '#64748b' }}>
-                                                    {selectedFiles.length} arquivo(s)
-                                                </span>
-                                                <button
-                                                    onClick={(e) => { e.stopPropagation(); setSelectedFiles([]) }}
-                                                    className="btn-remove-file"
-                                                    title="Limpar tudo"
-                                                    type="button"
-                                                >
-                                                    <X size={16} />
-                                                </button>
-                                            </div>
-                                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(80px, 1fr))', gap: '0.5rem' }}>
-                                                {selectedFiles.map((file, index) => (
-                                                    <div key={index} style={{ position: 'relative', aspectRatio: '1/1', borderRadius: '8px', overflow: 'hidden', border: '1px solid #e2e8f0', background: '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                                        {file.type === 'application/pdf' ? (
-                                                            <div style={{ textAlign: 'center', padding: '0.25rem' }}>
-                                                                <FileText size={32} color="#ef4444" style={{ margin: '0 auto 4px' }} />
-                                                                <span style={{ display: 'block', fontSize: '10px', color: '#64748b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '70px' }}>
-                                                                    {file.name}
-                                                                </span>
-                                                            </div>
-                                                        ) : (
-                                                            <img
-                                                                src={URL.createObjectURL(file)}
-                                                                alt={`Preview ${index}`}
-                                                                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                                                            />
-                                                        )}
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
+                            {errorMsg && <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm flex items-center gap-2"><AlertCircle size={16} /> {errorMsg}</div>}
 
-                            {errorMsg && <p className="error-text">{errorMsg}</p>}
-
-                            <div className="modal-footer">
-                                <button type="button" className="btn-cancel" onClick={onClose}>Cancelar</button>
-                                <button type="submit" className="btn-generate-primary" disabled={loading}>
-                                    {loading ? <><Loader2 className="spinner" /> Salvando...</> : "💾 Salvar Rascunho Manual"}
+                            <div className="flex gap-4 pt-4">
+                                <button type="button" onClick={onClose} className="flex-1 px-4 py-3 rounded-xl border border-glass-border text-gray-400 hover:bg-white/5 hover:text-white transition-all font-medium">Cancelar</button>
+                                <button type="submit" disabled={loading} className="flex-[2] btn-primary">
+                                    {loading ? <Loader2 className="animate-spin" /> : "💾 Salvar Manualmente"}
                                 </button>
                             </div>
                         </form>
@@ -666,9 +418,44 @@ const CreatePostModal = ({ onClose, onSuccess }) => {
 
                 </div>
             </div>
-            <style>{`.fade-in { animation: navLinkFade 0.4s ease forwards; } @keyframes navLinkFade { from { opacity: 0; transform: translateX(10px); } to { opacity: 1; transform: translateX(0); } }`}</style>
         </div>
     )
 }
+
+// Sub-component for Media Upload to keep logic clean
+const FormMediaUpload = ({ selectedFiles, setSelectedFiles, handleFileChange }) => (
+    <div className="mb-8">
+        <label className="block text-sm font-medium text-gray-400 mb-2 ml-1">Mídia (Imagens/Vídeo)</label>
+        <div className={`border-2 border-dashed rounded-xl p-4 transition-all ${selectedFiles.length > 0 ? 'border-primary/50 bg-primary/5' : 'border-glass-border hover:border-gray-500 hover:bg-white/5'}`}>
+            <input type="file" multiple accept="image/*,video/*,application/pdf" onChange={handleFileChange} className="hidden" id="file-upload" />
+
+            {selectedFiles.length === 0 ? (
+                <label htmlFor="file-upload" className="flex flex-col items-center justify-center h-24 cursor-pointer gap-2">
+                    <UploadCloud className="text-gray-500" size={24} />
+                    <span className="text-sm font-medium text-gray-400">Clique para selecionar arquivos</span>
+                </label>
+            ) : (
+                <div>
+                    <div className="flex justify-between items-center mb-3 px-1">
+                        <span className="text-xs font-semibold text-gray-400 uppercase">{selectedFiles.length} arquivos</span>
+                        <button type="button" onClick={() => setSelectedFiles([])} className="text-xs text-red-400 hover:text-red-300 font-medium">Limpar Tudo</button>
+                    </div>
+                    <div className="grid grid-cols-4 gap-2">
+                        {selectedFiles.map((file, i) => (
+                            <div key={i} className="aspect-square rounded-lg bg-black/40 border border-glass-border overflow-hidden relative flex items-center justify-center group">
+                                {file.type.includes('pdf') ? <FileText className="text-red-500" /> :
+                                    <img src={URL.createObjectURL(file)} className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" />
+                                }
+                            </div>
+                        ))}
+                        <label htmlFor="file-upload" className="aspect-square rounded-lg border border-glass-border flex items-center justify-center cursor-pointer hover:bg-white/5 text-gray-500 hover:text-white transition-colors">
+                            <span className="text-2xl">+</span>
+                        </label>
+                    </div>
+                </div>
+            )}
+        </div>
+    </div>
+)
 
 export default CreatePostModal

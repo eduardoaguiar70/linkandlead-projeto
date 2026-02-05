@@ -29,42 +29,30 @@ const ClientSelector = () => {
 
     const handleChange = (e) => {
         const val = e.target.value
-        setSelectedClientId(val ? parseInt(val) : null) // Assuming ID is int, or string if UUID
+        setSelectedClientId(val ? parseInt(val) : null)
     }
 
-    // Heuristics to find the display name
     const getClientName = (c) => c.name || 'Cliente sem nome'
 
     return (
-        <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-            <div style={{ position: 'absolute', left: '10px', pointerEvents: 'none', color: '#64748b' }}>
+        <div className="relative flex items-center group">
+            <div className="absolute left-3 pointer-events-none text-primary/80 group-hover:text-primary transition-colors">
                 <Users size={16} />
             </div>
             <select
                 value={selectedClientId || ''}
                 onChange={handleChange}
-                style={{
-                    padding: '0.5rem 2rem 0.5rem 2.25rem',
-                    borderRadius: '6px',
-                    border: '1px solid #cbd5e1',
-                    background: 'white',
-                    fontSize: '0.85rem',
-                    fontWeight: '500',
-                    color: '#334155',
-                    cursor: 'pointer',
-                    appearance: 'none',
-                    minWidth: '200px'
-                }}
                 disabled={loading}
+                className="appearance-none bg-white/5 border border-glass-border hover:border-primary/50 text-gray-200 text-sm font-medium rounded-lg pl-10 pr-10 py-2.5 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all cursor-pointer min-w-[200px] backdrop-blur-md"
             >
-                <option value="">Selecione um Cliente...</option>
+                <option value="" className="bg-charcoal text-gray-400">Selecione um Cliente...</option>
                 {clients.map(client => (
-                    <option key={client.id} value={client.id}>
+                    <option key={client.id} value={client.id} className="bg-charcoal text-white">
                         {getClientName(client)}
                     </option>
                 ))}
             </select>
-            <div style={{ position: 'absolute', right: '10px', pointerEvents: 'none', color: '#64748b' }}>
+            <div className="absolute right-3 pointer-events-none text-gray-500 group-hover:text-white transition-colors">
                 <ChevronDown size={14} />
             </div>
         </div>

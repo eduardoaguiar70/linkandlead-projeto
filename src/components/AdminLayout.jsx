@@ -15,6 +15,8 @@ import {
     ChevronDown,
     ChevronRight,
     MessageCircle, // Added
+    Target, // Added
+    Info
 } from 'lucide-react'
 import CreatePostModal from './CreatePostModal'
 import ClientSelector from './ClientSelector'
@@ -69,12 +71,7 @@ const AdminLayout = () => {
             <aside className={`sidebar ${isSidebarOpen ? 'open' : ''}`}>
 
                 {/* Mobile Close Button */}
-                <button
-                    className="mobile-close-btn"
-                    onClick={() => setSidebarOpen(false)}
-                >
-                    <X size={20} />
-                </button>
+                {/* Sidebar Close Button Removed as requested */}
 
 
                 <div className="logo-area">
@@ -127,8 +124,8 @@ const AdminLayout = () => {
 
                         {expandedGroups.sales && (
                             <div className="nav-group-items" style={{ animation: 'fadeIn 0.2s' }}>
-                                <Link to="/sales" className={isActive('/sales')}>
-                                    <Database size={20} /> Mineração de Base
+                                <Link to="/campaigns" className={isActive('/campaigns')}>
+                                    <Target size={20} /> Campanhas & Prospecção
                                 </Link>
                                 <Link to="/sales/inbox" className={isActive('/sales/inbox')}>
                                     <div style={{ position: 'relative' }}>
@@ -141,6 +138,12 @@ const AdminLayout = () => {
                                 </Link>
                                 <Link to="/clients" className={isActive('/clients')}>
                                     <Users size={20} /> Gerenciar Clientes
+                                </Link>
+                                <Link to="/lists" className={isActive('/lists')}>
+                                    <Database size={20} /> Listas de Contatos
+                                </Link>
+                                <Link to="/system-info" className={isActive('/system-info')}>
+                                    <Info size={20} /> Informações do Sistema
                                 </Link>
                             </div>
                         )}
@@ -180,17 +183,17 @@ const AdminLayout = () => {
             {/* MAIN CONTENT AREA */}
             <main className="main-content">
                 {/* Sales Context Header */}
-                {(location.pathname.startsWith('/sales') || location.pathname.startsWith('/leads')) && (
+                {(location.pathname.startsWith('/sales') || location.pathname.startsWith('/leads') || location.pathname.startsWith('/campaigns')) && (
                     <div className="context-header" style={{
-                        padding: '1rem 2rem',
-                        background: 'white',
-                        borderBottom: '1px solid #e2e8f0',
+                        padding: '0.75rem 1.5rem',
+                        background: 'rgba(255, 255, 255, 0.03)',
+                        borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'space-between'
                     }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                            <span style={{ fontSize: '0.9rem', color: '#64748b' }}>Contexto:</span>
+                            <span style={{ fontSize: '0.9rem', color: '#94a3b8' }}>Contexto:</span>
                             <ClientSelector />
                         </div>
                     </div>

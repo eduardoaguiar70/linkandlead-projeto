@@ -2,14 +2,10 @@ import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../services/supabaseClient'
 import { useAuth } from '../contexts/AuthContext'
-import ReactMarkdown from 'react-markdown'
-import {
-    Loader2
-} from 'lucide-react'
-import './ClientDashboard.css'
+import { Loader2, Camera, ArrowRight, RefreshCw, LayoutGrid } from 'lucide-react'
 
 const ClientDashboard = () => {
-    const { profile, signOut } = useAuth()
+    const { profile } = useAuth()
     const [posts, setPosts] = useState([])
     const [loading, setLoading] = useState(true)
     const navigate = useNavigate()
@@ -28,7 +24,7 @@ const ClientDashboard = () => {
                 .from('tabela_projetofred1')
                 .select('*')
                 .eq('nome_cliente', clientName)
-                .order('id', { ascending: false }) // Newest first
+                .order('id', { ascending: false })
 
             if (error) throw error
             setPosts(data || [])
@@ -42,51 +38,53 @@ const ClientDashboard = () => {
     const clientName = profile?.nome_empresa
 
     return (
-        <div className="min-h-screen bg-gray-50 p-6 md:p-10 font-sans">
+        <div className="p-2 md:p-6 animate-fade-in-up">
             {/* Header */}
-            <div className="max-w-7xl mx-auto mb-10 flex flex-col md:flex-row justify-between items-end gap-4">
+            <div className="mb-8 flex flex-col md:flex-row justify-between items-end gap-4 glass-panel p-6 rounded-2xl border-glass-border bg-gradient-to-r from-white/5 to-transparent">
                 <div>
-                    <h1 className="text-3xl font-bold text-gray-900 mb-2">Olá, {clientName || 'Cliente'}</h1>
-                    <p className="text-gray-500">
-                        Você tem <span className="text-purple-600 font-bold">{posts.length} posts</span> no histórico.
+                    <h1 className="text-3xl font-bold text-white mb-2 flex items-center gap-3">
+                        Olá, {clientName || 'Cliente'} <span className="text-2xl">👋</span>
+                    </h1>
+                    <p className="text-gray-400">
+                        Você tem <span className="text-primary font-bold">{posts.length} posts</span> no histórico.
                     </p>
                 </div>
                 <button
                     onClick={() => window.location.reload()}
-                    className="text-sm text-gray-400 hover:text-gray-600 underline"
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white transition-all text-sm font-medium border border-glass-border hover:border-white/20"
                 >
-                    Atualizar Dados
+                    <RefreshCw size={14} /> Atualizar Dados
                 </button>
             </div>
 
             {loading ? (
-                <div className="text-center py-20 text-gray-500">
-                    <Loader2 className="spinner mx-auto mb-4" size={32} />
-                    <p>Carregando galeria...</p>
+                <div className="flex flex-col items-center justify-center py-20 text-gray-500">
+                    <Loader2 className="animate-spin mb-4 text-primary" size={32} />
+                    <p className="text-sm font-medium">Carregando galeria...</p>
                 </div>
             ) : (
                 /* Grid de Cards */
-                <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {posts.map((post) => (
-                        <div key={post.id} className="group bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all duration-300 overflow-hidden flex flex-col">
+                        <div key={post.id} className="group glass-panel rounded-2xl border-glass-border overflow-hidden flex flex-col hover:border-primary/30 transition-all duration-300 hover:shadow-lg hover:shadow-primary/5">
 
-                            {/* Área da Imagem (Topo) */}
-                            <div className="h-48 bg-gray-100 relative overflow-hidden">
+                            {/* Área da Imagem */}
+                            <div className="h-48 bg-black/40 relative overflow-hidden">
                                 {post.image_url ? (
-                                    <img src={post.image_url} alt="Post" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                                    <img src={post.image_url} alt="Post" className="w-full h-full object-cover opacity-80 group-hover:opacity-100 group-hover:scale-105 transition-all duration-500" />
                                 ) : (
-                                    <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-100 to-gray-200 text-gray-400">
-                                        <span className="text-4xl opacity-20">📷</span>
+                                    <div className="w-full h-full flex items-center justify-center bg-white/5 text-gray-600">
+                                        <Camera className="w-12 h-12 opacity-20" />
                                     </div>
                                 )}
-                                {/* Badge de Status Flutuante */}
-                                {/* Badge de Status Flutuante */}
+
+                                {/* Badge de Status */}
                                 <div className="absolute top-3 right-3">
-                                    <span className={`px-3 py-1 rounded-full text-xs font-bold shadow-sm backdrop-blur-md ${(() => {
+                                    <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider backdrop-blur-md border ${(() => {
                                         const s = (post.status || '').toUpperCase();
-                                        if (s === 'APPROVED' || s.includes('APPROV')) return 'bg-green-100/90 text-green-700';
-                                        if (s.includes('WAITING') || s.includes('PEND')) return 'bg-amber-100/90 text-amber-700';
-                                        return 'bg-gray-100/90 text-gray-600';
+                                        if (s === 'APPROVED' || s.includes('APPROV')) return 'bg-green-500/20 text-green-400 border-green-500/30';
+                                        if (s.includes('WAITING') || s.includes('PEND')) return 'bg-amber-500/20 text-amber-400 border-amber-500/30';
+                                        return 'bg-gray-500/20 text-gray-400 border-gray-500/30';
                                     })()}`}>
                                         {(() => {
                                             const s = (post.status || '').toUpperCase();
@@ -99,33 +97,33 @@ const ClientDashboard = () => {
                             </div>
 
                             {/* Conteúdo do Card */}
-                            <div className="p-5 flex-1 flex flex-col">
+                            <div className="p-5 flex-1 flex flex-col bg-gradient-to-b from-transparent to-black/20">
                                 <div className="flex-1">
-                                    <h3 className="font-bold text-lg text-gray-800 leading-tight mb-2 line-clamp-2">
+                                    <h3 className="font-bold text-lg text-white leading-tight mb-2 line-clamp-2">
                                         {post.titulo_hook || post.tema || "Sem título"}
                                     </h3>
-                                    <p className="text-xs text-gray-400 font-medium mb-4">
-                                        Criado em {new Date(post.created_at).toLocaleDateString('pt-BR')}
+                                    <p className="text-xs text-gray-500 font-medium mb-4 flex items-center gap-2">
+                                        <span className="w-1 h-1 rounded-full bg-gray-600"></span>
+                                        {new Date(post.created_at).toLocaleDateString('pt-BR')}
                                     </p>
                                 </div>
 
-                                {/* Botão de Ação (Menor e Elegante) */}
                                 <button
                                     onClick={() => navigate(`/post-feedback/${post.id}`)}
-                                    className="w-full mt-4 py-2.5 rounded-xl bg-purple-50 text-purple-700 font-semibold text-sm hover:bg-purple-600 hover:text-white transition-all duration-300 flex items-center justify-center gap-2"
+                                    className="w-full mt-4 py-3 rounded-xl bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white border border-glass-border hover:border-primary/50 font-medium text-sm transition-all duration-300 flex items-center justify-center gap-2 group-hover:bg-primary/10 group-hover:text-primary group-hover:border-primary/30"
                                 >
                                     {(post.status || '').toUpperCase().includes('APPROV') ? 'Ver Detalhes' : 'Revisar Conteúdo'}
-                                    <span>→</span>
+                                    <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
                                 </button>
                             </div>
                         </div>
                     ))}
 
                     {posts.length === 0 && (
-                        <div className="col-span-full text-center py-20 bg-white rounded-2xl border border-dashed border-gray-200">
-                            <span className="block text-4xl mb-4 opacity-30">📭</span>
-                            <h3 className="text-gray-500 font-medium">Nenhum post encontrado.</h3>
-                            <p className="text-sm text-gray-400 mt-2">Seu histórico está vazio por enquanto.</p>
+                        <div className="col-span-full py-20 glass-panel rounded-2xl border-glass-border border-dashed flex flex-col items-center justify-center text-center">
+                            <LayoutGrid className="w-16 h-16 text-gray-700 mb-4" />
+                            <h3 className="text-gray-300 font-medium text-lg">Nenhum post encontrado.</h3>
+                            <p className="text-sm text-gray-500 mt-2">Seu histórico está vazio por enquanto.</p>
                         </div>
                     )}
                 </div>

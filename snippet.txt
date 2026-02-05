@@ -1,0 +1,38 @@
+```javascript
+    // UPDATED FETCH: JOIN campaign_leads with leads
+    const fetchLeads = async (pageIndex = 0, isRefresh = false) => {
+        if (!selectedClientId || !campaignId) return
+
+        try {
+            if (pageIndex === 0) setLoading(true)
+            else setLoadingMore(true)
+
+            const from = pageIndex * ITEMS_per_PAGE
+            const to = from + ITEMS_per_PAGE - 1
+
+            let query = supabase
+                .from('campaign_leads')
+                .select('*, leads_with_stats!inner(*)', { count: 'exact' }) // Use view with interaction stats
+                .eq('campaign_id', campaignId)
+                .range(from, to)
+
+            // Dynamic Sort
+            if (sortConfig.key) {
+                // Fields from campaign_leads table
+                if (['added_at', 'status_pipeline'].includes(sortConfig.key)) {
+                    query = query.order(sortConfig.key, { ascending: sortConfig.direction === 'asc' })
+                }
+                // Fields from leads_with_stats view (foreign table)
+                else if (sortConfig.key === 'nome') {
+                    query = query.order('nome', { foreignTable: 'leads_with_stats', ascending: sortConfig.direction === 'asc' })
+                } else if (sortConfig.key === 'empresa') {
+                    query = query.order('empresa', { foreignTable: 'leads_with_stats', ascending: sortConfig.direction === 'asc' })
+                } else if (sortConfig.key === 'location') {
+                    query = query.order('location', { foreignTable: 'leads_with_stats', ascending: sortConfig.direction === 'asc' })
+                } else if (sortConfig.key === 'total_interactions') {
+                    query = query.order('total_interactions', { foreignTable: 'leads_with_stats', ascending: sortConfig.direction === 'asc' })
+                }
+            } else {
+                query = query.order('added_at', { ascending: false })
+            }
+```
