@@ -3,6 +3,8 @@ import { supabase } from '../services/supabaseClient';
 import { useAuth } from '../contexts/AuthContext'; // Import Auth
 import { Pencil, Upload, FileText, X, Check, Link as LinkIcon, Info, AlertTriangle, Linkedin } from 'lucide-react';
 
+const N8N_UPLOAD_DOC_URL = 'https://n8n-n8n-start.kfocge.easypanel.host/webhook/upload-client-doc'
+
 export default function ClientsPage() {
     const { user } = useAuth(); // Hook Auth
     const [clients, setClients] = useState([]);
@@ -177,41 +179,33 @@ export default function ClientsPage() {
         for (const file of filesToUpload) {
             if (!file) continue;
 
-            const sanitizedName = sanitizeFileName(file.name);
-            const fileName = `${Date.now()}_${sanitizedName}`;
-            const filePath = `${clientId}/${fileName}`;
+            console.log(`[DEBUG] Preparando envio de ${file.name} para webhook`);
 
-            console.log(`[DEBUG] Iniciando upload: ${fileName} para bucket client-documents`);
+            // Create FormData with file and clientId
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('clientId', clientId);
 
-            const { data, error: uploadError } = await supabase.storage
-                .from('client-documents')
-                .upload(filePath, file);
+            console.log(`[DEBUG] Enviando para webhook: ${N8N_UPLOAD_DOC_URL}`);
 
-            if (uploadError) {
-                console.error(`[DEBUG] Erro no Upload do arquivo ${file.name}:`, uploadError);
-                throw new Error(`Falha no upload de "${file.name}": ${uploadError.message}`);
-            }
+            try {
+                const response = await fetch(N8N_UPLOAD_DOC_URL, {
+                    method: 'POST',
+                    body: formData
+                    // Note: Do NOT set Content-Type header - browser will set it automatically with boundary
+                });
 
-            console.log(`[DEBUG] Upload sucesso:`, data);
-
-            const insertPayload = {
-                client_id: clientId,
-                file_name: file.name,
-                file_path: filePath
-            };
-
-            console.log("[DEBUG] Inserindo no banco:", insertPayload);
-
-            const { error: dbError } = await supabase
-                .from('client_knowledge')
-                .insert([insertPayload]);
-
-            if (dbError) {
-                console.error(`[DEBUG] Erro ao salvar no banco (client_knowledge):`, dbError);
-                if (dbError.code === '22P02') {
-                    throw new Error(`Erro de Tipo no Banco (22P02): Verifique se o ID do cliente está correto (${clientId}). Detalhes: ${dbError.message}`);
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`Webhook retornou erro ${response.status}: ${errorText}`);
                 }
-                throw new Error(`Erro ao registrar arquivo "${file.name}" no banco: ${dbError.message}`);
+
+                const result = await response.json();
+                console.log(`[DEBUG] Upload de ${file.name} concluído:`, result);
+
+            } catch (error) {
+                console.error(`[DEBUG] Erro ao enviar ${file.name} para webhook:`, error);
+                throw new Error(`Falha no upload de "${file.name}": ${error.message}`);
             }
         }
     };
@@ -466,7 +460,7 @@ export default function ClientsPage() {
                                         value={formData.unipile_account_id}
                                         onChange={handleInputChange}
                                         placeholder="Ex: f7NRx9..."
-                                        style={{ width: '100%', padding: '0.5rem', border: '1px solid #93c5fd', borderRadius: '4px', fontFamily: 'monospace' }}
+                                        style={{ width: '100%', padding: '0.5rem', border: '1px solid #93c5fd', borderRadius: '4px', fontFamily: 'monospace', color: '#1f2937' }}
                                     />
                                 </div>
                             </div>
@@ -478,7 +472,7 @@ export default function ClientsPage() {
                                     name="name"
                                     value={formData.name}
                                     onChange={handleInputChange}
-                                    style={{ width: '100%', padding: '0.5rem', border: '1px solid #d1d5db', borderRadius: '0.25rem' }}
+                                    style={{ width: '100%', padding: '0.5rem', border: '1px solid #d1d5db', borderRadius: '0.25rem', color: '#1f2937' }}
                                 />
                             </div>
 
@@ -489,7 +483,7 @@ export default function ClientsPage() {
                                     name="description"
                                     value={formData.description}
                                     onChange={handleInputChange}
-                                    style={{ width: '100%', padding: '0.5rem', border: '1px solid #d1d5db', borderRadius: '0.25rem' }}
+                                    style={{ width: '100%', padding: '0.5rem', border: '1px solid #d1d5db', borderRadius: '0.25rem', color: '#1f2937' }}
                                     rows="3"
                                 />
                             </div>
@@ -500,7 +494,7 @@ export default function ClientsPage() {
                                     name="tone_of_voice"
                                     value={formData.tone_of_voice}
                                     onChange={handleInputChange}
-                                    style={{ width: '100%', padding: '0.5rem', border: '1px solid #d1d5db', borderRadius: '0.25rem' }}
+                                    style={{ width: '100%', padding: '0.5rem', border: '1px solid #d1d5db', borderRadius: '0.25rem', color: '#1f2937' }}
                                 >
                                     <option>Profissional</option>
                                     <option>Descontraído</option>
@@ -515,7 +509,7 @@ export default function ClientsPage() {
                                     name="target_audience_default"
                                     value={formData.target_audience_default}
                                     onChange={handleInputChange}
-                                    style={{ width: '100%', padding: '0.5rem', border: '1px solid #d1d5db', borderRadius: '0.25rem' }}
+                                    style={{ width: '100%', padding: '0.5rem', border: '1px solid #d1d5db', borderRadius: '0.25rem', color: '#1f2937' }}
                                 />
                             </div>
 
@@ -525,7 +519,7 @@ export default function ClientsPage() {
                                     name="pain_points"
                                     value={formData.pain_points}
                                     onChange={handleInputChange}
-                                    style={{ width: '100%', padding: '0.5rem', border: '1px solid #d1d5db', borderRadius: '0.25rem' }}
+                                    style={{ width: '100%', padding: '0.5rem', border: '1px solid #d1d5db', borderRadius: '0.25rem', color: '#1f2937' }}
                                     rows="3"
                                 />
                             </div>

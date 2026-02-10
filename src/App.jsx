@@ -13,15 +13,13 @@ import PostFeedbackPage from './pages/PostFeedbackPage' // New Feedback Loop
 import Login from './pages/Login'
 import ClientsPage from './pages/ClientsPage'
 import IdeasPage from './pages/IdeasPage'
-import LeadsPage from './pages/LeadsPage'
 import SalesHubPage from './pages/SalesHubPage'
 import SalesInboxPage from './pages/SalesInboxPage'
 import CampaignsPage from './pages/CampaignsPage'
 import CampaignLeadsView from './pages/CampaignLeadsView'
 import CampaignLeadsPage from './pages/CampaignLeadsPage'
-import ListsPage from './pages/ListsPage'
-import ListDetailsPage from './pages/ListDetailsPage'
 import SystemInfoPage from './pages/SystemInfoPage'
+import LinkedInEngagementPage from './pages/LinkedInEngagementPage'
 import AdminLayout from './components/AdminLayout'
 
 // Client Portal New (Ideas/Insights)
@@ -176,16 +174,14 @@ function App() {
                 <Route path="/posts" element={<PostsPage />} />
                 <Route path="/clients" element={<ClientsPage />} />
                 <Route path="/ideas" element={<IdeasPage />} />
-                <Route path="/leads" element={<LeadsPage />} />
                 <Route path="/sales" element={<SalesHubPage />} />
                 <Route path="/campaigns" element={<CampaignsPage />} />
                 <Route path="/campaigns" element={<CampaignsPage />} />
                 <Route path="/campaigns/:id" element={<CampaignLeadsView />} />
                 <Route path="/campaigns/:campaignId/leads" element={<CampaignLeadsPage />} />
                 <Route path="/sales/inbox" element={<SalesInboxPage />} />
-                <Route path="/lists" element={<ListsPage />} />
-                <Route path="/lists/:id" element={<ListDetailsPage />} />
                 <Route path="/system-info" element={<SystemInfoPage />} />
+                <Route path="/engagement" element={<LinkedInEngagementPage />} />
               </Route>
 
               {/* Fallback */}

@@ -38,8 +38,6 @@ import {
 } from 'lucide-react'
 import AddLeadsModal from '../components/AddLeadsModal'
 import LeadDetailModal from '../components/LeadDetailModal'
-import KanbanColumn from '../components/kanban/KanbanColumn'
-import KanbanLeadCard from '../components/kanban/KanbanLeadCard'
 
 const CampaignLeadsView = () => {
     const { id: campaignId } = useParams()
@@ -86,6 +84,7 @@ const CampaignLeadsView = () => {
     const [messageDraft, setMessageDraft] = useState('')
     const [isAddLeadsModalOpen, setIsAddLeadsModalOpen] = useState(false)
     const [syncLoading, setSyncLoading] = useState(false)
+    const [clientSyncTimestamp, setClientSyncTimestamp] = useState(null) // from clients.last_sync_timestamp
 
     // NEW: Bulk History Import State
     const [importQueue, setImportQueue] = useState({
@@ -97,64 +96,12 @@ const CampaignLeadsView = () => {
     })
     const [showImportConfirm, setShowImportConfirm] = useState(false)
 
-    // NEW: View Mode Toggle (list vs kanban)
-    const [viewMode, setViewMode] = useState('kanban') // 'list' | 'kanban'
+
 
     // Helper function for delay (Safe Queue Pattern)
     const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms))
 
-    // ========== KANBAN CATEGORIZATION LOGIC ==========
-    const categorizeLeads = (leadsArray) => {
-        const now = new Date()
-        const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
 
-        const highPriority = []
-        const toRespond = []
-        const waiting = []
-        const standby = []
-
-        leadsArray.forEach(lead => {
-            const trustScore = lead?.trust_score || 0
-            const icpScore = lead?.icp_score
-            const lastType = lead?.last_interaction_type
-            const lastDate = lead?.last_interaction_date ? new Date(lead.last_interaction_date) : null
-
-            // Rule 1: High Priority - Score > 70 OR ICP A
-            if (trustScore > 70 || icpScore === 'A') {
-                highPriority.push(lead)
-                return
-            }
-
-            // Rule 2: To Respond - Last message was received (theirs)
-            if (lastType === 'received' || lastType === 'inbound') {
-                toRespond.push(lead)
-                return
-            }
-
-            // Rule 4: Stand-by - Low score OR inactive > 7 days
-            if (trustScore < 40 || (lastDate && lastDate < sevenDaysAgo) || !lastDate) {
-                standby.push(lead)
-                return
-            }
-
-            // Rule 3: Waiting - Last message was sent (ours)
-            if (lastType === 'sent' || lastType === 'outbound') {
-                waiting.push(lead)
-                return
-            }
-
-            // Default: Stand-by
-            standby.push(lead)
-        })
-
-        // Sort: To Respond by oldest first, others by score
-        toRespond.sort((a, b) => new Date(a.last_interaction_date || 0) - new Date(b.last_interaction_date || 0))
-        highPriority.sort((a, b) => (b.trust_score || 0) - (a.trust_score || 0))
-
-        return { highPriority, toRespond, waiting, standby }
-    }
-
-    const kanbanData = categorizeLeads(leads)
 
     // Debounce Search
     useEffect(() => {
@@ -235,6 +182,23 @@ const CampaignLeadsView = () => {
             .eq('id', campaignId)
             .single()
         setCampaign(data)
+    }
+
+    const fetchClientSyncTimestamp = async () => {
+        if (!selectedClientId) return
+        try {
+            const { data } = await supabase
+                .from('clients')
+                .select('last_sync_timestamp')
+                .eq('id', selectedClientId)
+                .single()
+
+            if (data?.last_sync_timestamp) {
+                setClientSyncTimestamp(data.last_sync_timestamp)
+            }
+        } catch (err) {
+            console.error('Error fetching client sync timestamp:', err)
+        }
     }
 
     const fetchStats = async () => {
@@ -357,7 +321,10 @@ const CampaignLeadsView = () => {
     useEffect(() => {
         if (campaignId && selectedClientId) {
             // Only fetch details once or if campaignId changes
-            if (page === 0) fetchCampaignDetails()
+            if (page === 0) {
+                fetchCampaignDetails()
+                fetchClientSyncTimestamp()
+            }
         }
     }, [campaignId, selectedClientId])
 
@@ -525,6 +492,7 @@ const CampaignLeadsView = () => {
             if (error || !client?.unipile_account_id) {
                 setNotification({ message: 'Erro: Cliente sem conta Unipile conectada.', type: 'error' })
                 setSyncLoading(false)
+                setTimeout(() => setNotification(null), 5000)
                 return
             }
 
@@ -534,18 +502,43 @@ const CampaignLeadsView = () => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     account_id: client.unipile_account_id,
-                    user_id: user?.id || 'system_user'
+                    user_id: user?.id || 'system_user',
+                    client_id: selectedClientId
                 })
             })
 
             if (response.ok) {
-                setNotification({ message: 'Sincronização iniciada! Aguarde alguns instantes para atualizar os dados.', type: 'success' })
+                // Parse JSON response
+                const result = await response.json()
+
+                if (result.success) {
+                    const messageCount = result.data?.messages_synced || 0
+                    const timestamp = result.data?.last_sync_timestamp || new Date().toISOString()
+
+                    // Update local timestamp (backend saves to DB)
+                    setClientSyncTimestamp(timestamp)
+
+                    // Show success with message count
+                    setNotification({
+                        message: `Sincronização concluída! ${messageCount} mensagens processadas.`,
+                        type: 'success'
+                    })
+
+                    // Refresh data
+                    fetchLeads(0, true)
+                    fetchTotalMessages()
+                } else {
+                    throw new Error(result.message || 'Falha na sincronização')
+                }
             } else {
-                throw new Error('Falha no webhook')
+                throw new Error('Erro ao sincronizar. Tente novamente.')
             }
         } catch (error) {
             console.error(error)
-            setNotification({ message: 'Erro ao sincronizar mensagens.', type: 'error' })
+            setNotification({
+                message: error.message || 'Erro ao sincronizar. Tente novamente.',
+                type: 'error'
+            })
         } finally {
             setSyncLoading(false)
             setTimeout(() => setNotification(null), 5000)
@@ -906,10 +899,20 @@ const CampaignLeadsView = () => {
 
             {/* NOTIFICATION TOAST */}
             {notification && (
-                <div className={`fixed top-6 right-6 z-50 px-4 py-3 rounded-lg shadow-lg border flex items-center gap-3 animate-slide-in-right ${notification.type === 'error' ? 'bg-red-50 border-red-200 text-red-600' : 'bg-white border-gray-200 text-slate-700'
+                <div className={`fixed top-6 right-6 z-50 px-5 py-4 rounded-xl shadow-2xl border-2 flex items-center gap-3 animate-slide-in-right min-w-[300px] ${notification.type === 'error'
+                    ? 'bg-red-50 border-red-300 text-red-700'
+                    : notification.type === 'success'
+                        ? 'bg-emerald-50 border-emerald-300 text-emerald-700'
+                        : 'bg-blue-50 border-blue-300 text-blue-700'
                     }`}>
-                    {notification.type === 'error' ? <Zap size={18} /> : <RefreshCw size={18} className={(enrichmentLoading || icebreakerLoading) ? "animate-spin text-orange-500" : "text-green-500"} />}
-                    <span className="text-sm font-medium">{notification.message}</span>
+                    {notification.type === 'error' ? (
+                        <X size={20} className="shrink-0" />
+                    ) : notification.type === 'success' ? (
+                        <Check size={20} className="shrink-0" />
+                    ) : (
+                        <RefreshCw size={20} className="animate-spin shrink-0" />
+                    )}
+                    <span className="text-sm font-semibold flex-1">{notification.message}</span>
                 </div>
             )}
 
@@ -1084,17 +1087,34 @@ const CampaignLeadsView = () => {
                                 </span>
                             )}
 
-                            <button
-                                onClick={handleSyncMessages}
-                                disabled={syncLoading}
-                                className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-semibold text-sm transition-all ${syncLoading
-                                    ? 'bg-blue-50 text-blue-400 cursor-not-allowed'
-                                    : 'bg-blue-50 text-blue-600 hover:bg-blue-100 hover:text-blue-700 border border-blue-200'
-                                    }`}
-                            >
-                                <RefreshCw size={16} className={syncLoading ? "animate-spin" : ""} />
-                                {syncLoading ? 'Sincronizando...' : 'Sync Mensagens'}
-                            </button>
+
+                            <div className="flex flex-col items-end gap-1">
+                                {clientSyncTimestamp && !syncLoading && (
+                                    <div className="text-[10px] text-slate-500 flex items-center gap-1 mb-1">
+                                        <Clock size={10} />
+                                        <span>
+                                            Última sync: {new Date(clientSyncTimestamp).toLocaleString('pt-BR', {
+                                                day: '2-digit',
+                                                month: '2-digit',
+                                                hour: '2-digit',
+                                                minute: '2-digit'
+                                            })}
+                                        </span>
+                                    </div>
+                                )}
+                                <button
+                                    onClick={handleSyncMessages}
+                                    disabled={syncLoading}
+                                    className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-semibold text-sm transition-all ${syncLoading
+                                        ? 'bg-blue-50 text-blue-400 cursor-not-allowed'
+                                        : 'bg-blue-50 text-blue-600 hover:bg-blue-100 hover:text-blue-700 border border-blue-200'
+                                        }`}
+                                >
+                                    <RefreshCw size={16} className={syncLoading ? "animate-spin" : ""} />
+                                    {syncLoading ? 'Sincronizando...' : 'Sync Mensagens'}
+                                </button>
+                            </div>
+
 
                             <button
                                 onClick={handleBulkHistorySync}
@@ -1236,113 +1256,12 @@ const CampaignLeadsView = () => {
                     onImportConnections={handleSyncConnections}
                 />
 
-                {/* VIEW MODE TOGGLE */}
-                <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-2 bg-slate-100 p-1 rounded-xl">
-                        <button
-                            onClick={() => setViewMode('kanban')}
-                            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${viewMode === 'kanban'
-                                ? 'bg-white text-orange-600 shadow-sm'
-                                : 'text-slate-500 hover:text-slate-700'
-                                }`}
-                        >
-                            📊 Kanban
-                        </button>
-                        <button
-                            onClick={() => setViewMode('list')}
-                            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${viewMode === 'list'
-                                ? 'bg-white text-orange-600 shadow-sm'
-                                : 'text-slate-500 hover:text-slate-700'
-                                }`}
-                        >
-                            📋 Lista
-                        </button>
-                    </div>
-                    <div className="text-sm text-slate-500">
-                        {viewMode === 'kanban' && (
-                            <span>
-                                🔥 {kanbanData.highPriority.length} |
-                                📩 {kanbanData.toRespond.length} |
-                                ⏳ {kanbanData.waiting.length} |
-                                💤 {kanbanData.standby.length}
-                            </span>
-                        )}
-                    </div>
-                </div>
 
-                {/* ========== KANBAN VIEW ========== */}
-                {viewMode === 'kanban' && (
-                    <div className="overflow-x-auto pb-4">
-                        <div className="flex gap-4 min-w-max">
-                            {/* Column 1: High Priority */}
-                            <KanbanColumn
-                                title="Prioridade Alta"
-                                icon="🔥"
-                                count={kanbanData.highPriority.length}
-                                colorClass="bg-red-500"
-                            >
-                                {kanbanData.highPriority.map(lead => (
-                                    <KanbanLeadCard
-                                        key={lead.id}
-                                        lead={lead}
-                                        onClick={(l) => setSelectedLead({ ...l, leads_with_stats: l })}
-                                    />
-                                ))}
-                            </KanbanColumn>
 
-                            {/* Column 2: To Respond */}
-                            <KanbanColumn
-                                title="Para Responder"
-                                icon="📩"
-                                count={kanbanData.toRespond.length}
-                                colorClass="bg-blue-500"
-                            >
-                                {kanbanData.toRespond.map(lead => (
-                                    <KanbanLeadCard
-                                        key={lead.id}
-                                        lead={lead}
-                                        onClick={(l) => setSelectedLead({ ...l, leads_with_stats: l })}
-                                    />
-                                ))}
-                            </KanbanColumn>
 
-                            {/* Column 3: Waiting */}
-                            <KanbanColumn
-                                title="Aguardando"
-                                icon="⏳"
-                                count={kanbanData.waiting.length}
-                                colorClass="bg-amber-500"
-                            >
-                                {kanbanData.waiting.map(lead => (
-                                    <KanbanLeadCard
-                                        key={lead.id}
-                                        lead={lead}
-                                        onClick={(l) => setSelectedLead({ ...l, leads_with_stats: l })}
-                                    />
-                                ))}
-                            </KanbanColumn>
-
-                            {/* Column 4: Stand-by */}
-                            <KanbanColumn
-                                title="Stand-by / Frios"
-                                icon="💤"
-                                count={kanbanData.standby.length}
-                                colorClass="bg-slate-400"
-                            >
-                                {kanbanData.standby.map(lead => (
-                                    <KanbanLeadCard
-                                        key={lead.id}
-                                        lead={lead}
-                                        onClick={(l) => setSelectedLead({ ...l, leads_with_stats: l })}
-                                    />
-                                ))}
-                            </KanbanColumn>
-                        </div>
-                    </div>
-                )}
 
                 {/* ========== TABLE/LIST VIEW ========== */}
-                {viewMode === 'list' && (
+                {
                     <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden flex flex-col">
                         <div className="overflow-x-auto min-h-[400px]">
                             <table className="w-full text-left border-collapse">
@@ -1682,7 +1601,7 @@ const CampaignLeadsView = () => {
                             </div>
                         </div>
                     </div>
-                )}
+                }
 
             </div>
 

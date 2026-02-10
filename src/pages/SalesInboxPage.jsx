@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { supabase } from '../services/supabaseClient'
 import { useClientSelection } from '../contexts/ClientSelectionContext'
-import { Search, Send, MoreVertical, Phone, Mail, MapPin, Briefcase, Zap, Star, Sparkles, MessageSquare, Copy, Check, LayoutGrid, List } from 'lucide-react'
+import { Search, Send, MoreVertical, Phone, Mail, MapPin, Briefcase, Zap, Star, Sparkles, MessageSquare, Copy, Check, LayoutGrid, List, Loader2, X } from 'lucide-react'
+
+const N8N_GENERATE_REPLY_URL = 'https://n8n-n8n-start.kfocge.easypanel.host/webhook/generate-reply'
 import KanbanColumn from '../components/kanban/KanbanColumn'
 import KanbanLeadCard from '../components/kanban/KanbanLeadCard'
 
@@ -13,6 +15,7 @@ const SalesInboxPage = () => {
 
     // View Mode
     const [viewMode, setViewMode] = useState('list') // 'list' | 'kanban'
+    const [searchTerm, setSearchTerm] = useState('')
 
     // Chat State
     const [interactions, setInteractions] = useState([])
@@ -23,6 +26,9 @@ const SalesInboxPage = () => {
     const [draftMessage, setDraftMessage] = useState('')
     const [selectedSuggestionIdx, setSelectedSuggestionIdx] = useState(null)
     const [copiedIdx, setCopiedIdx] = useState(null)
+    const [generatingReply, setGeneratingReply] = useState(false)
+    const [sdrSeniorGenerated, setSdrSeniorGenerated] = useState(false)
+    const [generatedReasoning, setGeneratedReasoning] = useState(null)
 
     // 1. Fetch Inbox Leads (Score > 0, Sorted Desc)
     useEffect(() => {
@@ -31,28 +37,41 @@ const SalesInboxPage = () => {
         const fetchInboxLeads = async () => {
             setLoadingLeads(true)
             try {
-                // Fetch leads with interaction stats
                 const { data, error } = await supabase
                     .from('leads')
-                    .select(`
-                        *,
-                        interactions:interactions(count),
-                        last_interaction:interactions(interaction_date)
-                    `)
+                    .select('*')
                     .eq('client_id', selectedClientId)
-                    .gt('engagement_score', 0)
-                    .order('engagement_score', { ascending: false })
+                    .order('last_interaction_date', { ascending: false, nullsFirst: false })
                     .limit(50)
 
                 if (error) throw error
 
-                // Process leads to flatten interaction data
+                const leadIds = (data || []).map(l => l.id)
+
+                // Fetch last interaction direction (is_sender) per lead
+                let lastSenderMap = {}
+                if (leadIds.length > 0) {
+                    const { data: intData } = await supabase
+                        .from('interactions')
+                        .select('lead_id, is_sender, interaction_date')
+                        .in('lead_id', leadIds)
+                        .order('interaction_date', { ascending: false })
+
+                    if (intData) {
+                        intData.forEach(row => {
+                            if (!(row.lead_id in lastSenderMap)) {
+                                lastSenderMap[row.lead_id] = row.is_sender
+                            }
+                        })
+                    }
+                }
+
                 const processedLeads = (data || []).map(lead => ({
                     ...lead,
-                    total_interactions_count: lead.interactions?.[0]?.count || 0,
-                    last_interaction_date: lead.last_interaction?.length > 0
-                        ? lead.last_interaction.sort((a, b) => new Date(b.interaction_date) - new Date(a.interaction_date))[0]?.interaction_date
-                        : null
+                    total_interactions_count: lead.total_interactions_count || 0,
+                    last_interaction_date: lead.last_interaction_date || null,
+                    // is_sender=true → I sent last msg | is_sender=false → lead sent last msg
+                    _lastMsgIsSender: lead.id in lastSenderMap ? lastSenderMap[lead.id] : null
                 }))
 
                 setLeads(processedLeads)
@@ -115,6 +134,10 @@ const SalesInboxPage = () => {
     }, [activeLead])
 
     // Kanban Categorization Logic
+    // 1) Prioridade Alta: confiança >= 75
+    // 2) Para Responder: confiança < 75, lead enviou a última msg (eu preciso responder)
+    // 3) Aguardando: confiança < 75, eu enviei a última msg (aguardando lead responder)
+    // 4) Stand-by: confiança < 75, mais de 7 dias desde a última mensagem
     const categorizeLeads = (leadsArray) => {
         const now = new Date()
         const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
@@ -126,36 +149,49 @@ const SalesInboxPage = () => {
 
         leadsArray.forEach(lead => {
             const trustScore = lead?.trust_score || lead?.engagement_score || 0
-            const icpScore = lead?.qualification_tier || lead?.icp_score
-            // Using engagement_score as proxy if trust_score missing for this view
-            const lastType = lead?.last_interaction_type // assuming this field exists on leads table or we check interactions
             const lastDate = lead?.last_interaction_date ? new Date(lead.last_interaction_date) : null
 
-            // Logic adapted for what we have available in `leads` table fetch
-            // If `last_interaction_type` isn't on `leads` table, we might be limited. 
-            // Assuming for now it is or relying on simple rules.
-
-            // Rule: High Priority
-            if (trustScore > 70 || icpScore === 'A') {
+            // Rule 1: Prioridade Alta — confiança >= 75
+            if (trustScore >= 75) {
                 highPriority.push(lead)
                 return
             }
 
-            // Rule: Standby (Low score or old)
-            if (trustScore < 40 || (lastDate && lastDate < sevenDaysAgo)) {
+            // Rule 4: Stand-by — mais de 7 dias sem interação
+            if (lastDate && lastDate < sevenDaysAgo) {
                 standby.push(lead)
                 return
             }
 
-            // Since we might not have `last_interaction_type` on the lead object directly without a join,
-            // we'll default to 'Para Responder' based on 'To Respond' usually being the default active state for engagement
-            toRespond.push(lead)
+            // Rule 2 & 3: baseado em quem enviou a última mensagem
+            // _lastMsgIsSender: true = eu enviei, false = lead enviou, null = sem dados
+            if (lead._lastMsgIsSender === false) {
+                // Lead enviou a última msg → eu preciso responder
+                toRespond.push(lead)
+            } else if (lead._lastMsgIsSender === true) {
+                // Eu enviei a última msg → aguardando resposta do lead
+                waiting.push(lead)
+            } else {
+                // Sem histórico de interação → Para Responder (default)
+                toRespond.push(lead)
+            }
         })
 
         return { highPriority, toRespond, waiting, standby }
     }
 
-    const kanbanData = categorizeLeads(leads)
+    const filteredLeads = searchTerm.trim()
+        ? leads.filter(lead => {
+            const term = searchTerm.toLowerCase()
+            return (
+                (lead.nome || '').toLowerCase().includes(term) ||
+                (lead.headline || '').toLowerCase().includes(term) ||
+                (lead.company || '').toLowerCase().includes(term)
+            )
+        })
+        : leads
+
+    const kanbanData = categorizeLeads(filteredLeads)
 
     const handleSendMessage = async () => {
         if (!newMessage.trim() || !activeLead) return
@@ -194,6 +230,55 @@ const SalesInboxPage = () => {
         setTimeout(() => setCopiedIdx(null), 2000)
     }
 
+    const generateAISuggestion = async () => {
+        if (!activeLead || !selectedClientId) return
+
+        setGeneratingReply(true)
+        setSdrSeniorGenerated(false)
+        setGeneratedReasoning(null)
+        try {
+            const conversationHistory = interactions
+                .slice().reverse()
+                .map(msg => `${msg.is_sender ? 'Eu' : 'Lead'}: ${msg.content}`)
+                .join('\n')
+
+            const payload = {
+                user_id: selectedClientId,
+                lead_id: activeLead.id,
+                lead_name: activeLead.nome || '',
+                lead_headline: activeLead.headline || '',
+                lead_location: activeLead.location || '',
+                lead_reasoning: activeLead.analysis_reasoning || '',
+                lead_icp_reason: activeLead.icp_reason || '',
+                conversation_history: conversationHistory,
+                is_icebreaker: interactions.length === 0
+            }
+
+            const response = await fetch(N8N_GENERATE_REPLY_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            })
+
+            if (!response.ok) throw new Error('Erro na requisição')
+
+            const data = await response.json()
+            if (data.reply) {
+                setNewMessage(data.reply)
+                setDraftMessage(data.reply)
+                setSdrSeniorGenerated(true)
+                if (data.reasoning) {
+                    setGeneratedReasoning(data.reasoning)
+                }
+            }
+        } catch (error) {
+            console.error('[AI] Error generating suggestion:', error)
+            alert('❌ Erro ao gerar sugestão. Tente novamente.')
+        } finally {
+            setGeneratingReply(false)
+        }
+    }
+
     if (!selectedClientId) return (
         <div className="flex flex-col items-center justify-center h-[calc(100vh-100px)] text-gray-400 gap-4">
             <div className="w-16 h-16 rounded-full bg-primary/10 border border-primary/30 flex items-center justify-center">
@@ -207,10 +292,31 @@ const SalesInboxPage = () => {
         <div className="flex flex-col h-[calc(100vh-120px)] p-2 gap-4 overflow-hidden">
 
             {/* HEADER & TOGGLE */}
-            <div className="flex justify-between items-center px-4 shrink-0">
+            <div className="flex flex-wrap justify-between items-center px-4 gap-3 shrink-0">
                 <h1 className="text-xl font-bold text-black flex items-center gap-2">
                     <LayoutGrid size={20} className="text-primary" /> Inbox Inteligente
                 </h1>
+
+                {/* Search Input */}
+                <div className="relative flex-1 max-w-xs">
+                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+                    <input
+                        type="text"
+                        placeholder="Pesquisar lead..."
+                        value={searchTerm}
+                        onChange={e => setSearchTerm(e.target.value)}
+                        className="w-full bg-black/40 border border-white/10 rounded-xl pl-9 pr-8 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30 transition-all"
+                    />
+                    {searchTerm && (
+                        <button
+                            onClick={() => setSearchTerm('')}
+                            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white transition-colors"
+                        >
+                            <X size={14} />
+                        </button>
+                    )}
+                </div>
+
                 <div className="bg-black/40 p-1 rounded-xl border border-white/10 flex gap-1 backdrop-blur-md">
                     <button
                         onClick={() => setViewMode('kanban')}
@@ -306,14 +412,14 @@ const SalesInboxPage = () => {
                         <div className="p-4 border-b border-white/10 bg-[#111111] flex justify-between items-center">
                             <span className="font-semibold text-white">Inbox Prioritário</span>
                             <span className="text-xs bg-primary/20 text-primary px-2 py-1 rounded-full font-bold">
-                                {leads.length}
+                                {filteredLeads.length}
                             </span>
                         </div>
 
                         <div className="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-2">
                             {loadingLeads ? (
                                 <div className="p-8 text-center text-gray-500 text-sm">Carregando...</div>
-                            ) : leads.map(lead => (
+                            ) : filteredLeads.map(lead => (
                                 <div
                                     key={lead.id}
                                     onClick={() => setActiveLead(lead)}
@@ -338,9 +444,9 @@ const SalesInboxPage = () => {
                                     </div>
                                 </div>
                             ))}
-                            {!loadingLeads && leads.length === 0 && (
+                            {!loadingLeads && filteredLeads.length === 0 && (
                                 <div className="p-8 text-center text-gray-500 text-sm">
-                                    Nenhum lead com engajamento.
+                                    {searchTerm ? 'Nenhum lead encontrado.' : 'Nenhum lead com engajamento.'}
                                 </div>
                             )}
                         </div>
@@ -431,103 +537,185 @@ const SalesInboxPage = () => {
                     <div className="w-80 flex flex-col gap-4 shrink-0 overflow-y-auto custom-scrollbar">
                         {activeLead ? (
                             <>
-                                {/* Lead Info Card */}
+                                {/* Lead Info Card - 3 Main Indicators */}
                                 <div className="bg-[#0d0d0d] rounded-2xl border border-white/10 p-5">
                                     <h4 className="text-xs font-bold text-primary uppercase tracking-wider mb-4">Dados do Lead</h4>
-                                    <div className="space-y-3">
-                                        <div className="flex gap-3 items-center text-sm text-white">
-                                            <Briefcase size={16} className="text-primary" />
-                                            <span className="truncate">{activeLead.headline}</span>
+                                    <div className="flex items-center justify-between gap-3">
+                                        {/* ICP Score */}
+                                        <div className={`flex-1 text-center py-2 px-3 rounded-lg border ${activeLead.icp_score === 'A' ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400' :
+                                            activeLead.icp_score === 'B' ? 'bg-amber-500/20 border-amber-500/50 text-amber-400' :
+                                                'bg-slate-500/20 border-slate-500/50 text-slate-400'
+                                            }`}>
+                                            <div className="text-[10px] uppercase tracking-wider opacity-70 mb-1">ICP</div>
+                                            <div className="text-lg font-bold">{activeLead.icp_score || 'C'}</div>
                                         </div>
-                                        <div className="flex gap-3 items-center text-sm text-white">
-                                            <MapPin size={16} className="text-primary" />
-                                            <span className="truncate">{activeLead.location || 'Localização não informada'}</span>
+
+                                        {/* Interactions Count */}
+                                        <div className="flex-1 text-center py-2 px-3 rounded-lg bg-blue-500/20 border border-blue-500/50 text-blue-400">
+                                            <div className="text-[10px] uppercase tracking-wider opacity-70 mb-1">Interações</div>
+                                            <div className="text-lg font-bold">{activeLead.total_interactions_count || activeLead.total_interactions || 0}</div>
+                                        </div>
+
+                                        {/* Trust Score (Confiança) */}
+                                        <div className={`flex-1 text-center py-2 px-3 rounded-lg border ${(activeLead.trust_score || activeLead.engagement_score || 0) >= 70 ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400' :
+                                            (activeLead.trust_score || activeLead.engagement_score || 0) >= 40 ? 'bg-amber-500/20 border-amber-500/50 text-amber-400' :
+                                                'bg-red-500/20 border-red-500/50 text-red-400'
+                                            }`}>
+                                            <div className="text-[10px] uppercase tracking-wider opacity-70 mb-1">Confiança</div>
+                                            <div className="text-lg font-bold">{activeLead.trust_score || activeLead.engagement_score || 0}</div>
                                         </div>
                                     </div>
                                 </div>
 
-                                {/* AI Suggestion Card (Enhanced) */}
+                                {/* AI Suggestion Card - Redesigned */}
                                 <div className="relative p-[1px] rounded-2xl bg-gradient-to-br from-primary/50 to-purple-600/50 shadow-lg shadow-primary/10">
                                     <div className="bg-[#0d0d0d] rounded-2xl p-5 h-full flex flex-col gap-4">
-                                        <div className="flex items-center gap-2 mb-1 text-primary font-bold text-sm">
+                                        <div className="flex items-center gap-2 text-primary font-bold text-sm">
                                             <Sparkles size={16} /> Próximo Passo
                                         </div>
 
                                         {(() => {
-                                            // Parse AI Suggestions Safely
-                                            let aiReplies = [];
+                                            // Parse AI Suggestion from DB
+                                            let suggestion = null;
                                             try {
                                                 const raw = activeLead.ai_suggested_replies;
-                                                aiReplies = typeof raw === 'string' ? JSON.parse(raw) : (raw || []);
-                                                if (!Array.isArray(aiReplies)) aiReplies = [];
-                                            } catch (e) { aiReplies = [] }
+                                                const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+                                                if (Array.isArray(parsed) && parsed.length > 0) {
+                                                    suggestion = parsed[0];
+                                                } else if (parsed && typeof parsed === 'object') {
+                                                    suggestion = parsed;
+                                                }
+                                            } catch (e) { suggestion = null }
 
-                                            if (aiReplies.length > 0) {
+                                            const hasGeneratedReply = sdrSeniorGenerated || (suggestion && (typeof suggestion === 'object' ? suggestion.text : suggestion))
+                                            const isIcebreaker = interactions.length === 0
+
+                                            // No messages and no generated reply → show ONLY the generate button
+                                            if (isIcebreaker && !hasGeneratedReply) {
                                                 return (
-                                                    <div className="space-y-3">
-                                                        {aiReplies.map((reply, idx) => {
-                                                            const text = typeof reply === 'object' ? reply.text : reply
-                                                            const strategy = typeof reply === 'object' ? reply.strategy : null
-                                                            const isSelected = selectedSuggestionIdx === idx
-
-                                                            return (
-                                                                <div
-                                                                    key={idx}
-                                                                    onClick={() => {
-                                                                        setDraftMessage(text)
-                                                                        setSelectedSuggestionIdx(idx)
-                                                                    }}
-                                                                    className={`p-3 rounded-lg border transition-all cursor-pointer ${isSelected
-                                                                        ? 'bg-primary/20 border-primary/50'
-                                                                        : 'bg-[#1a1a1a] border-white/10 hover:bg-white/10'
-                                                                        }`}
-                                                                >
-                                                                    <p className="text-sm text-white line-clamp-3">"{text}"</p>
-                                                                    {strategy && (
-                                                                        <div className="mt-2 text-[11px] text-primary/80 italic border-t border-white/10 pt-2">
-                                                                            💡 {strategy}
-                                                                        </div>
-                                                                    )}
-                                                                </div>
-                                                            )
-                                                        })}
+                                                    <div className="text-center py-6">
+                                                        <p className="text-sm text-gray-400 mb-5">
+                                                            Nenhuma conversa iniciada com este lead.
+                                                        </p>
+                                                        <button
+                                                            onClick={generateAISuggestion}
+                                                            disabled={generatingReply}
+                                                            className="w-full py-3 rounded-lg bg-gradient-to-r from-amber-500/20 to-orange-500/20 hover:from-amber-500/30 hover:to-orange-500/30 border border-amber-500/30 text-sm font-semibold text-amber-300 hover:text-amber-200 transition-all flex justify-center items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                        >
+                                                            {generatingReply ? (
+                                                                <>
+                                                                    <Loader2 size={14} className="animate-spin" />
+                                                                    Gerando Icebreaker...
+                                                                </>
+                                                            ) : (
+                                                                <>
+                                                                    <Sparkles size={14} />
+                                                                    Gerar Icebreaker
+                                                                </>
+                                                            )}
+                                                        </button>
                                                     </div>
                                                 )
-                                            } else {
+                                            }
+
+                                            // Has a generated reply (from DB or just generated) → show full card
+                                            if (hasGeneratedReply) {
+                                                const text = suggestion
+                                                    ? (typeof suggestion === 'object' ? suggestion.text : suggestion)
+                                                    : '';
+                                                const reasoning = sdrSeniorGenerated && generatedReasoning
+                                                    ? generatedReasoning
+                                                    : (suggestion && typeof suggestion === 'object'
+                                                        ? (suggestion.reasoning || suggestion.strategy)
+                                                        : null);
+
                                                 return (
-                                                    <p className="text-sm text-gray-400">
-                                                        Sem sugestões disponíveis.
-                                                    </p>
+                                                    <>
+                                                        {/* SDR Senior Badge */}
+                                                        {sdrSeniorGenerated && (
+                                                            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gradient-to-r from-amber-500/20 to-orange-500/20 border border-amber-500/30 text-amber-400 text-[10px] font-bold uppercase tracking-wider">
+                                                                <Sparkles size={12} />
+                                                                Gerada pelo Agente SDR Senior
+                                                            </div>
+                                                        )}
+
+                                                        {/* Message - Prominent Display */}
+                                                        <div className="p-4 rounded-xl bg-white/10 border border-primary/30">
+                                                            <p className="text-white text-sm leading-relaxed">
+                                                                "{draftMessage || text}"
+                                                            </p>
+                                                        </div>
+
+                                                        {/* Reasoning (only if available) */}
+                                                        {reasoning && (
+                                                            <div className="flex gap-2 text-gray-400 text-xs">
+                                                                <span className="text-primary/60 shrink-0">💡</span>
+                                                                <p className="leading-relaxed italic">
+                                                                    {reasoning}
+                                                                </p>
+                                                            </div>
+                                                        )}
+
+                                                        {/* Regenerate Button */}
+                                                        <button
+                                                            onClick={generateAISuggestion}
+                                                            disabled={generatingReply}
+                                                            className="w-full mt-2 py-2.5 rounded-lg bg-gradient-to-r from-amber-500/20 to-orange-500/20 hover:from-amber-500/30 hover:to-orange-500/30 border border-amber-500/30 text-xs font-semibold text-amber-300 hover:text-amber-200 transition-all flex justify-center items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                        >
+                                                            {generatingReply ? (
+                                                                <>
+                                                                    <Loader2 size={14} className="animate-spin" />
+                                                                    {isIcebreaker ? 'Gerando Icebreaker...' : 'Gerando Resposta...'}
+                                                                </>
+                                                            ) : (
+                                                                <>
+                                                                    <Sparkles size={14} />
+                                                                    {isIcebreaker ? 'Gerar Novo Icebreaker' : 'Gerar Nova Resposta'}
+                                                                </>
+                                                            )}
+                                                        </button>
+
+                                                        {/* Use in Chat Button */}
+                                                        <button
+                                                            onClick={() => {
+                                                                setNewMessage(draftMessage || text)
+                                                                setSelectedSuggestionIdx(0)
+                                                            }}
+                                                            className="w-full py-2.5 rounded-lg bg-primary hover:bg-primary/80 text-white text-xs font-bold shadow-lg shadow-primary/20 transition-all flex justify-center items-center gap-2"
+                                                        >
+                                                            <Check size={14} />
+                                                            Usar no Chat
+                                                        </button>
+                                                    </>
                                                 )
                                             }
-                                        })()}
 
-                                        {/* Editor */}
-                                        {draftMessage && (
-                                            <div className="mt-2 pt-4 border-t border-white/20">
-                                                <label className="text-[11px] text-primary uppercase font-bold mb-2 block">Editar & Enviar</label>
-                                                <textarea
-                                                    className="w-full bg-black/40 border border-glass-border rounded-lg p-3 text-sm text-white mb-2 focus:ring-1 focus:ring-primary/50 focus:outline-none resize-none"
-                                                    rows="4"
-                                                    value={draftMessage}
-                                                    onChange={(e) => setDraftMessage(e.target.value)}
-                                                />
-                                                <div className="flex gap-2">
+                                            // Has interactions but no suggestion → show generate response button
+                                            return (
+                                                <div className="text-center py-4">
+                                                    <p className="text-sm text-gray-400 mb-4">
+                                                        Sem sugestões disponíveis.
+                                                    </p>
                                                     <button
-                                                        onClick={() => copyToClipboard(draftMessage, 999)}
-                                                        className="flex-1 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-xs font-bold text-white transition-all flex justify-center items-center gap-2"
+                                                        onClick={generateAISuggestion}
+                                                        disabled={generatingReply}
+                                                        className="w-full py-2.5 rounded-lg bg-gradient-to-r from-amber-500/20 to-orange-500/20 hover:from-amber-500/30 hover:to-orange-500/30 border border-amber-500/30 text-xs font-semibold text-amber-300 hover:text-amber-200 transition-all flex justify-center items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                                                     >
-                                                        {copiedIdx === 999 ? <Check size={14} /> : <Copy size={14} />}
-                                                    </button>
-                                                    <button
-                                                        onClick={handleAiSend}
-                                                        className="flex-[3] py-2 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-white text-xs font-bold shadow-lg shadow-emerald-500/20 transition-all flex justify-center items-center gap-2"
-                                                    >
-                                                        <Send size={14} /> Enviar via LinkedIn
+                                                        {generatingReply ? (
+                                                            <>
+                                                                <Loader2 size={14} className="animate-spin" />
+                                                                Gerando Resposta...
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                <Sparkles size={14} />
+                                                                Gerar Resposta
+                                                            </>
+                                                        )}
                                                     </button>
                                                 </div>
-                                            </div>
-                                        )}
+                                            )
+                                        })()}
                                     </div>
                                 </div>
                             </>

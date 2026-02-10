@@ -16,7 +16,8 @@ import {
     ChevronRight,
     MessageCircle, // Added
     Target, // Added
-    Info
+    Info,
+    ThumbsUp
 } from 'lucide-react'
 import CreatePostModal from './CreatePostModal'
 import ClientSelector from './ClientSelector'
@@ -133,14 +134,11 @@ const AdminLayout = () => {
                                     </div>
                                     Inbox Inteligente
                                 </Link>
-                                <Link to="/leads" className={isActive('/leads')}>
-                                    <Briefcase size={20} /> Gestão de Leads
-                                </Link>
                                 <Link to="/clients" className={isActive('/clients')}>
                                     <Users size={20} /> Gerenciar Clientes
                                 </Link>
-                                <Link to="/lists" className={isActive('/lists')}>
-                                    <Database size={20} /> Listas de Contatos
+                                <Link to="/engagement" className={isActive('/engagement')}>
+                                    <ThumbsUp size={20} /> Engajamento LinkedIn
                                 </Link>
                                 <Link to="/system-info" className={isActive('/system-info')}>
                                     <Info size={20} /> Informações do Sistema
@@ -183,7 +181,7 @@ const AdminLayout = () => {
             {/* MAIN CONTENT AREA */}
             <main className="main-content">
                 {/* Sales Context Header */}
-                {(location.pathname.startsWith('/sales') || location.pathname.startsWith('/leads') || location.pathname.startsWith('/campaigns')) && (
+                {(location.pathname.startsWith('/sales') || location.pathname.startsWith('/leads') || location.pathname.startsWith('/campaigns') || location.pathname.startsWith('/engagement')) && (
                     <div className="context-header" style={{
                         padding: '0.75rem 1.5rem',
                         background: 'rgba(255, 255, 255, 0.03)',
@@ -193,7 +191,7 @@ const AdminLayout = () => {
                         justifyContent: 'space-between'
                     }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                            <span style={{ fontSize: '0.9rem', color: '#94a3b8' }}>Contexto:</span>
+                            <span style={{ fontSize: '0.9rem', color: '#5F5F5F' }}>Contexto:</span>
                             <ClientSelector />
                         </div>
                     </div>

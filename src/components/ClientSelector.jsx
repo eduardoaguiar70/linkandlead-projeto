@@ -43,7 +43,8 @@ const ClientSelector = () => {
                 value={selectedClientId || ''}
                 onChange={handleChange}
                 disabled={loading}
-                className="appearance-none bg-white/5 border border-glass-border hover:border-primary/50 text-gray-200 text-sm font-medium rounded-lg pl-10 pr-10 py-2.5 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all cursor-pointer min-w-[200px] backdrop-blur-md"
+                className="appearance-none bg-white/5 border border-glass-border hover:border-primary/50 text-sm font-medium rounded-lg pl-10 pr-10 py-2.5 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all cursor-pointer min-w-[200px] backdrop-blur-md"
+                style={{ color: '#5F5F5F' }}
             >
                 <option value="" className="bg-charcoal text-gray-400">Selecione um Cliente...</option>
                 {clients.map(client => (
