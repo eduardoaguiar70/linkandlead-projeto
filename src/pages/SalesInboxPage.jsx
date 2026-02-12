@@ -6,6 +6,7 @@ import { Search, Send, MoreVertical, Phone, Mail, MapPin, Briefcase, Zap, Star, 
 const N8N_GENERATE_REPLY_URL = 'https://n8n-n8n-start.kfocge.easypanel.host/webhook/generate-reply'
 import KanbanColumn from '../components/kanban/KanbanColumn'
 import KanbanLeadCard from '../components/kanban/KanbanLeadCard'
+import StrategicContextCard from '../components/StrategicContextCard'
 
 const SalesInboxPage = () => {
     const { selectedClientId } = useClientSelection()
@@ -91,26 +92,21 @@ const SalesInboxPage = () => {
             setInteractions([])
             setDraftMessage('')
             setSelectedSuggestionIdx(null)
+            setSdrSeniorGenerated(false)
+            setGeneratedReasoning(null)
             return
         }
 
-        // Set initial draft if AI suggestion exists
-        if (activeLead.ai_suggested_replies) {
-            // Handle both object and string format safely
-            try {
-                const replies = typeof activeLead.ai_suggested_replies === 'string'
-                    ? JSON.parse(activeLead.ai_suggested_replies)
-                    : activeLead.ai_suggested_replies
-
-                if (Array.isArray(replies) && replies.length > 0) {
-                    const firstReply = replies[0]
-                    setDraftMessage(typeof firstReply === 'object' ? firstReply.text : firstReply)
-                    setSelectedSuggestionIdx(0)
-                }
-            } catch (e) {
-                console.error("Error parsing AI replies", e)
-            }
+        // Load suggested_message from DB if it exists
+        if (activeLead.suggested_message) {
+            setDraftMessage(activeLead.suggested_message)
+            setSdrSeniorGenerated(true)
+        } else {
+            setDraftMessage('')
+            setSdrSeniorGenerated(false)
         }
+        setSelectedSuggestionIdx(null)
+        setGeneratedReasoning(null)
 
         const fetchInteractions = async () => {
             setLoadingChat(true)
@@ -271,6 +267,32 @@ const SalesInboxPage = () => {
                     setGeneratedReasoning(data.reasoning)
                 }
             }
+
+            // After 5s, re-fetch the lead's strategic columns + suggested_message (populated by n8n workflow)
+            const leadId = activeLead.id
+            setTimeout(async () => {
+                try {
+                    const { data: updated, error } = await supabase
+                        .from('leads')
+                        .select('last_cadence_level, last_signal_detected, last_psychological_factor, last_forbidden_action, last_strategy_used, suggested_message')
+                        .eq('id', leadId)
+                        .single()
+
+                    if (error || !updated) return
+
+                    // Update activeLead & leads array
+                    setActiveLead(prev => prev && prev.id === leadId ? { ...prev, ...updated } : prev)
+                    setLeads(prev => prev.map(l => l.id === leadId ? { ...l, ...updated } : l))
+
+                    // Update Próximo Passo with DB suggested_message
+                    if (updated.suggested_message) {
+                        setDraftMessage(updated.suggested_message)
+                        setSdrSeniorGenerated(true)
+                    }
+                } catch (err) {
+                    console.error('[Raio-X] Error refreshing strategic data:', err)
+                }
+            }, 5000)
         } catch (error) {
             console.error('[AI] Error generating suggestion:', error)
             alert('❌ Erro ao gerar sugestão. Tente novamente.')
@@ -556,18 +578,29 @@ const SalesInboxPage = () => {
                                             <div className="text-lg font-bold">{activeLead.total_interactions_count || activeLead.total_interactions || 0}</div>
                                         </div>
 
-                                        {/* Trust Score (Confiança) */}
-                                        <div className={`flex-1 text-center py-2 px-3 rounded-lg border ${(activeLead.trust_score || activeLead.engagement_score || 0) >= 70 ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400' :
-                                            (activeLead.trust_score || activeLead.engagement_score || 0) >= 40 ? 'bg-amber-500/20 border-amber-500/50 text-amber-400' :
-                                                'bg-red-500/20 border-red-500/50 text-red-400'
-                                            }`}>
-                                            <div className="text-[10px] uppercase tracking-wider opacity-70 mb-1">Confiança</div>
-                                            <div className="text-lg font-bold">{activeLead.trust_score || activeLead.engagement_score || 0}</div>
-                                        </div>
+                                        {/* Cadence Stage */}
+                                        {(() => {
+                                            const stage = activeLead.cadence_stage || ''
+                                            const match = stage?.toString().match(/(\d+)/)
+                                            const level = match ? parseInt(match[1], 10) : 0
+                                            const style = level >= 5 ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400'
+                                                : level >= 3 ? 'bg-amber-500/20 border-amber-500/50 text-amber-400'
+                                                    : level >= 1 ? 'bg-blue-500/20 border-blue-500/50 text-blue-400'
+                                                        : 'bg-slate-500/20 border-slate-500/50 text-slate-400'
+                                            return (
+                                                <div className={`flex-1 text-center py-2 px-3 rounded-lg border ${style}`}>
+                                                    <div className="text-[10px] uppercase tracking-wider opacity-70 mb-1">Cadência</div>
+                                                    <div className="text-lg font-bold">{stage || '—'}</div>
+                                                </div>
+                                            )
+                                        })()}
                                     </div>
                                 </div>
 
-                                {/* AI Suggestion Card - Redesigned */}
+                                {/* Raio-X da Negociação */}
+                                <StrategicContextCard lead={activeLead} />
+
+                                {/* AI Suggestion Card - Always starts clean */}
                                 <div className="relative p-[1px] rounded-2xl bg-gradient-to-br from-primary/50 to-purple-600/50 shadow-lg shadow-primary/10">
                                     <div className="bg-[#0d0d0d] rounded-2xl p-5 h-full flex flex-col gap-4">
                                         <div className="flex items-center gap-2 text-primary font-bold text-sm">
@@ -575,83 +608,32 @@ const SalesInboxPage = () => {
                                         </div>
 
                                         {(() => {
-                                            // Parse AI Suggestion from DB
-                                            let suggestion = null;
-                                            try {
-                                                const raw = activeLead.ai_suggested_replies;
-                                                const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
-                                                if (Array.isArray(parsed) && parsed.length > 0) {
-                                                    suggestion = parsed[0];
-                                                } else if (parsed && typeof parsed === 'object') {
-                                                    suggestion = parsed;
-                                                }
-                                            } catch (e) { suggestion = null }
-
-                                            const hasGeneratedReply = sdrSeniorGenerated || (suggestion && (typeof suggestion === 'object' ? suggestion.text : suggestion))
                                             const isIcebreaker = interactions.length === 0
+                                            const hasGeneratedReply = !!draftMessage
 
-                                            // No messages and no generated reply → show ONLY the generate button
-                                            if (isIcebreaker && !hasGeneratedReply) {
-                                                return (
-                                                    <div className="text-center py-6">
-                                                        <p className="text-sm text-gray-400 mb-5">
-                                                            Nenhuma conversa iniciada com este lead.
-                                                        </p>
-                                                        <button
-                                                            onClick={generateAISuggestion}
-                                                            disabled={generatingReply}
-                                                            className="w-full py-3 rounded-lg bg-gradient-to-r from-amber-500/20 to-orange-500/20 hover:from-amber-500/30 hover:to-orange-500/30 border border-amber-500/30 text-sm font-semibold text-amber-300 hover:text-amber-200 transition-all flex justify-center items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                                                        >
-                                                            {generatingReply ? (
-                                                                <>
-                                                                    <Loader2 size={14} className="animate-spin" />
-                                                                    Gerando Icebreaker...
-                                                                </>
-                                                            ) : (
-                                                                <>
-                                                                    <Sparkles size={14} />
-                                                                    Gerar Icebreaker
-                                                                </>
-                                                            )}
-                                                        </button>
-                                                    </div>
-                                                )
-                                            }
-
-                                            // Has a generated reply (from DB or just generated) → show full card
+                                            // Has a message (from DB or just generated) → show it
                                             if (hasGeneratedReply) {
-                                                const text = suggestion
-                                                    ? (typeof suggestion === 'object' ? suggestion.text : suggestion)
-                                                    : '';
-                                                const reasoning = sdrSeniorGenerated && generatedReasoning
-                                                    ? generatedReasoning
-                                                    : (suggestion && typeof suggestion === 'object'
-                                                        ? (suggestion.reasoning || suggestion.strategy)
-                                                        : null);
-
                                                 return (
                                                     <>
                                                         {/* SDR Senior Badge */}
-                                                        {sdrSeniorGenerated && (
-                                                            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gradient-to-r from-amber-500/20 to-orange-500/20 border border-amber-500/30 text-amber-400 text-[10px] font-bold uppercase tracking-wider">
-                                                                <Sparkles size={12} />
-                                                                Gerada pelo Agente SDR Senior
-                                                            </div>
-                                                        )}
+                                                        <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gradient-to-r from-amber-500/20 to-orange-500/20 border border-amber-500/30 text-amber-400 text-[10px] font-bold uppercase tracking-wider">
+                                                            <Sparkles size={12} />
+                                                            Gerada pelo Agente SDR Senior
+                                                        </div>
 
                                                         {/* Message - Prominent Display */}
                                                         <div className="p-4 rounded-xl bg-white/10 border border-primary/30">
-                                                            <p className="text-white text-sm leading-relaxed">
-                                                                "{draftMessage || text}"
+                                                            <p className="text-white text-sm leading-relaxed whitespace-pre-wrap">
+                                                                "{draftMessage}"
                                                             </p>
                                                         </div>
 
                                                         {/* Reasoning (only if available) */}
-                                                        {reasoning && (
+                                                        {generatedReasoning && (
                                                             <div className="flex gap-2 text-gray-400 text-xs">
                                                                 <span className="text-primary/60 shrink-0">💡</span>
                                                                 <p className="leading-relaxed italic">
-                                                                    {reasoning}
+                                                                    {generatedReasoning}
                                                                 </p>
                                                             </div>
                                                         )}
@@ -678,7 +660,7 @@ const SalesInboxPage = () => {
                                                         {/* Use in Chat Button */}
                                                         <button
                                                             onClick={() => {
-                                                                setNewMessage(draftMessage || text)
+                                                                setNewMessage(draftMessage)
                                                                 setSelectedSuggestionIdx(0)
                                                             }}
                                                             className="w-full py-2.5 rounded-lg bg-primary hover:bg-primary/80 text-white text-xs font-bold shadow-lg shadow-primary/20 transition-all flex justify-center items-center gap-2"
@@ -690,26 +672,28 @@ const SalesInboxPage = () => {
                                                 )
                                             }
 
-                                            // Has interactions but no suggestion → show generate response button
+                                            // Default: Empty state → show generate button
                                             return (
-                                                <div className="text-center py-4">
-                                                    <p className="text-sm text-gray-400 mb-4">
-                                                        Sem sugestões disponíveis.
+                                                <div className="text-center py-6">
+                                                    <p className="text-sm text-gray-400 mb-5">
+                                                        {isIcebreaker
+                                                            ? 'Nenhuma conversa iniciada com este lead.'
+                                                            : 'Clique para gerar uma sugestão de resposta com IA.'}
                                                     </p>
                                                     <button
                                                         onClick={generateAISuggestion}
                                                         disabled={generatingReply}
-                                                        className="w-full py-2.5 rounded-lg bg-gradient-to-r from-amber-500/20 to-orange-500/20 hover:from-amber-500/30 hover:to-orange-500/30 border border-amber-500/30 text-xs font-semibold text-amber-300 hover:text-amber-200 transition-all flex justify-center items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                        className="w-full py-3 rounded-lg bg-gradient-to-r from-amber-500/20 to-orange-500/20 hover:from-amber-500/30 hover:to-orange-500/30 border border-amber-500/30 text-sm font-semibold text-amber-300 hover:text-amber-200 transition-all flex justify-center items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                                                     >
                                                         {generatingReply ? (
                                                             <>
                                                                 <Loader2 size={14} className="animate-spin" />
-                                                                Gerando Resposta...
+                                                                {isIcebreaker ? 'Gerando Icebreaker...' : 'Gerando Resposta...'}
                                                             </>
                                                         ) : (
                                                             <>
                                                                 <Sparkles size={14} />
-                                                                Gerar Resposta
+                                                                {isIcebreaker ? 'Gerar Icebreaker' : 'Gerar Resposta'}
                                                             </>
                                                         )}
                                                     </button>

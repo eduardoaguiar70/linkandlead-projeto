@@ -20,7 +20,6 @@ const LeadDetailModal = ({ lead, campaignLead, onClose }) => {
     const [interactions, setInteractions] = useState([])
     const [loadingInteractions, setLoadingInteractions] = useState(false)
     const [copiedIdx, setCopiedIdx] = useState(null)
-    const [showTrustTooltip, setShowTrustTooltip] = useState(false)
     const [enrichedData, setEnrichedData] = useState(null) // Local state for fresh DB data
     const [draftMessage, setDraftMessage] = useState('') // Human-in-the-loop message editing
     const [selectedSuggestionIdx, setSelectedSuggestionIdx] = useState(null)
@@ -47,7 +46,7 @@ const LeadDetailModal = ({ lead, campaignLead, onClose }) => {
             // Since the main view can't join, we fetch fresh data here
             const { data: leadData, error: leadError } = await supabase
                 .from('leads')
-                .select('trust_score, sentiment, sentiment_reasoning, ai_suggested_replies, conversation_summary, icp_reason')
+                .select('cadence_stage, sentiment, sentiment_reasoning, ai_suggested_replies, conversation_summary, icp_reason')
                 .eq('id', lead.id)
                 .single()
 
@@ -72,7 +71,7 @@ const LeadDetailModal = ({ lead, campaignLead, onClose }) => {
         setTimeout(() => setCopiedIdx(null), 2000)
     }
 
-    // ============ TRUST TRIAD LOGIC ============
+    // ============ DATA TRIAD LOGIC ============
 
     // 1. QUALITY (A/B/C tier)
     const getQualityData = () => {
@@ -93,45 +92,39 @@ const LeadDetailModal = ({ lead, campaignLead, onClose }) => {
         return { percent: Math.max(10, count * 10), color: '#ef4444', label: count, text: 'text-red-400' }
     }
 
-    // 3. TRUST SCORE (0-100, derived from sentiment or explicit field)
-    const getTrustData = () => {
-        // Priority: 1. Fresh Enriched Data, 2. Prop Data (Root), 3. Prop Data (Nested)
+    // 3. CADENCE STAGE → Trust/Proximity Level
+    // In outbound prospecting, cadence stages reflect growing trust:
+    // G1 (first contact) → G7+ (high trust / ready to close)
+    const getCadenceData = () => {
+        const stage = enrichedData?.cadence_stage
+            ?? lead?.cadence_stage
+            ?? lead?.leads?.cadence_stage
+            ?? ''
 
-        // Try to get explicit trust_score
-        let score = enrichedData?.trust_score
-            ?? lead?.trust_score
-            ?? lead?.leads?.trust_score
+        // Extract numeric level from stage (e.g. "G5" → 5, "G1" → 1)
+        const match = stage?.toString().match(/(\d+)/)
+        const level = match ? parseInt(match[1], 10) : 0
 
-        // If not found, log and fallback
-        if (score === undefined || score === null) {
-            console.log('[Trust Score] Not found, checking sentiment...')
-            const sentiment = (enrichedData?.sentiment || lead?.leads?.sentiment || lead?.sentiment)?.toUpperCase()
+        // Map level to trust progression (outbound context)
+        const trustLevels = [
+            { max: 0, label: 'Sem Cadência', desc: 'Este lead ainda não iniciou a cadência de prospecção.', percent: 5, color: '#94a3b8', text: 'text-slate-400' },
+            { max: 1, label: 'Primeiro Contato', desc: 'Lead recebeu o primeiro toque. Nível de confiança inicial.', percent: 15, color: '#3b82f6', text: 'text-blue-400' },
+            { max: 2, label: 'Reconhecimento', desc: 'Lead começa a reconhecer você. Confiança em construção.', percent: 30, color: '#06b6d4', text: 'text-cyan-400' },
+            { max: 3, label: 'Consideração', desc: 'Lead demonstra abertura para conversar. Confiança em crescimento.', percent: 45, color: '#f59e0b', text: 'text-amber-400' },
+            { max: 4, label: 'Interesse Ativo', desc: 'Lead engajado e interessado. Boa confiança estabelecida.', percent: 60, color: '#f97316', text: 'text-orange-400' },
+            { max: 5, label: 'Relacionamento', desc: 'Lead confia em você como referência. Relação sólida.', percent: 75, color: '#10b981', text: 'text-emerald-400' },
+            { max: 6, label: 'Alta Confiança', desc: 'Lead altamente engajado. Pronto para proposta.', percent: 90, color: '#22c55e', text: 'text-green-400' },
+            { max: Infinity, label: 'Pronto p/ Fechar', desc: 'Máxima confiança atingida. Momento ideal para conversão.', percent: 100, color: '#eab308', text: 'text-yellow-400' }
+        ]
 
-            if (sentiment === 'POSITIVE') score = 85
-            else if (sentiment === 'NEUTRAL') score = 50
-            else if (sentiment === 'NEGATIVE') score = 20
-            else score = 0
-        } else {
-            console.log('[Trust Score] Found explicit score:', score)
-        }
+        const config = trustLevels.find(t => level <= t.max) || trustLevels[0]
 
-        let color = '#ef4444'
-        let text = 'text-red-400'
-        if (score >= 70) { color = '#10b981'; text = 'text-emerald-400' }
-        else if (score >= 40) { color = '#f59e0b'; text = 'text-amber-400' }
-
-        // Get reasoning
-        const reasoning = enrichedData?.sentiment_reasoning
-            ?? lead?.leads?.sentiment_reasoning
-            ?? lead?.sentiment_reasoning
-            ?? null
-
-        return { score, percent: score, color, text, reasoning }
+        return { ...config, stage, level }
     }
 
     const quality = getQualityData()
     const interaction = getInteractionData()
-    const trust = getTrustData()
+    const cadence = getCadenceData()
     // Prioritize fresh AI replies
     const aiReplies = enrichedData?.ai_suggested_replies || lead?.ai_suggested_replies || []
 
@@ -247,12 +240,15 @@ const LeadDetailModal = ({ lead, campaignLead, onClose }) => {
                             <span className="text-[11px] text-slate-600 font-semibold uppercase tracking-wider mt-2">Interações</span>
                         </div>
 
-                        {/* Gauge 3: Confiança */}
+                        {/* Gauge 3: Nível de Cadência (Trust Proxy) */}
                         <div className="flex flex-col items-center">
-                            <CircularGauge percent={trust.percent} color={trust.color}>
-                                <span className={`text-xl font-bold ${trust.text}`}>{trust.score}</span>
+                            <CircularGauge percent={cadence.percent} color={cadence.color}>
+                                <div className="flex flex-col items-center">
+                                    <span className={`text-lg font-bold ${cadence.text}`}>{cadence.stage || '—'}</span>
+                                </div>
                             </CircularGauge>
-                            <span className="text-[11px] text-slate-600 font-semibold uppercase tracking-wider mt-2">Confiança</span>
+                            <span className="text-[11px] text-slate-600 font-semibold uppercase tracking-wider mt-2">Cadência</span>
+                            <span className={`text-[9px] font-medium mt-0.5 ${cadence.text}`}>{cadence.label}</span>
                         </div>
                     </div>
 
@@ -264,11 +260,11 @@ const LeadDetailModal = ({ lead, campaignLead, onClose }) => {
                         </p>
                     </div>
 
-                    {/* Trust/Sentiment Reasoning */}
+                    {/* Cadence Stage Explanation */}
                     <div className="mt-3 p-3 bg-white rounded-xl border border-slate-200 shadow-sm">
                         <p className="text-xs text-slate-600">
-                            <span className="font-bold text-slate-800 mr-1">Por que essa confiança?</span>
-                            {trust.reasoning || "Aguardando análise de sentimento..."}
+                            <span className="font-bold text-slate-800 mr-1">Nível de Cadência ({cadence.stage || '—'}):</span>
+                            {cadence.desc}
                         </p>
                     </div>
                 </div>

@@ -450,7 +450,7 @@ const CampaignLeadsView = () => {
             }
 
             // 2. Call Webhook
-            const response = await fetch('https://n8n-n8n-start.kfocge.easypanel.host/webhook/sync-connections', {
+            const response = await fetch('https://n8n-n8n-start.kfocge.easypanel.host/webhook-test/sync-connections', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({

@@ -21,11 +21,19 @@ const KanbanLeadCard = ({ lead, onClick }) => {
         return 'agora'
     }
 
-    // Helper: Score color based on value
-    const getScoreColor = (score) => {
-        if (score >= 70) return 'bg-emerald-500'
-        if (score >= 40) return 'bg-amber-500'
-        return 'bg-slate-400'
+    // Helper: Cadence stage styling (trust-gradient based on level)
+    const getCadenceStyle = (stage) => {
+        const match = stage?.toString().match(/(\d+)/)
+        const level = match ? parseInt(match[1], 10) : 0
+
+        if (level >= 7) return 'bg-yellow-100 text-yellow-700 border border-yellow-300'
+        if (level >= 6) return 'bg-green-100 text-green-700 border border-green-300'
+        if (level >= 5) return 'bg-emerald-100 text-emerald-700 border border-emerald-300'
+        if (level >= 4) return 'bg-orange-100 text-orange-700 border border-orange-300'
+        if (level >= 3) return 'bg-amber-100 text-amber-700 border border-amber-300'
+        if (level >= 2) return 'bg-cyan-100 text-cyan-700 border border-cyan-300'
+        if (level >= 1) return 'bg-blue-100 text-blue-700 border border-blue-300'
+        return 'bg-gray-100 text-gray-600 border border-gray-300'
     }
 
     // Helper: ICP tier styling
@@ -40,7 +48,7 @@ const KanbanLeadCard = ({ lead, onClick }) => {
 
     // Extract lead data (handle both direct and nested structures)
     const leadData = lead?.leads || lead
-    const trustScore = leadData?.trust_score || 0
+    const cadenceStage = leadData?.cadence_stage || ''
     const icpTier = leadData?.qualification_tier || leadData?.icp_score || 'C'
     const totalInteractions = leadData?.total_interactions_count || leadData?.total_interactions || 0
     const lastInteractionDate = leadData?.last_interaction_date
@@ -71,10 +79,12 @@ const KanbanLeadCard = ({ lead, onClick }) => {
                     <p className="text-xs text-gray-500 truncate">{headline || '—'}</p>
                 </div>
 
-                {/* Trust Score Badge */}
-                <div className={`${getScoreColor(trustScore)} text-white text-xs font-bold px-2 py-1 rounded-lg shrink-0`}>
-                    {trustScore}
-                </div>
+                {/* Cadence Stage Badge */}
+                {cadenceStage && (
+                    <div className={`${getCadenceStyle(cadenceStage)} text-[10px] font-bold px-2 py-0.5 rounded-lg shrink-0`}>
+                        {cadenceStage}
+                    </div>
+                )}
             </div>
 
             {/* Bottom Row: Meta Info */}
