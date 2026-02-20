@@ -26,7 +26,9 @@ import {
 // ═══════════════════════════════════════════════
 
 const HOT_STAGES = ['G4', 'G5']
+const MAX_DAILY_TASKS = 30
 const VISIBLE_COLD_CARDS = 8
+const ICP_PRIORITY = { A: 0, B: 1, C: 2 }
 
 const CADENCE_LABELS = {
     G1: 'Primeiro Contato',
@@ -131,7 +133,19 @@ const SalesCockpitPage = () => {
 
             if (pendingResult.error) throw pendingResult.error
 
-            setPendingTasks(pendingResult.data || [])
+            const prioritized = (pendingResult.data || []).sort((a, b) => {
+                const aHot = HOT_STAGES.includes(a.leads?.cadence_stage) ? 0 : 1
+                const bHot = HOT_STAGES.includes(b.leads?.cadence_stage) ? 0 : 1
+                if (aHot !== bHot) return aHot - bHot
+
+                const aIcp = ICP_PRIORITY[a.leads?.icp_score] ?? 3
+                const bIcp = ICP_PRIORITY[b.leads?.icp_score] ?? 3
+                if (aIcp !== bIcp) return aIcp - bIcp
+
+                return new Date(a.created_at) - new Date(b.created_at)
+            }).slice(0, MAX_DAILY_TASKS)
+
+            setPendingTasks(prioritized)
             setDoneCount(doneResult.count || 0)
         } catch (err) {
             console.error('Error fetching cockpit tasks:', err)
@@ -176,9 +190,9 @@ const SalesCockpitPage = () => {
 
     const navigate = useNavigate()
 
-    const handleExecute = (leadId) => {
+    const handleExecute = (leadId, taskId) => {
         if (leadId) {
-            navigate(`/sales/inbox?leadId=${leadId}`)
+            navigate(`/sales/inbox?leadId=${leadId}${taskId ? `&taskId=${taskId}` : ''}`)
         }
     }
 
@@ -200,7 +214,7 @@ const SalesCockpitPage = () => {
         return { hotTasks: hot, coldTasks: cold }
     }, [pendingTasks])
 
-    const totalMissions = pendingTasks.length + doneCount
+    const totalMissions = Math.min(pendingTasks.length + doneCount, MAX_DAILY_TASKS)
     const progressPercent = totalMissions > 0 ? Math.round((doneCount / totalMissions) * 100) : 0
     const allDone = pendingTasks.length === 0 && !loading
     const visibleColdTasks = showAllCold ? coldTasks : coldTasks.slice(0, VISIBLE_COLD_CARDS)
@@ -344,7 +358,7 @@ const SalesCockpitPage = () => {
                         {/* LEFT: 🔥 PRIORIDADES (G4, G5) */}
                         <KanbanColumn
                             title="Prioridades"
-                            emoji="🔥"
+                            emoji=""
                             icon={<DollarSign size={15} />}
                             count={hotTasks.length}
                             themeKey="hot"
@@ -366,8 +380,8 @@ const SalesCockpitPage = () => {
 
                         {/* RIGHT: 🔨 MODERADAS */}
                         <KanbanColumn
-                            title="Moderadas"
-                            emoji="🔨"
+                            title="Tarefas de Prospecção"
+                            emoji=""
                             icon={<Users size={15} />}
                             count={coldTasks.length}
                             themeKey="cold"
@@ -477,7 +491,7 @@ const TaskCard = ({ task, themeKey, completing, onComplete, onExecute }) => {
     return (
         <div
             className={`
-                rounded-xl p-3.5 group
+                rounded-xl group flex
                 transition-all duration-300 ease-out
                 bg-white border border-gray-200
                 hover:shadow-md hover:border-gray-300
@@ -488,57 +502,79 @@ const TaskCard = ({ task, themeKey, completing, onComplete, onExecute }) => {
                 }
             `}
         >
-            {/* Row 1: Avatar + Lead Info + Stage Badge */}
-            <div className="flex items-start gap-3 mb-2">
-                {lead?.avatar_url ? (
-                    <img
-                        src={lead.avatar_url}
-                        alt={lead.nome || 'Lead'}
-                        className="w-9 h-9 rounded-lg shrink-0 object-cover border border-gray-200"
-                    />
+            {/* Checkbox column */}
+            <button
+                onClick={() => onComplete(task.id)}
+                disabled={completing}
+                className="
+                    shrink-0 flex items-center justify-center w-10
+                    border-r border-gray-100
+                    hover:bg-green-50 transition-colors
+                    disabled:opacity-50 disabled:cursor-not-allowed
+                    rounded-l-xl
+                "
+                title="Marcar como concluída"
+            >
+                {completing ? (
+                    <Loader2 size={15} className="animate-spin text-gray-400" />
                 ) : (
-                    <div className="w-9 h-9 rounded-lg shrink-0 bg-gray-100 border border-gray-200 flex items-center justify-center">
-                        <span className="text-xs font-bold text-gray-600">{initial}</span>
+                    <div className="w-4.5 h-4.5 rounded-full border-2 border-gray-300 group-hover:border-green-400 transition-colors flex items-center justify-center">
+                        <CheckCircle2 size={0} className="opacity-0 group-hover:opacity-100 text-green-500 transition-opacity" />
                     </div>
                 )}
-                <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-0.5">
-                        <h4 className="text-sm font-semibold text-gray-900 truncate">{lead.nome || 'Lead'}</h4>
-                        {stage && (
-                            <span className={`shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded border ${stageStyle}`}>
-                                {stage}
-                            </span>
-                        )}
-                        {lead.icp_score && (
-                            <span className={`shrink-0 text-[9px] px-1.5 py-0.5 rounded border ${ICP_STYLES[lead.icp_score] || 'bg-gray-100 text-gray-500 border-gray-200'}`}>
-                                {lead.icp_score}
-                            </span>
-                        )}
+            </button>
+
+            {/* Card content */}
+            <div className="flex-1 p-3.5">
+                {/* Row 1: Avatar + Lead Info + Stage Badge */}
+                <div className="flex items-start gap-3 mb-2">
+                    {lead?.avatar_url ? (
+                        <img
+                            src={lead.avatar_url}
+                            alt={lead.nome || 'Lead'}
+                            className="w-9 h-9 rounded-lg shrink-0 object-cover border border-gray-200"
+                        />
+                    ) : (
+                        <div className="w-9 h-9 rounded-lg shrink-0 bg-gray-100 border border-gray-200 flex items-center justify-center">
+                            <span className="text-xs font-bold text-gray-600">{initial}</span>
+                        </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-0.5">
+                            <h4 className="text-sm font-semibold text-gray-900 truncate">{lead.nome || 'Lead'}</h4>
+                            {stage && (
+                                <span className={`shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded border ${stageStyle}`}>
+                                    {stage}
+                                </span>
+                            )}
+                            {lead.icp_score && (
+                                <span className={`shrink-0 text-[9px] px-1.5 py-0.5 rounded border ${ICP_STYLES[lead.icp_score] || 'bg-gray-100 text-gray-500 border-gray-200'}`}>
+                                    {lead.icp_score}
+                                </span>
+                            )}
+                        </div>
+                        <p className="text-[11px] text-gray-500 leading-tight">
+                            {lead.headline || ''}
+                            {lead.empresa && lead.headline ? ` · ${lead.empresa}` : lead.empresa || ''}
+                        </p>
                     </div>
-                    <p className="text-[11px] text-gray-500 leading-tight">
-                        {lead.headline || ''}
-                        {lead.empresa && lead.headline ? ` · ${lead.empresa}` : lead.empresa || ''}
-                    </p>
                 </div>
-            </div>
 
-            {/* Row 2: AI Instruction */}
-            {task.instruction && (
-                <div className="mb-3">
-                    <p className="text-[11px] text-gray-500 leading-relaxed bg-gray-50 rounded-lg px-3 py-2 border border-gray-100">
-                        <span className="mr-1">💡</span>{task.instruction}
-                    </p>
-                </div>
-            )}
+                {/* Row 2: AI Instruction */}
+                {task.instruction && (
+                    <div className="mb-3">
+                        <p className="text-[11px] text-gray-500 leading-relaxed bg-gray-50 rounded-lg px-3 py-2 border border-gray-100">
+                            <span className="mr-1">💡</span>{task.instruction}
+                        </p>
+                    </div>
+                )}
 
-            {/* Row 3: Smart Action Buttons */}
-            <div className="flex items-center gap-2">
-                {/* PRIMARY: Smart LinkedIn Action */}
+                {/* Row 3: Smart Action Button (full width) */}
                 {lead.linkedin_profile_url && (
                     <button
-                        onClick={() => onExecute(lead?.id)}
+                        onClick={() => onExecute(lead?.id, task.id)}
                         className={`
-                            flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-[11px] font-semibold
+                            w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-[11px] font-semibold
                             transition-all duration-200
                             ${isFirstContact
                                 ? 'bg-orange-50 text-orange-600 border border-orange-200 hover:bg-orange-100'
@@ -560,26 +596,6 @@ const TaskCard = ({ task, themeKey, completing, onComplete, onExecute }) => {
                         )}
                     </button>
                 )}
-
-                {/* SECONDARY: Concluir */}
-                <button
-                    onClick={() => onComplete(task.id)}
-                    disabled={completing}
-                    className="
-                        shrink-0 flex items-center justify-center gap-1 px-3 py-2 rounded-lg text-[11px] font-semibold
-                        bg-gray-50 text-gray-400 border border-gray-200
-                        hover:bg-green-50 hover:text-green-600 hover:border-green-200
-                        transition-all duration-200
-                        disabled:opacity-50 disabled:cursor-not-allowed
-                    "
-                    title="Marcar como concluída"
-                >
-                    {completing ? (
-                        <Loader2 size={13} className="animate-spin" />
-                    ) : (
-                        <CheckCircle2 size={13} />
-                    )}
-                </button>
             </div>
         </div>
     )

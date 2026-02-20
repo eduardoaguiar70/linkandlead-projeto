@@ -59,14 +59,7 @@ const AdminLayout = () => {
                 <nav className="nav-menu" style={{ gap: '0.25rem' }}>
 
                     {/* ═══ PRIMARY: Máquina de Vendas (always visible, no toggle) ═══ */}
-                    <div style={{
-                        padding: '0.4rem 1.5rem 0.3rem',
-                        fontSize: '0.65rem',
-                        fontWeight: '800',
-                        letterSpacing: '0.1em',
-                        color: '#f97316',
-                        textTransform: 'uppercase'
-                    }}>
+                    <div className="px-6 py-2 text-[10px] font-extrabold tracking-widest text-primary uppercase opacity-70">
                         Máquina de Vendas
                     </div>
 
@@ -157,16 +150,9 @@ const AdminLayout = () => {
             <main className="main-content">
                 {/* Client Context Header for sales-related pages */}
                 {(location.pathname === '/' || location.pathname.startsWith('/sales') || location.pathname.startsWith('/leads') || location.pathname.startsWith('/campaigns') || location.pathname.startsWith('/engagement') || location.pathname.startsWith('/missions')) && (
-                    <div className="context-header" style={{
-                        padding: '0.75rem 1.5rem',
-                        background: 'rgba(255, 255, 255, 0.03)',
-                        borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between'
-                    }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                            <span style={{ fontSize: '0.9rem', color: '#5F5F5F' }}>Contexto:</span>
+                    <div className="px-6 py-3 bg-white/5 border-b border-white/10 flex items-center justify-between backdrop-blur-md">
+                        <div className="flex items-center gap-4">
+                            <span className="text-sm text-text-muted font-medium">Contexto:</span>
                             <ClientSelector />
                         </div>
                     </div>

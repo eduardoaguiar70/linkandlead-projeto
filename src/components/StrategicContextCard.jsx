@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { ShieldAlert, Brain, Radio, Target, TrendingUp, Loader2 } from 'lucide-react'
+import { ShieldAlert, Brain, Radio, Target, TrendingUp, Loader2, Sparkles } from 'lucide-react'
 
 // Cadence level configurations
 const CADENCE_LEVELS = {
@@ -16,7 +16,7 @@ const getCadenceConfig = (level) => {
     return CADENCE_LEVELS[key] || CADENCE_LEVELS['G1']
 }
 
-const StrategicContextCard = ({ lead }) => {
+const StrategicContextCard = ({ lead, isIcebreaker = false }) => {
     const [showTooltip, setShowTooltip] = useState(false)
 
     if (!lead) return null
@@ -40,11 +40,22 @@ const StrategicContextCard = ({ lead }) => {
                     <h4 className="text-xs font-bold text-primary uppercase tracking-wider">Raio-X da Negociação</h4>
                 </div>
                 <div className="flex flex-col items-center justify-center py-6 gap-3">
-                    <Loader2 size={24} className="text-gray-500 animate-spin" />
-                    <p className="text-xs text-gray-500 text-center leading-relaxed">
-                        Aguardando Análise da IA...<br />
-                        <span className="text-gray-600">Disponível após o próximo processamento.</span>
-                    </p>
+                    {isIcebreaker ? (
+                        <>
+                            <Sparkles size={24} className="text-amber-400/70" />
+                            <p className="text-xs text-gray-400 text-center leading-relaxed">
+                                Gere o Icebreaker para ativar<br />a análise estratégica.
+                            </p>
+                        </>
+                    ) : (
+                        <>
+                            <Loader2 size={24} className="text-gray-500 animate-spin" />
+                            <p className="text-xs text-gray-500 text-center leading-relaxed">
+                                Aguardando Análise da IA...<br />
+                                <span className="text-gray-600">Disponível após o próximo processamento.</span>
+                            </p>
+                        </>
+                    )}
                 </div>
             </div>
         )

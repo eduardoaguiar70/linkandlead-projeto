@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '../services/supabaseClient'
 import { useAuth } from '../contexts/AuthContext'
 import { useClientSelection } from '../contexts/ClientSelectionContext'
+import { KpiCardSkeleton, HeroTaskCardSkeleton, Skeleton } from '../components/Skeleton'
 import {
     Crosshair,
     Flame,
@@ -10,16 +11,13 @@ import {
     PartyPopper,
     Loader2,
     RefreshCw,
-    AlertTriangle,
-    Sparkles,
     TrendingUp,
     Users,
-    DollarSign,
     HandMetal,
     MessageCircle,
     CheckCircle2,
-    Hammer,
-    Zap
+    Zap,
+    Star
 } from 'lucide-react'
 
 // ═══════════════════════════════════════════════
@@ -203,8 +201,36 @@ const AdminPanel = () => {
 
     if (loading) {
         return (
-            <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-                <Loader2 className="w-8 h-8 animate-spin text-orange-500" />
+            <div className="min-h-screen bg-gray-50 text-gray-900 p-4 sm:p-6 lg:p-8">
+                <div className="max-w-6xl mx-auto space-y-6">
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                            <Skeleton className="w-10 h-10 rounded-xl" />
+                            <div className="space-y-2">
+                                <Skeleton className="w-48 h-8" />
+                                <Skeleton className="w-64 h-4" />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <Skeleton className="h-32 rounded-2xl" />
+                        <div className="col-span-2 grid grid-cols-3 gap-4">
+                            <KpiCardSkeleton />
+                            <KpiCardSkeleton />
+                            <KpiCardSkeleton />
+                        </div>
+                    </div>
+
+                    <div className="space-y-4">
+                        <Skeleton className="w-32 h-6" />
+                        <div className="space-y-3">
+                            <HeroTaskCardSkeleton />
+                            <HeroTaskCardSkeleton />
+                            <HeroTaskCardSkeleton />
+                        </div>
+                    </div>
+                </div>
             </div>
         )
     }
@@ -331,7 +357,7 @@ const AdminPanel = () => {
             {/* Quick Actions Bar (Bottom) */}
             <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-white/90 backdrop-blur-md border border-gray-200 shadow-xl rounded-full px-6 py-3 flex items-center gap-4 z-50">
                 <button
-                    onClick={() => window.location.href = '/campaigns'}
+                    onClick={() => navigate('/campaigns')}
                     className="flex items-center gap-2 text-sm font-semibold text-gray-600 hover:text-orange-600 transition-colors"
                 >
                     <Users size={16} />
@@ -339,7 +365,7 @@ const AdminPanel = () => {
                 </button>
                 <div className="w-px h-4 bg-gray-300" />
                 <button
-                    onClick={() => window.location.href = '/missions'}
+                    onClick={() => navigate('/missions')}
                     className="flex items-center gap-2 text-sm font-bold text-orange-600 hover:text-orange-700 transition-colors"
                 >
                     <Trophy size={16} />

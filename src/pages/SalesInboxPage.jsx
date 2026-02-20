@@ -4,7 +4,7 @@ import { supabase } from '../services/supabaseClient'
 import { useClientSelection } from '../contexts/ClientSelectionContext'
 import { Search, Send, MoreVertical, Phone, Mail, MapPin, Briefcase, Zap, Star, Sparkles, MessageSquare, Copy, Check, LayoutGrid, List, Loader2, X } from 'lucide-react'
 
-const N8N_GENERATE_REPLY_URL = 'https://n8n-n8n-start.kfocge.easypanel.host/webhook/generate-reply'
+const N8N_GENERATE_REPLY_URL = 'https://n8n-n8n-start.kfocge.easypanel.host/webhook-test/generate-reply'
 const N8N_SEND_MESSAGE_URL = 'https://n8n-n8n-start.kfocge.easypanel.host/webhook/send-linkedin-message'
 import KanbanColumn from '../components/kanban/KanbanColumn'
 import KanbanLeadCard from '../components/kanban/KanbanLeadCard'
@@ -36,6 +36,9 @@ const SalesInboxPage = () => {
     const [sdrSeniorGenerated, setSdrSeniorGenerated] = useState(false)
     const [generatedReasoning, setGeneratedReasoning] = useState(null)
 
+    // Cockpit task auto-complete
+    const [pendingTaskId, setPendingTaskId] = useState(null)
+
     // 1. Fetch Inbox Leads (Score > 0, Sorted Desc)
     useEffect(() => {
         if (!selectedClientId) return
@@ -56,6 +59,7 @@ const SalesInboxPage = () => {
 
                 // Fetch last interaction direction (is_sender) per lead
                 let lastSenderMap = {}
+                let lastDateMap = {}
                 if (leadIds.length > 0) {
                     const { data: intData } = await supabase
                         .from('interactions')
@@ -67,6 +71,7 @@ const SalesInboxPage = () => {
                         intData.forEach(row => {
                             if (!(row.lead_id in lastSenderMap)) {
                                 lastSenderMap[row.lead_id] = row.is_sender
+                                lastDateMap[row.lead_id] = row.interaction_date
                             }
                         })
                     }
@@ -75,22 +80,50 @@ const SalesInboxPage = () => {
                 const processedLeads = (data || []).map(lead => ({
                     ...lead,
                     total_interactions_count: lead.total_interactions_count || 0,
-                    last_interaction_date: lead.last_interaction_date || null,
+                    last_interaction_date: lastDateMap[lead.id] || lead.last_interaction_date || null,
                     // is_sender=true → I sent last msg | is_sender=false → lead sent last msg
                     _lastMsgIsSender: lead.id in lastSenderMap ? lastSenderMap[lead.id] : null
-                }))
+                })).sort((a, b) => {
+                    const dateA = a.last_interaction_date ? new Date(a.last_interaction_date).getTime() : 0
+                    const dateB = b.last_interaction_date ? new Date(b.last_interaction_date).getTime() : 0
+                    return dateB - dateA
+                })
 
                 setLeads(processedLeads)
 
                 // Auto-select lead from URL param (e.g. /sales/inbox?leadId=xxx)
                 const targetLeadId = searchParams.get('leadId')
                 if (targetLeadId) {
-                    const targetLead = processedLeads.find(l => String(l.id) === targetLeadId)
+                    let targetLead = processedLeads.find(l => String(l.id) === targetLeadId)
+
+                    // Lead not in top 50 — fetch individually and prepend
+                    if (!targetLead) {
+                        const { data: singleLead } = await supabase
+                            .from('leads')
+                            .select('*')
+                            .eq('id', targetLeadId)
+                            .single()
+
+                        if (singleLead) {
+                            targetLead = {
+                                ...singleLead,
+                                total_interactions_count: singleLead.total_interactions_count || 0,
+                                _lastMsgIsSender: null
+                            }
+                            setLeads(prev => [targetLead, ...prev])
+                        }
+                    }
+
                     if (targetLead) {
                         setActiveLead(targetLead)
                         setViewMode('list')
                     }
-                    // Clear the param so it doesn't re-trigger
+
+                    // Store taskId for auto-complete after sending message
+                    const taskId = searchParams.get('taskId')
+                    if (taskId) setPendingTaskId(taskId)
+
+                    // Clear the params so they don't re-trigger
                     setSearchParams({}, { replace: true })
                 }
             } catch (err) {
@@ -211,6 +244,20 @@ const SalesInboxPage = () => {
         setTimeout(() => setToast(null), 3500)
     }
 
+    const completeTaskIfPending = async () => {
+        if (!pendingTaskId) return
+        try {
+            await supabase
+                .from('tasks')
+                .update({ status: 'DONE' })
+                .eq('id', pendingTaskId)
+            setPendingTaskId(null)
+            showToast('✅ Tarefa do Cockpit concluída automaticamente!')
+        } catch (err) {
+            console.error('[Auto-complete] Error:', err)
+        }
+    }
+
     const sendToWebhook = async (messageText) => {
         // Fetch the Unipile account_id from the clients table
         const { data: client, error: clientError } = await supabase
@@ -255,6 +302,7 @@ const SalesInboxPage = () => {
             setInteractions(prev => [tempMsg, ...prev])
             setNewMessage('')
             showToast('Mensagem enviada!')
+            await completeTaskIfPending()
         } catch (err) {
             console.error('[Send] Error:', err)
             showToast('Erro ao enviar mensagem. Tente novamente.', 'error')
@@ -281,6 +329,7 @@ const SalesInboxPage = () => {
             setInteractions(prev => [tempMsg, ...prev])
             setDraftMessage('')
             showToast('Mensagem enviada via LinkedIn!')
+            await completeTaskIfPending()
         } catch (err) {
             console.error('[AI Send] Error:', err)
             showToast('Erro ao enviar mensagem. Tente novamente.', 'error')
@@ -304,8 +353,10 @@ const SalesInboxPage = () => {
         try {
             const conversationHistory = interactions
                 .slice().reverse()
-                .map(msg => `${msg.is_sender ? 'Eu' : 'Lead'}: ${msg.content}`)
-                .join('\n')
+                .map(msg => ({
+                    is_sender: !!msg.is_sender,
+                    content: msg.content || ''
+                }))
 
             const payload = {
                 user_id: selectedClientId,
@@ -396,7 +447,7 @@ const SalesInboxPage = () => {
                         placeholder="Pesquisar lead..."
                         value={searchTerm}
                         onChange={e => setSearchTerm(e.target.value)}
-                        className="w-full bg-black/40 border border-white/10 rounded-xl pl-9 pr-8 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30 transition-all"
+                        className="w-full bg-black/40 border border-white/10 rounded-xl pl-9 pr-8 py-2 text-sm text-gray-800 placeholder-gray-500 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30 transition-all"
                     />
                     {searchTerm && (
                         <button
@@ -497,11 +548,11 @@ const SalesInboxPage = () => {
 
             {/* LIST / DETAIL VIEW */}
             {viewMode === 'list' && (
-                <div className="flex-1 flex gap-6 overflow-hidden">
+                <div className="flex-1 flex gap-4 lg:gap-6 overflow-hidden">
                     {/* LEFT: Lead List */}
-                    <div className="w-80 flex flex-col bg-[#0d0d0d] rounded-2xl border border-white/10 overflow-hidden shrink-0">
-                        <div className="p-4 border-b border-white/10 bg-[#111111] flex justify-between items-center">
-                            <span className="font-semibold text-white">Inbox Prioritário</span>
+                    <div className="hidden md:flex w-72 lg:w-80 flex-col bg-charcoal rounded-2xl border border-glass-border overflow-hidden shrink-0">
+                        <div className="p-4 border-b border-glass-border bg-black/20 flex justify-between items-center">
+                            <span className="font-semibold text-text-heading">Inbox Prioritário</span>
                             <span className="text-xs bg-primary/20 text-primary px-2 py-1 rounded-full font-bold">
                                 {filteredLeads.length}
                             </span>
@@ -509,34 +560,54 @@ const SalesInboxPage = () => {
 
                         <div className="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-2">
                             {loadingLeads ? (
-                                <div className="p-8 text-center text-gray-500 text-sm">Carregando...</div>
+                                <div className="p-8 text-center text-text-muted text-sm">Carregando...</div>
                             ) : filteredLeads.map(lead => (
                                 <div
                                     key={lead.id}
                                     onClick={() => setActiveLead(lead)}
                                     className={`p-3 rounded-xl border cursor-pointer transition-all ${activeLead?.id === lead.id
-                                        ? 'bg-primary/20 border-primary/50 shadow-lg shadow-primary/10'
-                                        : 'border-transparent hover:bg-white/10 hover:border-white/10'
+                                        ? 'bg-primary/10 border-primary/40 shadow-lg shadow-primary/5'
+                                        : 'border-transparent hover:bg-glass hover:border-glass-border'
                                         }`}
                                 >
                                     <div className="flex justify-between items-start mb-1">
-                                        <span className={`font-semibold text-sm truncate max-w-[160px] ${activeLead?.id === lead.id ? 'text-white' : 'text-white'}`}>
+                                        <span className={`font-semibold text-sm truncate max-w-[140px] lg:max-w-[160px] text-text-heading`}>
                                             {lead.nome || 'Sem Nome'}
                                         </span>
-                                        <span className="text-[10px] text-gray-400">
+                                        <span className="text-[10px] text-text-muted">
                                             {lead.last_interaction ? new Date(lead.last_interaction).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : ''}
                                         </span>
                                     </div>
-                                    <div className="text-xs text-gray-300 mb-2 truncate">
+                                    <div className="text-xs text-text-body mb-2 truncate">
                                         {lead.headline || 'Lead qualificado'}
                                     </div>
-                                    <div className="flex items-center gap-1 text-[10px] font-bold text-white bg-primary/30 self-start px-2 py-0.5 rounded-md inline-flex">
-                                        <Star size={10} className="text-primary fill-primary" /> {lead.engagement_score} pts
+                                    <div className="flex items-center gap-2 text-[10px]">
+                                        {/* ICP Score */}
+                                        <span className={`font-bold px-1.5 py-0.5 rounded ${lead.icp_score === 'A' ? 'bg-emerald-500/20 text-emerald-400' :
+                                            lead.icp_score === 'B' ? 'bg-amber-500/20 text-amber-400' :
+                                                'bg-slate-500/20 text-slate-400'
+                                            }`}>
+                                            ICP {lead.icp_score || 'C'}
+                                        </span>
+                                        {/* Relative time */}
+                                        <span className="text-text-muted">
+                                            {(() => {
+                                                const d = lead.last_interaction_date
+                                                if (!d) return 'Sem interação'
+                                                const diff = Date.now() - new Date(d).getTime()
+                                                const mins = Math.floor(diff / 60000)
+                                                if (mins < 60) return `💬 há ${mins}m`
+                                                const hrs = Math.floor(mins / 60)
+                                                if (hrs < 24) return `💬 há ${hrs}h`
+                                                const days = Math.floor(hrs / 24)
+                                                return `💬 há ${days}d`
+                                            })()}
+                                        </span>
                                     </div>
                                 </div>
                             ))}
                             {!loadingLeads && filteredLeads.length === 0 && (
-                                <div className="p-8 text-center text-gray-500 text-sm">
+                                <div className="p-8 text-center text-text-muted text-sm">
                                     {searchTerm ? 'Nenhum lead encontrado.' : 'Nenhum lead com engajamento.'}
                                 </div>
                             )}
@@ -545,11 +616,11 @@ const SalesInboxPage = () => {
 
                     {/* MIDDLE: Chat Area */}
                     {activeLead ? (
-                        <div className="flex-1 flex flex-col bg-[#0d0d0d] rounded-2xl border border-white/10 overflow-hidden relative">
+                        <div className="flex-1 flex flex-col bg-charcoal rounded-2xl border border-glass-border overflow-hidden relative">
                             {/* Header */}
-                            <div className="p-4 border-b border-white/10 bg-[#111111] flex items-center justify-between z-10">
+                            <div className="p-4 border-b border-glass-border bg-black/20 flex items-center justify-between z-10">
                                 <div className="flex items-center gap-3 flex-1 min-w-0">
-                                    <div className="w-10 h-10 shrink-0 rounded-full bg-gradient-to-br from-gray-700 to-black border border-glass-border flex items-center justify-center text-white font-bold shadow-inner overflow-hidden">
+                                    <div className="w-10 h-10 shrink-0 rounded-full bg-gradient-to-br from-gray-800 to-black border border-glass-border flex items-center justify-center text-white font-bold shadow-inner overflow-hidden">
                                         {activeLead.avatar_url ? (
                                             <img src={activeLead.avatar_url} alt={activeLead.nome} className="w-full h-full object-cover" />
                                         ) : (
@@ -557,44 +628,111 @@ const SalesInboxPage = () => {
                                         )}
                                     </div>
                                     <div className="flex-1 min-w-0">
-                                        <div className="font-bold text-white text-sm truncate">{activeLead.nome}</div>
-                                        <div className="text-xs text-gray-400 truncate">{activeLead.headline || activeLead.company}</div>
+                                        <div className="font-bold text-text-heading text-sm truncate">{activeLead.nome}</div>
+                                        <div className="text-xs text-text-muted truncate">{activeLead.headline || activeLead.company}</div>
                                     </div>
                                 </div>
-                                <button className="p-2 rounded-lg hover:bg-white/5 text-gray-400 hover:text-white transition-colors shrink-0">
+                                <button className="p-2 rounded-lg hover:bg-glass text-text-muted hover:text-text-heading transition-colors shrink-0">
                                     <MoreVertical size={18} />
                                 </button>
                             </div>
 
                             {/* Timeline */}
-                            <div className="flex-1 overflow-y-auto p-6 flex flex-col-reverse gap-4 custom-scrollbar bg-black/20">
+                            <div className="flex-1 overflow-y-auto p-4 lg:p-6 flex flex-col-reverse gap-4 custom-scrollbar bg-black/10">
                                 {loadingChat ? (
-                                    <div className="text-center text-gray-500 text-sm py-10">Carregando histórico...</div>
+                                    <div className="text-center text-text-muted text-sm py-10">Carregando histórico...</div>
                                 ) : interactions.length === 0 ? (
-                                    <div className="text-center text-gray-500 text-sm py-10 flex flex-col items-center gap-2">
+                                    <div className="text-center text-text-muted text-sm py-10 flex flex-col items-center gap-2">
                                         <MessageSquare size={24} className="opacity-20" />
                                         Nenhuma mensagem trocada ainda.
                                     </div>
-                                ) : interactions.map(msg => (
-                                    <div key={msg.id} className={`flex flex-col max-w-[80%] ${msg.is_sender === true ? 'self-end items-end' : 'self-start items-start'}`}>
-                                        <div className={`px-4 py-3 rounded-2xl text-sm leading-relaxed ${msg.is_sender === true
-                                            ? 'bg-primary/90 text-white rounded-br-sm shadow-lg shadow-primary/10'
-                                            : 'bg-white/10 text-gray-200 rounded-bl-sm'
-                                            }`}>
-                                            {msg.content}
-                                        </div>
-                                        <span className="text-[10px] text-gray-500 mt-1 px-1">
-                                            {new Date(msg.interaction_date).toLocaleString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                                        </span>
-                                    </div>
-                                ))}
+                                ) : (() => {
+                                    // Build date label helper
+                                    const getDateLabel = (dateStr) => {
+                                        const date = new Date(dateStr)
+                                        const now = new Date()
+                                        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+                                        const msgDay = new Date(date.getFullYear(), date.getMonth(), date.getDate())
+                                        const diffDays = Math.round((today - msgDay) / (1000 * 60 * 60 * 24))
+
+                                        if (diffDays === 0) return 'HOJE'
+                                        if (diffDays === 1) return 'ONTEM'
+                                        if (diffDays < 7) {
+                                            return date.toLocaleDateString('pt-BR', { weekday: 'long' }).toUpperCase()
+                                        }
+                                        const day = date.getDate()
+                                        const month = date.toLocaleDateString('pt-BR', { month: 'short' }).toUpperCase().replace('.', '')
+                                        return `${day} DE ${month}.`
+                                    }
+
+                                    const getDateKey = (dateStr) => {
+                                        const d = new Date(dateStr)
+                                        return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`
+                                    }
+
+                                    // interactions are sorted desc (newest first), rendered with flex-col-reverse
+                                    const elements = []
+                                    let lastDateKey = null
+
+                                    interactions.forEach((msg, idx) => {
+                                        const dateKey = getDateKey(msg.interaction_date)
+
+                                        // When date changes, insert divider BEFORE the message bubble
+                                        // (in reversed layout, this renders ABOVE the group)
+                                        if (dateKey !== lastDateKey) {
+                                            // Look at next message — if it's a different day, the divider goes here
+                                            // For the first message (newest), always show divider
+                                            if (lastDateKey !== null) {
+                                                elements.push(
+                                                    <div key={`divider-${lastDateKey}`} className="flex items-center gap-3 my-2 self-stretch">
+                                                        <div className="flex-1 h-px bg-glass-border" />
+                                                        <span className="text-[10px] font-bold text-text-muted tracking-widest uppercase">
+                                                            {getDateLabel(interactions[idx - 1].interaction_date)}
+                                                        </span>
+                                                        <div className="flex-1 h-px bg-glass-border" />
+                                                    </div>
+                                                )
+                                            }
+                                            lastDateKey = dateKey
+                                        }
+
+                                        elements.push(
+                                            <div key={msg.id} className={`flex flex-col max-w-[85%] lg:max-w-[80%] ${msg.is_sender === true ? 'self-end items-end' : 'self-start items-start'}`}>
+                                                <div className={`px-4 py-3 rounded-2xl text-sm leading-relaxed ${msg.is_sender === true
+                                                    ? 'bg-primary text-white rounded-br-sm shadow-lg shadow-primary/10'
+                                                    : 'bg-glass text-text-body rounded-bl-sm border border-glass-border'
+                                                    }`}>
+                                                    {msg.content}
+                                                </div>
+                                                <span className="text-[10px] text-text-muted mt-1 px-1">
+                                                    {new Date(msg.interaction_date).toLocaleString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                                                </span>
+                                            </div>
+                                        )
+                                    })
+
+                                    // Add divider for the last (oldest) group
+                                    if (lastDateKey !== null) {
+                                        elements.push(
+                                            <div key={`divider-${lastDateKey}`} className="flex items-center gap-3 my-2 self-stretch">
+                                                <div className="flex-1 h-px bg-glass-border" />
+                                                <span className="text-[10px] font-bold text-text-muted tracking-widest uppercase">
+                                                    {getDateLabel(interactions[interactions.length - 1].interaction_date)}
+                                                </span>
+                                                <div className="flex-1 h-px bg-glass-border" />
+                                            </div>
+                                        )
+                                    }
+
+                                    return elements
+                                })()}
                             </div>
 
                             {/* Input Area */}
-                            <div className="p-4 border-t border-glass-border bg-white/[0.02]">
+                            <div className="p-4 border-t border-glass-border bg-black/20">
                                 <div className="relative">
                                     <textarea
-                                        className="w-full bg-black/40 border border-glass-border rounded-xl pl-4 pr-12 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition-all resize-none text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                                        className="w-full bg-black/40 border border-glass-border rounded-xl pl-4 pr-12 py-3 text-white placeholder-text-muted focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition-all resize-none text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                                         rows="1"
                                         placeholder={isSending ? 'Enviando...' : 'Digite sua resposta... (Ctrl+Enter para enviar)'}
                                         value={newMessage}
@@ -610,44 +748,34 @@ const SalesInboxPage = () => {
                                     <button
                                         onClick={handleSendMessage}
                                         disabled={isSending || !newMessage.trim()}
-                                        className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-lg bg-primary hover:bg-primary-dark text-white shadow-lg shadow-primary/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                        className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-lg bg-primary hover:bg-primary/80 text-white shadow-lg shadow-primary/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                                     >
                                         {isSending ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
                                     </button>
                                 </div>
                             </div>
-
-                            {/* Toast Notification */}
-                            {toast && (
-                                <div className={`absolute bottom-20 left-1/2 -translate-x-1/2 px-4 py-2.5 rounded-xl text-sm font-medium shadow-xl backdrop-blur-md border transition-all animate-fade-in z-50 ${toast.type === 'error'
-                                    ? 'bg-red-500/90 border-red-400/50 text-white'
-                                    : 'bg-emerald-500/90 border-emerald-400/50 text-white'
-                                    }`}>
-                                    {toast.type === 'error' ? '❌' : '✅'} {toast.message}
-                                </div>
-                            )}
                         </div>
                     ) : (
-                        <div className="flex-1 flex flex-col items-center justify-center bg-[#0d0d0d] rounded-2xl border border-white/10 text-gray-300 gap-4">
+                        <div className="flex-1 flex flex-col items-center justify-center bg-charcoal rounded-2xl border border-glass-border text-text-muted gap-4">
                             <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center">
                                 <Zap size={32} className="text-primary/50" />
                             </div>
-                            <p className="text-sm text-gray-400">Selecione um lead para iniciar o atendimento.</p>
+                            <p className="text-sm text-text-muted">Selecione um lead para iniciar o atendimento.</p>
                         </div>
                     )}
 
                     {/* RIGHT: Context & AI (ENHANCED) */}
-                    <div className="w-80 flex flex-col gap-4 shrink-0 overflow-y-auto custom-scrollbar">
+                    <div className="hidden xl:flex w-80 flex-col gap-4 shrink-0 overflow-y-auto custom-scrollbar">
                         {activeLead ? (
                             <>
                                 {/* Lead Info Card - 3 Main Indicators */}
-                                <div className="bg-[#0d0d0d] rounded-2xl border border-white/10 p-5">
+                                <div className="bg-charcoal rounded-2xl border border-glass-border p-5">
                                     <h4 className="text-xs font-bold text-primary uppercase tracking-wider mb-4">Dados do Lead</h4>
                                     <div className="flex items-center justify-between gap-3">
                                         {/* ICP Score */}
                                         <div className={`flex-1 text-center py-2 px-3 rounded-lg border ${activeLead.icp_score === 'A' ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400' :
                                             activeLead.icp_score === 'B' ? 'bg-amber-500/20 border-amber-500/50 text-amber-400' :
-                                                'bg-slate-500/20 border-slate-500/50 text-slate-400'
+                                                'bg-slate-500/20 border-slate-500/50 text-text-muted'
                                             }`}>
                                             <div className="text-[10px] uppercase tracking-wider opacity-70 mb-1">ICP</div>
                                             <div className="text-lg font-bold">{activeLead.icp_score || 'C'}</div>
@@ -667,7 +795,7 @@ const SalesInboxPage = () => {
                                             const style = level >= 5 ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400'
                                                 : level >= 3 ? 'bg-amber-500/20 border-amber-500/50 text-amber-400'
                                                     : level >= 1 ? 'bg-blue-500/20 border-blue-500/50 text-blue-400'
-                                                        : 'bg-slate-500/20 border-slate-500/50 text-slate-400'
+                                                        : 'bg-slate-500/20 border-slate-500/50 text-text-muted'
                                             return (
                                                 <div className={`flex-1 text-center py-2 px-3 rounded-lg border ${style}`}>
                                                     <div className="text-[10px] uppercase tracking-wider opacity-70 mb-1">Cadência</div>
@@ -679,11 +807,11 @@ const SalesInboxPage = () => {
                                 </div>
 
                                 {/* Raio-X da Negociação */}
-                                <StrategicContextCard lead={activeLead} />
+                                <StrategicContextCard lead={activeLead} isIcebreaker={interactions.length === 0} />
 
                                 {/* AI Suggestion Card - Always starts clean */}
                                 <div className="relative p-[1px] rounded-2xl bg-gradient-to-br from-primary/50 to-purple-600/50 shadow-lg shadow-primary/10">
-                                    <div className="bg-[#0d0d0d] rounded-2xl p-5 h-full flex flex-col gap-4">
+                                    <div className="bg-charcoal rounded-2xl p-5 h-full flex flex-col gap-4">
                                         <div className="flex items-center gap-2 text-primary font-bold text-sm">
                                             <Sparkles size={16} /> Próximo Passo
                                         </div>
@@ -703,15 +831,15 @@ const SalesInboxPage = () => {
                                                         </div>
 
                                                         {/* Message - Prominent Display */}
-                                                        <div className="p-4 rounded-xl bg-white/10 border border-primary/30">
-                                                            <p className="text-white text-sm leading-relaxed whitespace-pre-wrap">
+                                                        <div className="p-4 rounded-xl bg-white/5 border border-primary/30">
+                                                            <p className="text-text-heading text-sm leading-relaxed whitespace-pre-wrap">
                                                                 "{draftMessage}"
                                                             </p>
                                                         </div>
 
                                                         {/* Reasoning (only if available) */}
                                                         {generatedReasoning && (
-                                                            <div className="flex gap-2 text-gray-400 text-xs">
+                                                            <div className="flex gap-2 text-text-muted text-xs">
                                                                 <span className="text-primary/60 shrink-0">💡</span>
                                                                 <p className="leading-relaxed italic">
                                                                     {generatedReasoning}
@@ -756,7 +884,7 @@ const SalesInboxPage = () => {
                                             // Default: Empty state → show generate button
                                             return (
                                                 <div className="text-center py-6">
-                                                    <p className="text-sm text-gray-400 mb-5">
+                                                    <p className="text-sm text-text-muted mb-5">
                                                         {isIcebreaker
                                                             ? 'Nenhuma conversa iniciada com este lead.'
                                                             : 'Clique para gerar uma sugestão de resposta com IA.'}
@@ -785,7 +913,7 @@ const SalesInboxPage = () => {
                                 </div>
                             </>
                         ) : (
-                            <div className="bg-[#0d0d0d] rounded-2xl border border-white/10 p-8 text-center text-gray-400 text-sm h-40 flex items-center justify-center">
+                            <div className="bg-charcoal rounded-2xl border border-glass-border p-8 text-center text-text-muted text-sm h-40 flex items-center justify-center">
                                 Contexto do lead aparecerá aqui.
                             </div>
                         )}
