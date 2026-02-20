@@ -38,6 +38,7 @@ import {
 } from 'lucide-react'
 import AddLeadsModal from '../components/AddLeadsModal'
 import LeadDetailModal from '../components/LeadDetailModal'
+import HistorySyncModal from '../components/HistorySyncModal'
 
 const CampaignLeadsView = () => {
     const { id: campaignId } = useParams()
@@ -86,7 +87,7 @@ const CampaignLeadsView = () => {
     const [syncLoading, setSyncLoading] = useState(false)
     const [clientSyncTimestamp, setClientSyncTimestamp] = useState(null) // from clients.last_sync_timestamp
 
-    // NEW: Bulk History Import State
+    // Bulk History Import State (legacy queue kept for backward compat)
     const [importQueue, setImportQueue] = useState({
         active: false,
         current: 0,
@@ -95,6 +96,11 @@ const CampaignLeadsView = () => {
         currentLeadName: ''
     })
     const [showImportConfirm, setShowImportConfirm] = useState(false)
+
+    // ARQUEÓLOGO: Sequential orchestration state
+    const [showHistorySyncModal, setShowHistorySyncModal] = useState(false)
+    const [syncProgress, setSyncProgress] = useState({ status: 'idle', current: 0, total: 0, failures: 0 })
+    const cancelRef = useRef(false)
 
 
 
@@ -344,6 +350,11 @@ const CampaignLeadsView = () => {
         fetchTopLeads()
     }, [])
 
+    // Reset cancel flag on unmount
+    useEffect(() => {
+        return () => { cancelRef.current = false }
+    }, [])
+
     // --- HANDLERS ---
     const handleSort = (key) => {
         setSortConfig(current => ({
@@ -450,7 +461,7 @@ const CampaignLeadsView = () => {
             }
 
             // 2. Call Webhook
-            const response = await fetch('https://n8n-n8n-start.kfocge.easypanel.host/webhook-test/sync-connections', {
+            const response = await fetch('https://n8n-n8n-start.kfocge.easypanel.host/webhook/sync-connections', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -723,9 +734,128 @@ const CampaignLeadsView = () => {
         }
     }
 
-    // NEW: Bulk History Import Logic (Workflow B - Mass Action)
-    const handleBulkHistorySync = () => {
-        setShowImportConfirm(true)
+    // ----------------------------------------------------------------
+    // ARQUEÓLOGO: Sequential lead-by-lead webhook orchestration
+    // ----------------------------------------------------------------
+    const handleBulkHistorySync = async () => {
+        if (!selectedClientId || syncProgress.status === 'running') return
+        cancelRef.current = false
+
+        try {
+            // 1. Fetch ALL lead IDs for this client
+            const { data: allLeads, error: leadsError } = await supabase
+                .from('leads')
+                .select('id')
+                .eq('client_id', selectedClientId)
+                .order('id', { ascending: true })
+
+            if (leadsError) throw leadsError
+            if (!allLeads || allLeads.length === 0) {
+                setNotification({ message: 'Nenhum lead encontrado para este cliente.', type: 'error' })
+                setTimeout(() => setNotification(null), 5000)
+                return
+            }
+
+            // 2. Fetch Unipile account ID
+            const { data: client, error: clientError } = await supabase
+                .from('clients')
+                .select('unipile_account_id')
+                .eq('id', selectedClientId)
+                .single()
+
+            if (clientError || !client?.unipile_account_id) {
+                setNotification({ message: 'Conecte uma conta do LinkedIn nas configurações deste cliente.', type: 'error' })
+                setTimeout(() => setNotification(null), 5000)
+                return
+            }
+
+            const totalLeads = allLeads.length
+            const accountId = client.unipile_account_id
+
+            // 3. Open modal + set initial progress
+            setSyncProgress({ status: 'running', current: 0, total: totalLeads, failures: 0 })
+            setShowHistorySyncModal(true)
+
+            // 4. Upsert status in Supabase
+            await supabase
+                .from('history_sync_progress')
+                .upsert([{
+                    client_id: selectedClientId,
+                    status: 'running',
+                    total_leads: totalLeads,
+                    processed: 0,
+                    failures: 0,
+                    started_at: new Date().toISOString(),
+                    completed_at: null,
+                    updated_at: new Date().toISOString()
+                }], { onConflict: 'client_id' })
+
+            // 5. Sequential loop — fire-and-forget per lead, 2s delay
+            let failures = 0
+
+            for (let i = 0; i < totalLeads; i++) {
+                // Check for cancellation
+                if (cancelRef.current) {
+                    setSyncProgress(prev => ({ ...prev, status: 'cancelled' }))
+                    await supabase
+                        .from('history_sync_progress')
+                        .update({ status: 'cancelled', processed: i, failures, updated_at: new Date().toISOString() })
+                        .eq('client_id', selectedClientId)
+                    return
+                }
+
+                const lead = allLeads[i]
+                setSyncProgress(prev => ({ ...prev, current: i + 1 }))
+
+                // Fire-and-forget with 5s timeout
+                try {
+                    const controller = new AbortController()
+                    const timeout = setTimeout(() => controller.abort(), 5000)
+
+                    await fetch('https://n8n-n8n-start.kfocge.easypanel.host/webhook/import-history', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ lead_id: lead.id, account_id: accountId }),
+                        signal: controller.signal
+                    }).catch(() => { }) // Ignore response errors — fire and forget
+
+                    clearTimeout(timeout)
+                } catch (err) {
+                    // Network error or abort — log and continue
+                    console.warn(`[Arqueólogo] Lead ${lead.id} falhou:`, err.message)
+                    failures++
+                    setSyncProgress(prev => ({ ...prev, failures: prev.failures + 1 }))
+                }
+
+                // 2-second delay between calls (skip on last iteration)
+                if (i < totalLeads - 1) {
+                    await new Promise(resolve => setTimeout(resolve, 2000))
+                }
+            }
+
+            // 6. Completed
+            setSyncProgress(prev => ({ ...prev, status: 'completed' }))
+            await supabase
+                .from('history_sync_progress')
+                .update({
+                    status: 'completed',
+                    processed: totalLeads,
+                    failures,
+                    completed_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString()
+                })
+                .eq('client_id', selectedClientId)
+
+        } catch (err) {
+            console.error('[Arqueólogo] Error:', err)
+            setSyncProgress(prev => ({ ...prev, status: 'error' }))
+            setNotification({ message: 'Erro ao iniciar importação. Tente novamente.', type: 'error' })
+            setTimeout(() => setNotification(null), 5000)
+        }
+    }
+
+    const handleCancelSync = async () => {
+        cancelRef.current = true
     }
 
     const cancelImport = () => {
@@ -759,48 +889,19 @@ const CampaignLeadsView = () => {
             return
         }
 
-        // 2. PREPARAÇÃO DOS LEADS: Buscar IDs REAIS diretamente do banco
+        // 2. PREPARAÇÃO DOS LEADS: usar o state `leads` (view já é flat, id = ID real do lead)
         let realLeadIds = []
-        setNotification({ message: 'Buscando IDs reais dos leads no banco...', type: 'info' })
+        setNotification({ message: 'Preparando lista de leads...', type: 'info' })
 
-        try {
-            if (selectedLeads.size > 0) {
-                // Se há seleção, buscar apenas os leads selecionados
-                // Precisamos mapear os IDs selecionados (que são de campaign_leads) para os IDs reais dos leads
-                const selectedCampaignLeadIds = Array.from(selectedLeads)
-
-                const { data, error } = await supabase
-                    .from('campaign_leads')
-                    .select('lead_id, leads!inner(id, nome)')
-                    .in('id', selectedCampaignLeadIds)
-                    .eq('campaign_id', campaignId)
-
-                if (error) throw error
-
-                // Extrair os IDs REAIS da tabela leads
-                realLeadIds = data.map(item => ({
-                    id: item.leads.id,  // ID REAL do lead na tabela leads
-                    nome: item.leads.nome
-                }))
-            } else {
-                // Buscar TODOS os leads da campanha diretamente da tabela leads
-                const { data, error } = await supabase
-                    .from('campaign_leads')
-                    .select('lead_id, leads!inner(id, nome)')
-                    .eq('campaign_id', campaignId)
-
-                if (error) throw error
-
-                // Extrair os IDs REAIS
-                realLeadIds = data.map(item => ({
-                    id: item.leads.id,  // ID REAL do lead
-                    nome: item.leads.nome
-                }))
-            }
-        } catch (err) {
-            console.error("Error fetching real lead IDs", err)
-            setNotification({ message: 'Erro ao buscar IDs reais dos leads.', type: 'error' })
-            return
+        if (selectedLeads.size > 0) {
+            // Filtrar apenas os leads selecionados do state
+            const selectedIds = Array.from(selectedLeads)
+            realLeadIds = leads
+                .filter(l => selectedIds.includes(l.id))
+                .map(l => ({ id: l.id, nome: l.nome }))
+        } else {
+            // Usar todos os leads carregados no state
+            realLeadIds = leads.map(l => ({ id: l.id, nome: l.nome }))
         }
 
         if (realLeadIds.length === 0) {
@@ -1116,17 +1217,36 @@ const CampaignLeadsView = () => {
                             </div>
 
 
-                            <button
-                                onClick={handleBulkHistorySync}
-                                disabled={importQueue.active}
-                                className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-semibold text-sm transition-all ${importQueue.active
-                                    ? 'bg-amber-50 text-amber-400 cursor-not-allowed'
-                                    : 'bg-amber-50 text-amber-600 hover:bg-amber-100 hover:text-amber-700 border border-amber-200'
-                                    }`}
-                            >
-                                <History size={16} className={importQueue.active ? "animate-spin" : ""} />
-                                {importQueue.active ? 'Processando...' : 'Sync Histórico'}
-                            </button>
+                            <div className="flex flex-col items-end gap-1">
+                                {/* Sync progress badge */}
+                                {syncProgress.status === 'running' && (
+                                    <div className="flex items-center gap-1.5 text-[11px] font-medium text-amber-600 bg-amber-50 border border-amber-200 rounded-full px-2.5 py-1">
+                                        <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+                                        Lead {syncProgress.current}/{syncProgress.total}...
+                                    </div>
+                                )}
+                                {syncProgress.status === 'completed' && (
+                                    <div className="flex items-center gap-1.5 text-[11px] font-medium text-emerald-600 bg-emerald-50 border border-emerald-200 rounded-full px-2.5 py-1">
+                                        ✅ {syncProgress.total} leads sincronizados
+                                    </div>
+                                )}
+                                {syncProgress.status === 'error' && (
+                                    <div className="flex items-center gap-1.5 text-[11px] font-medium text-red-600 bg-red-50 border border-red-200 rounded-full px-2.5 py-1">
+                                        ❌ Erro na sincronização — tente novamente
+                                    </div>
+                                )}
+                                <button
+                                    onClick={handleBulkHistorySync}
+                                    disabled={syncProgress.status === 'running'}
+                                    className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-semibold text-sm transition-all ${syncProgress.status === 'running'
+                                            ? 'bg-amber-50 text-amber-400 cursor-not-allowed'
+                                            : 'bg-amber-50 text-amber-600 hover:bg-amber-100 hover:text-amber-700 border border-amber-200'
+                                        }`}
+                                >
+                                    <History size={16} className={syncProgress.status === 'running' ? 'animate-spin' : ''} />
+                                    {syncProgress.status === 'running' ? `Sincronizando (${syncProgress.current}/${syncProgress.total})` : 'Importar Histórico'}
+                                </button>
+                            </div>
 
                             <button
                                 onClick={() => setIsAddLeadsModalOpen(true)}
@@ -1751,6 +1871,14 @@ const CampaignLeadsView = () => {
                     </div>
                 </div>
             )}
+
+            {/* HISTORY SYNC MODAL (Arqueólogo) */}
+            <HistorySyncModal
+                isOpen={showHistorySyncModal}
+                onClose={() => setShowHistorySyncModal(false)}
+                onCancel={handleCancelSync}
+                syncProgress={syncProgress}
+            />
 
             {/* LEAD DETAIL MODAL - AI INSIGHTS */}
             {selectedLead && (

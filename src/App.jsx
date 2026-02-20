@@ -20,6 +20,7 @@ import CampaignLeadsView from './pages/CampaignLeadsView'
 import CampaignLeadsPage from './pages/CampaignLeadsPage'
 import SystemInfoPage from './pages/SystemInfoPage'
 import LinkedInEngagementPage from './pages/LinkedInEngagementPage'
+import MissionsPage from './pages/MissionsPage'
 import AdminLayout from './components/AdminLayout'
 
 // Client Portal New (Ideas/Insights)
@@ -182,6 +183,7 @@ function App() {
                 <Route path="/sales/inbox" element={<SalesInboxPage />} />
                 <Route path="/system-info" element={<SystemInfoPage />} />
                 <Route path="/engagement" element={<LinkedInEngagementPage />} />
+                <Route path="/missions" element={<MissionsPage />} />
               </Route>
 
               {/* Fallback */}

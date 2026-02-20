@@ -1,15 +1,18 @@
 import React, { useState, useEffect, useRef } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { supabase } from '../services/supabaseClient'
 import { useClientSelection } from '../contexts/ClientSelectionContext'
 import { Search, Send, MoreVertical, Phone, Mail, MapPin, Briefcase, Zap, Star, Sparkles, MessageSquare, Copy, Check, LayoutGrid, List, Loader2, X } from 'lucide-react'
 
 const N8N_GENERATE_REPLY_URL = 'https://n8n-n8n-start.kfocge.easypanel.host/webhook/generate-reply'
+const N8N_SEND_MESSAGE_URL = 'https://n8n-n8n-start.kfocge.easypanel.host/webhook/send-linkedin-message'
 import KanbanColumn from '../components/kanban/KanbanColumn'
 import KanbanLeadCard from '../components/kanban/KanbanLeadCard'
 import StrategicContextCard from '../components/StrategicContextCard'
 
 const SalesInboxPage = () => {
     const { selectedClientId } = useClientSelection()
+    const [searchParams, setSearchParams] = useSearchParams()
     const [leads, setLeads] = useState([])
     const [loadingLeads, setLoadingLeads] = useState(false)
     const [activeLead, setActiveLead] = useState(null)
@@ -22,6 +25,8 @@ const SalesInboxPage = () => {
     const [interactions, setInteractions] = useState([])
     const [loadingChat, setLoadingChat] = useState(false)
     const [newMessage, setNewMessage] = useState('')
+    const [isSending, setIsSending] = useState(false)
+    const [toast, setToast] = useState(null)
 
     // AI Actions State
     const [draftMessage, setDraftMessage] = useState('')
@@ -76,6 +81,18 @@ const SalesInboxPage = () => {
                 }))
 
                 setLeads(processedLeads)
+
+                // Auto-select lead from URL param (e.g. /sales/inbox?leadId=xxx)
+                const targetLeadId = searchParams.get('leadId')
+                if (targetLeadId) {
+                    const targetLead = processedLeads.find(l => String(l.id) === targetLeadId)
+                    if (targetLead) {
+                        setActiveLead(targetLead)
+                        setViewMode('list')
+                    }
+                    // Clear the param so it doesn't re-trigger
+                    setSearchParams({}, { replace: true })
+                }
             } catch (err) {
                 console.error('Erro ao buscar leads do inbox:', err)
             } finally {
@@ -189,35 +206,87 @@ const SalesInboxPage = () => {
 
     const kanbanData = categorizeLeads(filteredLeads)
 
-    const handleSendMessage = async () => {
-        if (!newMessage.trim() || !activeLead) return
-
-        // Optimistic UI Update
-        const tempMsg = {
-            id: Date.now(),
-            content: newMessage,
-            direction: 'outbound',
-            interaction_date: new Date().toISOString()
-        }
-        setInteractions([tempMsg, ...interactions])
-        setNewMessage('')
+    const showToast = (message, type = 'success') => {
+        setToast({ message, type })
+        setTimeout(() => setToast(null), 3500)
     }
 
-    const handleAiSend = () => {
-        if (!draftMessage.trim() || !activeLead) return
+    const sendToWebhook = async (messageText) => {
+        // Fetch the Unipile account_id from the clients table
+        const { data: client, error: clientError } = await supabase
+            .from('clients')
+            .select('unipile_account_id')
+            .eq('id', activeLead.client_id)
+            .single()
 
-        console.log('[LinkedIn Send] Simulating send:', draftMessage)
-
-        // Optimistic Update
-        const tempMsg = {
-            id: Date.now(),
-            content: draftMessage,
-            direction: 'outbound',
-            interaction_date: new Date().toISOString()
+        if (clientError || !client?.unipile_account_id) {
+            throw new Error('Não foi possível obter o account_id da Unipile para este cliente.')
         }
-        setInteractions([tempMsg, ...interactions])
-        alert('✅ Mensagem enviada via LinkedIn (Simulação)')
-        setDraftMessage('')
+
+        const response = await fetch(N8N_SEND_MESSAGE_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                account_id: client.unipile_account_id,
+                provider_id: activeLead.provider_id,
+                chat_id: activeLead.chat_id || null,
+                message_text: messageText
+            })
+        })
+        if (!response.ok) throw new Error(`HTTP ${response.status}`)
+        return response
+    }
+
+    const handleSendMessage = async () => {
+        if (!newMessage.trim() || !activeLead || isSending) return
+
+        const messageText = newMessage.trim()
+        setIsSending(true)
+
+        try {
+            await sendToWebhook(messageText)
+
+            const tempMsg = {
+                id: Date.now(),
+                content: messageText,
+                is_sender: true,
+                interaction_date: new Date().toISOString()
+            }
+            setInteractions(prev => [tempMsg, ...prev])
+            setNewMessage('')
+            showToast('Mensagem enviada!')
+        } catch (err) {
+            console.error('[Send] Error:', err)
+            showToast('Erro ao enviar mensagem. Tente novamente.', 'error')
+        } finally {
+            setIsSending(false)
+        }
+    }
+
+    const handleAiSend = async () => {
+        if (!draftMessage.trim() || !activeLead || isSending) return
+
+        const messageText = draftMessage.trim()
+        setIsSending(true)
+
+        try {
+            await sendToWebhook(messageText)
+
+            const tempMsg = {
+                id: Date.now(),
+                content: messageText,
+                is_sender: true,
+                interaction_date: new Date().toISOString()
+            }
+            setInteractions(prev => [tempMsg, ...prev])
+            setDraftMessage('')
+            showToast('Mensagem enviada via LinkedIn!')
+        } catch (err) {
+            console.error('[AI Send] Error:', err)
+            showToast('Erro ao enviar mensagem. Tente novamente.', 'error')
+        } finally {
+            setIsSending(false)
+        }
     }
 
     const copyToClipboard = (text, idx) => {
@@ -525,13 +594,14 @@ const SalesInboxPage = () => {
                             <div className="p-4 border-t border-glass-border bg-white/[0.02]">
                                 <div className="relative">
                                     <textarea
-                                        className="w-full bg-black/40 border border-glass-border rounded-xl pl-4 pr-12 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition-all resize-none text-sm"
+                                        className="w-full bg-black/40 border border-glass-border rounded-xl pl-4 pr-12 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition-all resize-none text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                                         rows="1"
-                                        placeholder="Digite sua resposta..."
+                                        placeholder={isSending ? 'Enviando...' : 'Digite sua resposta... (Ctrl+Enter para enviar)'}
                                         value={newMessage}
                                         onChange={e => setNewMessage(e.target.value)}
+                                        disabled={isSending}
                                         onKeyDown={e => {
-                                            if (e.key === 'Enter' && !e.shiftKey) {
+                                            if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
                                                 e.preventDefault()
                                                 handleSendMessage()
                                             }
@@ -539,12 +609,23 @@ const SalesInboxPage = () => {
                                     />
                                     <button
                                         onClick={handleSendMessage}
-                                        className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-lg bg-primary hover:bg-primary-dark text-white shadow-lg shadow-primary/20 transition-all"
+                                        disabled={isSending || !newMessage.trim()}
+                                        className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-lg bg-primary hover:bg-primary-dark text-white shadow-lg shadow-primary/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                                     >
-                                        <Send size={14} />
+                                        {isSending ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
                                     </button>
                                 </div>
                             </div>
+
+                            {/* Toast Notification */}
+                            {toast && (
+                                <div className={`absolute bottom-20 left-1/2 -translate-x-1/2 px-4 py-2.5 rounded-xl text-sm font-medium shadow-xl backdrop-blur-md border transition-all animate-fade-in z-50 ${toast.type === 'error'
+                                    ? 'bg-red-500/90 border-red-400/50 text-white'
+                                    : 'bg-emerald-500/90 border-emerald-400/50 text-white'
+                                    }`}>
+                                    {toast.type === 'error' ? '❌' : '✅'} {toast.message}
+                                </div>
+                            )}
                         </div>
                     ) : (
                         <div className="flex-1 flex flex-col items-center justify-center bg-[#0d0d0d] rounded-2xl border border-white/10 text-gray-300 gap-4">

@@ -8,51 +8,36 @@ import {
     LogOut,
     Plus,
     Lightbulb,
-    Menu, // Added
-    X, // Added
-    Briefcase, // Added
-    Database, // Added
+    Menu,
+    X,
     ChevronDown,
     ChevronRight,
-    MessageCircle, // Added
-    Target, // Added
-    Info,
+    MessageCircle,
+    Target,
+    Flame,
     ThumbsUp
 } from 'lucide-react'
 import CreatePostModal from './CreatePostModal'
 import ClientSelector from './ClientSelector'
-// Reusing AdminPanel styles as requested/implied for consistency without full CSS refactor
 import '../pages/AdminPanel.css'
 
 import { useLanguage } from '../contexts/LanguageContext'
 
 const AdminLayout = () => {
     const { signOut } = useAuth()
-    const { t, language, setLanguage } = useLanguage()
+    const { t } = useLanguage()
     const [showModal, setShowModal] = useState(false)
-    const [isSidebarOpen, setSidebarOpen] = useState(false) // Mobile State
+    const [isSidebarOpen, setSidebarOpen] = useState(false)
     const location = useLocation()
 
-    const isActive = (path) => {
-        return location.pathname === path ? 'nav-item active' : 'nav-item'
-    }
-
+    const isActive = (path) => location.pathname === path ? 'nav-item active' : 'nav-item'
     const toggleSidebar = () => setSidebarOpen(!isSidebarOpen)
 
-    const [expandedGroups, setExpandedGroups] = useState({
-        creative: true,
-        sales: true
-    })
-
-    const toggleGroup = (group) => {
-        setExpandedGroups(prev => ({ ...prev, [group]: !prev[group] }))
-    }
-
-
+    const [showCreative, setShowCreative] = useState(false)
 
     return (
         <div className="dashboard-layout">
-            {/* MOBILE HEADER (VISIBLE ONLY ON MOBILE) */}
+            {/* MOBILE HEADER */}
             <div className="mobile-header">
                 <button onClick={toggleSidebar} className="menu-btn">
                     <Menu size={24} />
@@ -62,86 +47,81 @@ const AdminLayout = () => {
 
             {/* OVERLAY FOR MOBILE */}
             {isSidebarOpen && (
-                <div
-                    className="sidebar-overlay"
-                    onClick={() => setSidebarOpen(false)}
-                />
+                <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)} />
             )}
 
-            {/* GLOBAL SIDEBAR */}
+            {/* SIDEBAR */}
             <aside className={`sidebar ${isSidebarOpen ? 'open' : ''}`}>
-
-                {/* Mobile Close Button */}
-                {/* Sidebar Close Button Removed as requested */}
-
-
                 <div className="logo-area">
                     <img src="/logo-linklead.png" alt="Link&Lead" style={{ maxWidth: '160px', height: 'auto' }} />
                 </div>
-                <nav className="nav-menu" style={{ gap: '0.5rem' }}>
 
-                    {/* GROUP 1: Gestão Criativa */}
-                    <div className="nav-group">
-                        <button
-                            onClick={() => toggleGroup('creative')}
-                            style={{
-                                width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                                background: 'transparent', border: 'none', color: '#94a3b8',
-                                padding: '0.5rem 1.5rem', cursor: 'pointer', fontSize: '0.75rem', fontWeight: '700', letterSpacing: '0.05em'
-                            }}
-                        >
-                            GESTÃO CRIATIVA
-                            {expandedGroups.creative ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                        </button>
+                <nav className="nav-menu" style={{ gap: '0.25rem' }}>
 
-                        {expandedGroups.creative && (
-                            <div className="nav-group-items" style={{ animation: 'fadeIn 0.2s' }}>
-                                <Link to="/" className={isActive('/')}>
-                                    <LayoutDashboard size={20} /> {t('dashboard')}
-                                </Link>
-                                <Link to="/posts" className={isActive('/posts')}>
-                                    <FileText size={20} /> {t('posts')}
-                                </Link>
-                                <Link to="/ideas" className={isActive('/ideas')}>
-                                    <Lightbulb size={20} /> {t('ideas')}
-                                </Link>
-                            </div>
-                        )}
+                    {/* ═══ PRIMARY: Máquina de Vendas (always visible, no toggle) ═══ */}
+                    <div style={{
+                        padding: '0.4rem 1.5rem 0.3rem',
+                        fontSize: '0.65rem',
+                        fontWeight: '800',
+                        letterSpacing: '0.1em',
+                        color: '#f97316',
+                        textTransform: 'uppercase'
+                    }}>
+                        Máquina de Vendas
                     </div>
 
-                    {/* GROUP 2: Máquina de Vendas */}
-                    <div className="nav-group">
+                    <div className="nav-group-items">
+                        <Link to="/" className={isActive('/')}>
+                            <LayoutDashboard size={18} /> Visão Geral
+                        </Link>
+                        <Link to="/campaigns" className={isActive('/campaigns')}>
+                            <Target size={18} /> Campanhas
+                        </Link>
+                        <Link to="/missions" className={isActive('/missions')}>
+                            <Flame size={18} /> Cockpit de Vendas
+                        </Link>
+                        <Link to="/sales/inbox" className={isActive('/sales/inbox')}>
+                            <MessageCircle size={18} /> Inbox Inteligente
+                        </Link>
+                        <Link to="/clients" className={isActive('/clients')}>
+                            <Users size={18} /> Clientes
+                        </Link>
+                        <Link to="/engagement" className={isActive('/engagement')}>
+                            <ThumbsUp size={18} /> Engajamento
+                        </Link>
+                    </div>
+
+                    {/* ═══ SECONDARY: Gestão Criativa (collapsible, subtle) ═══ */}
+                    <div style={{ marginTop: '1.5rem' }}>
                         <button
-                            onClick={() => toggleGroup('sales')}
+                            onClick={() => setShowCreative(prev => !prev)}
                             style={{
-                                width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                                background: 'transparent', border: 'none', color: '#94a3b8',
-                                padding: '0.5rem 1.5rem', marginTop: '1rem', cursor: 'pointer', fontSize: '0.75rem', fontWeight: '700', letterSpacing: '0.05em'
+                                width: '100%',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                background: 'transparent',
+                                border: 'none',
+                                color: '#a1a1aa',
+                                padding: '0.4rem 1.5rem',
+                                cursor: 'pointer',
+                                fontSize: '0.6rem',
+                                fontWeight: '700',
+                                letterSpacing: '0.08em',
+                                textTransform: 'uppercase'
                             }}
                         >
-                            MÁQUINA DE VENDAS
-                            {expandedGroups.sales ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                            Conteúdo
+                            {showCreative ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
                         </button>
 
-                        {expandedGroups.sales && (
+                        {showCreative && (
                             <div className="nav-group-items" style={{ animation: 'fadeIn 0.2s' }}>
-                                <Link to="/campaigns" className={isActive('/campaigns')}>
-                                    <Target size={20} /> Campanhas & Prospecção
+                                <Link to="/posts" className={isActive('/posts')}>
+                                    <FileText size={18} /> {t('posts')}
                                 </Link>
-                                <Link to="/sales/inbox" className={isActive('/sales/inbox')}>
-                                    <div style={{ position: 'relative' }}>
-                                        <MessageCircle size={20} />
-                                    </div>
-                                    Inbox Inteligente
-                                </Link>
-                                <Link to="/clients" className={isActive('/clients')}>
-                                    <Users size={20} /> Gerenciar Clientes
-                                </Link>
-                                <Link to="/engagement" className={isActive('/engagement')}>
-                                    <ThumbsUp size={20} /> Engajamento LinkedIn
-                                </Link>
-                                <Link to="/system-info" className={isActive('/system-info')}>
-                                    <Info size={20} /> Informações do Sistema
+                                <Link to="/ideas" className={isActive('/ideas')}>
+                                    <Lightbulb size={18} /> {t('ideas')}
                                 </Link>
                             </div>
                         )}
@@ -151,26 +131,21 @@ const AdminLayout = () => {
 
                     <button
                         type="button"
-                        onClick={(e) => {
-                            e.preventDefault()
-                            signOut()
-                        }}
+                        onClick={(e) => { e.preventDefault(); signOut() }}
                         className="nav-item"
                         style={{
-                            marginTop: '0',
                             background: 'transparent',
                             border: 'none',
                             cursor: 'pointer',
                             color: '#ef4444',
                             width: '100%',
-                            justifyContent: 'flex-start',
-                            position: 'relative',
-                            zIndex: 50
+                            justifyContent: 'flex-start'
                         }}
                     >
-                        <LogOut size={20} /> {t('logout')}
+                        <LogOut size={18} /> {t('logout')}
                     </button>
                 </nav>
+
                 <div className="sidebar-footer">
                     <button className="btn-new-post" onClick={() => setShowModal(true)}>
                         <Plus size={18} /> {t('newPost')}
@@ -178,10 +153,10 @@ const AdminLayout = () => {
                 </div>
             </aside>
 
-            {/* MAIN CONTENT AREA */}
+            {/* MAIN CONTENT */}
             <main className="main-content">
-                {/* Sales Context Header */}
-                {(location.pathname.startsWith('/sales') || location.pathname.startsWith('/leads') || location.pathname.startsWith('/campaigns') || location.pathname.startsWith('/engagement')) && (
+                {/* Client Context Header for sales-related pages */}
+                {(location.pathname === '/' || location.pathname.startsWith('/sales') || location.pathname.startsWith('/leads') || location.pathname.startsWith('/campaigns') || location.pathname.startsWith('/engagement') || location.pathname.startsWith('/missions')) && (
                     <div className="context-header" style={{
                         padding: '0.75rem 1.5rem',
                         background: 'rgba(255, 255, 255, 0.03)',
@@ -200,25 +175,18 @@ const AdminLayout = () => {
             </main>
 
             {/* GLOBAL CREATE MODAL */}
-            {
-                showModal && (
-                    <CreatePostModal
-                        onClose={() => setShowModal(false)}
-                        onSuccess={() => {
-                            // Ideally we trigger a refresh here. 
-                            // Since we are in Layout, we might need a context or simple page reload for now.
-                            // Or we pass a context method. 
-                            // For simplicity in this request (focus on Layout), I'll just close it.
-                            // The user can refresh individual pages or we rely on React Query (not installed) or Realtime (installed).
-                            // I'll force a soft reload of the current view if possible, or just close.
-                            setShowModal(false)
-                            window.location.reload() // Bruteforce refresh to ensure lists update on all pages
-                        }}
-                    />
-                )
-            }
-        </div >
+            {showModal && (
+                <CreatePostModal
+                    onClose={() => setShowModal(false)}
+                    onSuccess={() => {
+                        setShowModal(false)
+                        window.location.reload()
+                    }}
+                />
+            )}
+        </div>
     )
 }
 
 export default AdminLayout
+
