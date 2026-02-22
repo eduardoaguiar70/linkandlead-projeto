@@ -78,6 +78,19 @@ const COLUMN_THEMES = {
         columnBg: '#ffffff',
         emptyBg: 'bg-blue-50',
         emptyBorder: 'border-blue-200',
+    },
+    warm: {
+        borderTop: 'linear-gradient(90deg, #eab308, #f59e0b)',
+        headerBg: 'bg-yellow-50',
+        headerBorder: 'border-yellow-200',
+        countBg: 'bg-yellow-100',
+        countText: 'text-yellow-600',
+        countBorder: 'border-yellow-200',
+        iconColor: 'text-yellow-500',
+        cardBorder: 'border-l-yellow-400',
+        columnBg: '#ffffff',
+        emptyBg: 'bg-yellow-50',
+        emptyBorder: 'border-yellow-200',
     }
 }
 
@@ -121,7 +134,8 @@ const SalesCockpitPage = () => {
             let doneQuery = supabase
                 .from('tasks')
                 .select('id, leads!inner(client_id)', { count: 'exact' })
-                .eq('status', 'DONE')
+                .eq('status', 'COMPLETED')
+                .gte('completed_at', `${new Date().toISOString().split('T')[0]}T00:00:00`)
 
             if (selectedClientId) {
                 doneQuery = doneQuery.eq('leads.client_id', selectedClientId)
@@ -172,7 +186,7 @@ const SalesCockpitPage = () => {
         try {
             const { error: updateError } = await supabase
                 .from('tasks')
-                .update({ status: 'DONE' })
+                .update({ status: 'COMPLETED', completed_at: new Date().toISOString() })
                 .eq('id', taskId)
 
             if (updateError) throw updateError
@@ -200,18 +214,21 @@ const SalesCockpitPage = () => {
     // DERIVED STATE
     // ───────────────────────────────────────────
 
-    const { hotTasks, coldTasks } = useMemo(() => {
-        const hot = []
-        const cold = []
-        pendingTasks.forEach(task => {
-            const stage = task.leads?.cadence_stage
-            if (HOT_STAGES.includes(stage)) {
-                hot.push(task)
-            } else {
-                cold.push(task)
-            }
-        })
-        return { hotTasks: hot, coldTasks: cold }
+    // Split by cadence_stage (HOT: G4/G5, WARM: G2/G3, COLD: G1)
+    const { hotTasks, warmTasks, coldTasks } = useMemo(() => {
+        const hot = pendingTasks.filter(t =>
+            t.leads?.cadence_stage === 'G4' || t.leads?.cadence_stage === 'G5'
+        );
+
+        const warm = pendingTasks.filter(t =>
+            t.leads?.cadence_stage === 'G2' || t.leads?.cadence_stage === 'G3'
+        );
+
+        const cold = pendingTasks.filter(t =>
+            t.leads?.cadence_stage === 'G1'
+        );
+
+        return { hotTasks: hot, warmTasks: warm, coldTasks: cold }
     }, [pendingTasks])
 
     const totalMissions = Math.min(pendingTasks.length + doneCount, MAX_DAILY_TASKS)
@@ -265,7 +282,7 @@ const SalesCockpitPage = () => {
                                 </h1>
                                 <p className="text-sm text-gray-500">
                                     {hotTasks.length > 0
-                                        ? <><span className="text-orange-500 font-semibold">{hotTasks.length} lead(s) quente(s)</span> · {coldTasks.length} em prospecção</>
+                                        ? <><span className="text-orange-500 font-semibold">{hotTasks.length} quente(s)</span> · {warmTasks.length} em nutrição · {coldTasks.length} novos contatos</>
                                         : pendingTasks.length > 0
                                             ? <>{pendingTasks.length} tarefas aguardando execução.</>
                                             : 'Nenhuma tarefa pendente!'
@@ -350,21 +367,19 @@ const SalesCockpitPage = () => {
                 )}
 
                 {/* ═══════════════════════════════════ */}
-                {/* KANBAN BOARD — 2 COLUMNS           */}
+                {/* 3-COLUMN GRID TASK BOARD            */}
                 {/* ═══════════════════════════════════ */}
                 {!allDone && !error && (
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
-                        {/* LEFT: 🔥 PRIORIDADES (G4, G5) */}
-                        <KanbanColumn
-                            title="Prioridades"
-                            emoji=""
+                        {/* COL 1: 🔥 HOT (G4/G5) */}
+                        <FeedSection
+                            title="HOT (G4/G5)"
+                            emoji="🔥"
                             icon={<DollarSign size={15} />}
                             count={hotTasks.length}
                             themeKey="hot"
-                            emptyIcon={<Sparkles size={28} className="text-orange-300" />}
-                            emptyTitle="Pipeline limpo"
-                            emptyText="Nenhum lead em estágio avançado (G4/G5). Foque na prospecção →"
+                            emptyText="Nenhum lead quente para hoje."
                         >
                             {hotTasks.map(task => (
                                 <TaskCard
@@ -376,18 +391,37 @@ const SalesCockpitPage = () => {
                                     onExecute={handleExecute}
                                 />
                             ))}
-                        </KanbanColumn>
+                        </FeedSection>
 
-                        {/* RIGHT: 🔨 MODERADAS */}
-                        <KanbanColumn
-                            title="Tarefas de Prospecção"
-                            emoji=""
+                        {/* COL 2: 🟡 MORNOS (G2/G3) */}
+                        <FeedSection
+                            title="MORNOS (G2/G3)"
+                            emoji="🟡"
                             icon={<Users size={15} />}
+                            count={warmTasks.length}
+                            themeKey="warm"
+                            emptyText="Nenhuma tarefa de nutrição."
+                        >
+                            {warmTasks.map(task => (
+                                <TaskCard
+                                    key={task.id}
+                                    task={task}
+                                    themeKey="warm"
+                                    completing={completingIds.has(task.id)}
+                                    onComplete={handleComplete}
+                                    onExecute={handleExecute}
+                                />
+                            ))}
+                        </FeedSection>
+
+                        {/* COL 3: 🧊 FRIOS (G1) */}
+                        <FeedSection
+                            title="FRIOS (G1)"
+                            emoji="🧊"
+                            icon={<Sparkles size={15} />}
                             count={coldTasks.length}
                             themeKey="cold"
-                            emptyIcon={<TrendingUp size={28} className="text-blue-300" />}
-                            emptyTitle="Tudo em dia"
-                            emptyText="Nenhuma tarefa de prospecção pendente."
+                            emptyText="Nenhuma prospecção pendente."
                             footer={
                                 hiddenColdCount > 0 && !showAllCold ? (
                                     <button
@@ -416,7 +450,7 @@ const SalesCockpitPage = () => {
                                     onExecute={handleExecute}
                                 />
                             ))}
-                        </KanbanColumn>
+                        </FeedSection>
                     </div>
                 )}
             </div>
@@ -425,10 +459,10 @@ const SalesCockpitPage = () => {
 }
 
 // ═══════════════════════════════════════════════
-// KANBAN COLUMN
+// COLUMN SECTION (3-Column Grid)
 // ═══════════════════════════════════════════════
 
-const KanbanColumn = ({ title, emoji, icon, count, themeKey, children, emptyIcon, emptyTitle, emptyText, footer }) => {
+const FeedSection = ({ title, emoji, icon, count, themeKey, children, footer, emptyText }) => {
     const theme = COLUMN_THEMES[themeKey]
     const isEmpty = React.Children.count(children) === 0
 
@@ -453,16 +487,14 @@ const KanbanColumn = ({ title, emoji, icon, count, themeKey, children, emptyIcon
                 </span>
             </div>
 
-            {/* Cards area */}
+            {/* Cards area with internal scroll */}
             <div
-                className="flex-1 p-3 space-y-2.5 overflow-y-auto"
-                style={{ maxHeight: '600px', minHeight: '140px' }}
+                className="flex-1 p-3 space-y-3 overflow-y-auto"
+                style={{ maxHeight: '70vh', minHeight: '120px' }}
             >
                 {isEmpty ? (
-                    <div className={`flex flex-col items-center justify-center py-10 gap-2 rounded-xl ${theme.emptyBg} border ${theme.emptyBorder}`}>
-                        {emptyIcon}
-                        <p className="text-sm font-semibold text-gray-500">{emptyTitle}</p>
-                        <p className="text-[11px] text-gray-400 text-center px-6">{emptyText}</p>
+                    <div className={`flex items-center justify-center py-10 px-4 rounded-xl ${theme.emptyBg} border ${theme.emptyBorder}`}>
+                        <p className="text-xs text-gray-400 text-center">{emptyText}</p>
                     </div>
                 ) : children}
             </div>
@@ -491,7 +523,7 @@ const TaskCard = ({ task, themeKey, completing, onComplete, onExecute }) => {
     return (
         <div
             className={`
-                rounded-xl group flex
+                rounded-xl group
                 transition-all duration-300 ease-out
                 bg-white border border-gray-200
                 hover:shadow-md hover:border-gray-300
@@ -502,58 +534,36 @@ const TaskCard = ({ task, themeKey, completing, onComplete, onExecute }) => {
                 }
             `}
         >
-            {/* Checkbox column */}
-            <button
-                onClick={() => onComplete(task.id)}
-                disabled={completing}
-                className="
-                    shrink-0 flex items-center justify-center w-10
-                    border-r border-gray-100
-                    hover:bg-green-50 transition-colors
-                    disabled:opacity-50 disabled:cursor-not-allowed
-                    rounded-l-xl
-                "
-                title="Marcar como concluída"
-            >
-                {completing ? (
-                    <Loader2 size={15} className="animate-spin text-gray-400" />
-                ) : (
-                    <div className="w-4.5 h-4.5 rounded-full border-2 border-gray-300 group-hover:border-green-400 transition-colors flex items-center justify-center">
-                        <CheckCircle2 size={0} className="opacity-0 group-hover:opacity-100 text-green-500 transition-opacity" />
-                    </div>
-                )}
-            </button>
-
             {/* Card content */}
-            <div className="flex-1 p-3.5">
+            <div className="p-4">
                 {/* Row 1: Avatar + Lead Info + Stage Badge */}
-                <div className="flex items-start gap-3 mb-2">
+                <div className="flex items-start gap-3 mb-3">
                     {lead?.avatar_url ? (
                         <img
                             src={lead.avatar_url}
                             alt={lead.nome || 'Lead'}
-                            className="w-9 h-9 rounded-lg shrink-0 object-cover border border-gray-200"
+                            className="w-10 h-10 rounded-lg shrink-0 object-cover border border-gray-200 shadow-sm"
                         />
                     ) : (
-                        <div className="w-9 h-9 rounded-lg shrink-0 bg-gray-100 border border-gray-200 flex items-center justify-center">
-                            <span className="text-xs font-bold text-gray-600">{initial}</span>
+                        <div className="w-10 h-10 rounded-lg shrink-0 bg-gray-100 border border-gray-200 flex items-center justify-center shadow-sm">
+                            <span className="text-sm font-bold text-gray-600">{initial}</span>
                         </div>
                     )}
                     <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-0.5">
+                        <div className="flex items-center gap-2 mb-1">
                             <h4 className="text-sm font-semibold text-gray-900 truncate">{lead.nome || 'Lead'}</h4>
                             {stage && (
-                                <span className={`shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded border ${stageStyle}`}>
+                                <span className={`shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded border ${stageStyle}`}>
                                     {stage}
                                 </span>
                             )}
                             {lead.icp_score && (
-                                <span className={`shrink-0 text-[9px] px-1.5 py-0.5 rounded border ${ICP_STYLES[lead.icp_score] || 'bg-gray-100 text-gray-500 border-gray-200'}`}>
+                                <span className={`shrink-0 text-[10px] px-1.5 py-0.5 rounded border ${ICP_STYLES[lead.icp_score] || 'bg-gray-100 text-gray-500 border-gray-200'}`}>
                                     {lead.icp_score}
                                 </span>
                             )}
                         </div>
-                        <p className="text-[11px] text-gray-500 leading-tight">
+                        <p className="text-xs text-gray-500 leading-tight">
                             {lead.headline || ''}
                             {lead.empresa && lead.headline ? ` · ${lead.empresa}` : lead.empresa || ''}
                         </p>
@@ -562,40 +572,64 @@ const TaskCard = ({ task, themeKey, completing, onComplete, onExecute }) => {
 
                 {/* Row 2: AI Instruction */}
                 {task.instruction && (
-                    <div className="mb-3">
-                        <p className="text-[11px] text-gray-500 leading-relaxed bg-gray-50 rounded-lg px-3 py-2 border border-gray-100">
-                            <span className="mr-1">💡</span>{task.instruction}
+                    <div className="mb-4">
+                        <p className="text-[11px] text-gray-600 leading-relaxed bg-gray-50 rounded-lg px-3.5 py-2.5 border border-gray-100 shadow-sm">
+                            <span className="mr-1.5 opacity-80">💡</span>{task.instruction}
                         </p>
                     </div>
                 )}
 
-                {/* Row 3: Smart Action Button (full width) */}
-                {lead.linkedin_profile_url && (
+                {/* Row 3: Action Buttons */}
+                <div className="flex flex-col sm:flex-row items-center gap-2">
+                    {lead.linkedin_profile_url && (
+                        <button
+                            onClick={() => onExecute(lead?.id, task.id)}
+                            className={`
+                                flex-1 w-full sm:w-auto flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-[12px] font-semibold
+                                transition-all duration-200 shadow-sm
+                                ${isFirstContact
+                                    ? 'bg-orange-50 text-orange-600 border border-orange-200 hover:bg-orange-100 hover:shadow-md'
+                                    : 'bg-orange-500 text-white border border-orange-500 hover:bg-orange-600 hover:shadow-md'
+                                }
+                            `}
+                            title={isFirstContact ? 'Enviar primeiro contato' : 'Continuar conversa'}
+                        >
+                            {isFirstContact ? (
+                                <>
+                                    <HandMetal size={15} />
+                                    <span>Enviar Icebreaker</span>
+                                </>
+                            ) : (
+                                <>
+                                    <MessageCircle size={15} />
+                                    <span>Continuar Conversa</span>
+                                </>
+                            )}
+                        </button>
+                    )}
+
                     <button
-                        onClick={() => onExecute(lead?.id, task.id)}
-                        className={`
-                            w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-[11px] font-semibold
-                            transition-all duration-200
-                            ${isFirstContact
-                                ? 'bg-orange-50 text-orange-600 border border-orange-200 hover:bg-orange-100'
-                                : 'bg-orange-500 text-white border border-orange-500 hover:bg-orange-600'
-                            }
-                        `}
-                        title={isFirstContact ? 'Enviar primeiro contato' : 'Continuar conversa'}
+                        onClick={() => onComplete(task.id)}
+                        disabled={completing}
+                        className="
+                            shrink-0 w-full sm:w-auto flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-[12px] font-semibold
+                            bg-green-50 text-green-700 border border-green-200
+                            hover:bg-green-500 hover:text-white hover:border-green-500 hover:shadow-md
+                            transition-all duration-200 shadow-sm
+                            disabled:opacity-50 disabled:cursor-not-allowed
+                        "
+                        title="Marcar como concluída"
                     >
-                        {isFirstContact ? (
-                            <>
-                                <HandMetal size={13} />
-                                <span>Enviar Icebreaker</span>
-                            </>
+                        {completing ? (
+                            <Loader2 size={15} className="animate-spin" />
                         ) : (
                             <>
-                                <MessageCircle size={13} />
-                                <span>Continuar Conversa</span>
+                                <CheckCircle2 size={15} />
+                                <span>Concluir</span>
                             </>
                         )}
                     </button>
-                )}
+                </div>
             </div>
         </div>
     )

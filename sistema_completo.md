@@ -1,5 +1,647 @@
 # Exportação do Sistema
-Data: 2026-02-17 11:42:25
+Data: 2026-02-21 15:16:04
+
+## File: account_sync_status_migration.sql
+```sql
+-- ============================================================
+-- Migration: create account_sync_status table
+-- Run in Supabase SQL Editor (Dashboard > SQL Editor > New query)
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS public.account_sync_status (
+    id           uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+    client_id    integer     NOT NULL REFERENCES public.clients(id) ON DELETE CASCADE,
+    account_id   text        NOT NULL,
+    status       text        NOT NULL DEFAULT 'idle'
+                               CHECK (status IN ('idle', 'running', 'completed', 'error')),
+    started_at   timestamptz,
+    completed_at timestamptz,
+    created_at   timestamptz NOT NULL DEFAULT now(),
+    updated_at   timestamptz
+);
+
+-- Indexes
+CREATE INDEX IF NOT EXISTS idx_account_sync_status_client_id
+    ON public.account_sync_status (client_id);
+
+CREATE INDEX IF NOT EXISTS idx_account_sync_status_status
+    ON public.account_sync_status (status);
+
+-- Enable Row-Level Security
+ALTER TABLE public.account_sync_status ENABLE ROW LEVEL SECURITY;
+
+-- Policy: authenticated clients may only see and edit their own rows.
+-- Uses the integer client_id stored in the profiles table.
+CREATE POLICY "Clients see own sync status"
+    ON public.account_sync_status
+    FOR ALL
+    USING (
+        client_id = (
+            SELECT client_id FROM public.profiles WHERE id = auth.uid()
+        )
+    )
+    WITH CHECK (
+        client_id = (
+            SELECT client_id FROM public.profiles WHERE id = auth.uid()
+        )
+    );
+
+-- Service-role bypass for n8n (optional: allow n8n to update status without RLS)
+-- Uncomment if n8n uses the service role key:
+-- CREATE POLICY "Service role full access"
+--     ON public.account_sync_status
+--     FOR ALL
+--     TO service_role
+--     USING (true)
+--     WITH CHECK (true);
+
+```
+
+## File: AdminPanel_HEAD.jsx
+```javascript
+import React, { useState, useEffect, useMemo, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { supabase } from '../services/supabaseClient'
+import { useAuth } from '../contexts/AuthContext'
+import { useClientSelection } from '../contexts/ClientSelectionContext'
+import { KpiCardSkeleton, HeroTaskCardSkeleton, Skeleton } from '../components/Skeleton'
+import {
+    Crosshair,
+    Flame,
+    Trophy,
+    PartyPopper,
+    Loader2,
+    RefreshCw,
+    TrendingUp,
+    Users,
+    HandMetal,
+    MessageCircle,
+    CheckCircle2,
+    Zap,
+    Star
+} from 'lucide-react'
+
+// ═══════════════════════════════════════════════
+// CONSTANTS
+// ═══════════════════════════════════════════════
+
+const HOT_STAGES = ['G4', 'G5']
+
+// Light theme cadence styles
+const CADENCE_STYLES = {
+    G1: 'bg-gray-100 text-gray-600 border-gray-300',
+    G2: 'bg-blue-50 text-blue-600 border-blue-200',
+    G3: 'bg-cyan-50 text-cyan-700 border-cyan-200',
+    G4: 'bg-orange-50 text-orange-600 border-orange-200',
+    G5: 'bg-red-50 text-red-600 border-red-200',
+}
+
+// ═══════════════════════════════════════════════
+// MAIN COMPONENT — ADMIN PANEL (Command Center)
+// ═══════════════════════════════════════════════
+
+const AdminPanel = () => {
+    const { user, profile } = useAuth()
+    const { selectedClientId } = useClientSelection()
+
+    const [loading, setLoading] = useState(true)
+    const [refreshing, setRefreshing] = useState(false)
+    const [stats, setStats] = useState({
+        doneToday: 0,
+        pendingTotal: 0,
+        hotLeads: 0
+    })
+    const [criticalTasks, setCriticalTasks] = useState([])
+    const [radarLeads, setRadarLeads] = useState([])
+    const [completingIds, setCompletingIds] = useState(new Set())
+
+    // ───────────────────────────────────────────
+    // DATA FETCHING
+    // ───────────────────────────────────────────
+
+    const fetchData = useCallback(async (isRefresh = false) => {
+        if (!user?.id) return
+        if (isRefresh) setRefreshing(true)
+        else setLoading(true)
+
+        try {
+            const today = new Date().toISOString().split('T')[0]
+
+            // 1. Stats: Done Today
+            let doneQuery = supabase
+                .from('tasks')
+                .select('id, leads!inner(client_id)', { count: 'exact', head: true })
+                .eq('status', 'DONE')
+                .gte('updated_at', `${today}T00:00:00`)
+
+            if (selectedClientId) doneQuery = doneQuery.eq('leads.client_id', selectedClientId)
+
+            // 2. Stats: Pending Total
+            let pendingStatsQuery = supabase
+                .from('tasks')
+                .select('id, leads!inner(client_id)', { count: 'exact', head: true })
+                .eq('status', 'PENDING')
+
+            if (selectedClientId) pendingStatsQuery = pendingStatsQuery.eq('leads.client_id', selectedClientId)
+
+            // 3. Critical Tasks (Focus) - G4/G5
+            let pendingQuery = supabase
+                .from('tasks')
+                .select('*, leads!inner(id, client_id, nome, empresa, headline, linkedin_profile_url, cadence_stage, total_interactions_count, avatar_url)')
+                .eq('status', 'PENDING')
+                .order('created_at', { ascending: true })
+
+            if (selectedClientId) pendingQuery = pendingQuery.eq('leads.client_id', selectedClientId)
+
+            // 4. Radar Leads (Responding/Hot)
+            let radarQuery = supabase
+                .from('leads')
+                .select('id, nome, empresa, headline, cadence_stage, total_interactions_count, updated_at, linkedin_profile_url, avatar_url')
+                .gt('total_interactions_count', 0)
+                .order('updated_at', { ascending: false })
+                .limit(10)
+
+            if (selectedClientId) radarQuery = radarQuery.eq('client_id', selectedClientId)
+
+            // Execute all
+            const [doneRes, pendingStatsRes, tasksRes, radarRes] = await Promise.all([
+                doneQuery,
+                pendingStatsQuery,
+                pendingQuery,
+                radarQuery
+            ])
+
+            if (tasksRes.error) throw tasksRes.error
+            if (radarRes.error) throw radarRes.error
+
+            const allPending = tasksRes.data || []
+            const g4g5 = allPending.filter(t => HOT_STAGES.includes(t.leads?.cadence_stage))
+
+            // If we have G4/G5, show them. If not, show G1/G2/G3 (up to 3)
+            const focusTasks = g4g5.length > 0 ? g4g5.slice(0, 3) : allPending.slice(0, 3)
+
+            setStats({
+                doneToday: doneRes.count || 0,
+                pendingTotal: pendingStatsRes.count || 0,
+                hotLeads: g4g5.length
+            })
+
+            setCriticalTasks(focusTasks)
+            setRadarLeads(radarRes.data || [])
+
+        } catch (err) {
+            console.error('Error fetching command center data:', err)
+        } finally {
+            setLoading(false)
+            setRefreshing(false)
+        }
+    }, [user?.id, selectedClientId])
+
+    useEffect(() => {
+        fetchData()
+    }, [fetchData])
+
+    // ───────────────────────────────────────────
+    // ACTIONS
+    // ───────────────────────────────────────────
+
+    const handleComplete = async (taskId) => {
+        setCompletingIds(prev => new Set(prev).add(taskId))
+
+        // Optimistic update
+        setCriticalTasks(prev => prev.filter(t => t.id !== taskId))
+        setStats(prev => ({
+            ...prev,
+            doneToday: prev.doneToday + 1,
+            pendingTotal: Math.max(0, prev.pendingTotal - 1)
+        }))
+
+        try {
+            const { error } = await supabase
+                .from('tasks')
+                .update({ status: 'DONE' })
+                .eq('id', taskId)
+
+            if (error) throw error
+        } catch (err) {
+            console.error('Error completing task:', err)
+            fetchData(true) // Revert on error
+        } finally {
+            setCompletingIds(prev => {
+                const next = new Set(prev)
+                next.delete(taskId)
+                return next
+            })
+        }
+    }
+
+    const navigate = useNavigate()
+
+    const handleExecute = (leadId) => {
+        if (leadId) {
+            navigate(`/sales/inbox?leadId=${leadId}`)
+        }
+    }
+
+    const getGreeting = () => {
+        const hour = new Date().getHours()
+        if (hour < 12) return 'Bom dia'
+        if (hour < 18) return 'Boa tarde'
+        return 'Boa noite'
+    }
+
+    const progressPercent = useMemo(() => {
+        const total = stats.doneToday + stats.pendingTotal
+        if (total === 0) return 0
+        return Math.round((stats.doneToday / total) * 100)
+    }, [stats])
+
+    // ───────────────────────────────────────────
+    // RENDER
+    // ───────────────────────────────────────────
+
+    if (loading) {
+        return (
+            <div className="min-h-screen bg-gray-50 text-gray-900 p-4 sm:p-6 lg:p-8">
+                <div className="max-w-6xl mx-auto space-y-6">
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                            <Skeleton className="w-10 h-10 rounded-xl" />
+                            <div className="space-y-2">
+                                <Skeleton className="w-48 h-8" />
+                                <Skeleton className="w-64 h-4" />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <Skeleton className="h-32 rounded-2xl" />
+                        <div className="col-span-2 grid grid-cols-3 gap-4">
+                            <KpiCardSkeleton />
+                            <KpiCardSkeleton />
+                            <KpiCardSkeleton />
+                        </div>
+                    </div>
+
+                    <div className="space-y-4">
+                        <Skeleton className="w-32 h-6" />
+                        <div className="space-y-3">
+                            <HeroTaskCardSkeleton />
+                            <HeroTaskCardSkeleton />
+                            <HeroTaskCardSkeleton />
+                        </div>
+                    </div>
+                </div>
+            </div>
+        )
+    }
+
+    return (
+        <div className="min-h-screen bg-gray-50 text-gray-900 p-4 sm:p-6 lg:p-8">
+            <div className="max-w-6xl mx-auto space-y-6">
+
+                {/* Header */}
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-orange-50 border border-orange-200 flex items-center justify-center">
+                            <Crosshair size={20} className="text-orange-500" />
+                        </div>
+                        <div>
+                            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-gray-900">
+                                {getGreeting()}, {profile?.name?.split(' ')[0] || 'Comandante'} 🎯
+                            </h1>
+                            <p className="text-sm text-gray-500">Command Center · Onde você ganha dinheiro agora</p>
+                        </div>
+                    </div>
+                    <button
+                        onClick={() => fetchData(true)}
+                        className="p-2 text-gray-400 hover:text-orange-500 hover:bg-orange-50 rounded-lg transition-colors"
+                        disabled={refreshing}
+                    >
+                        <RefreshCw size={20} className={refreshing ? 'animate-spin' : ''} />
+                    </button>
+                </div>
+
+                {/* PLACAR DO DIA */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {/* Ring Chart */}
+                    <div className="bg-white rounded-2xl border border-gray-200 p-6 flex items-center justify-between relative overflow-hidden">
+                        <div className="relative z-10">
+                            <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-1">Meta Diária</h3>
+                            <div className="flex items-baseline gap-1">
+                                <span className="text-4xl font-bold text-gray-900">{progressPercent}%</span>
+                                <span className="text-sm text-gray-400">concluído</span>
+                            </div>
+                        </div>
+                        <ProgressRing percent={progressPercent} size={80} stroke={6} />
+                    </div>
+
+                    {/* Stats */}
+                    <div className="col-span-2 grid grid-cols-3 gap-4">
+                        <KpiCard
+                            icon={<CheckCircle2 size={18} />}
+                            label="Concluídas Hoje"
+                            value={stats.doneToday}
+                            accent="text-green-600"
+                        />
+                        <KpiCard
+                            icon={<Loader2 size={18} />}
+                            label="Pendentes"
+                            value={stats.pendingTotal}
+                            accent="text-gray-900"
+                        />
+                        <KpiCard
+                            icon={<Flame size={18} />}
+                            label="Leads Quentes"
+                            value={stats.hotLeads}
+                            accent="text-orange-500"
+                        />
+                    </div>
+                </div>
+
+                {/* FOCO TOTAL (HERO SECTION) */}
+                <div>
+                    <div className="flex items-center gap-2 mb-4">
+                        <Zap className="text-orange-500" size={20} />
+                        <h2 className="text-lg font-bold text-gray-900">Foco Total</h2>
+                        <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-orange-100 text-orange-700 border border-orange-200">
+                            Prioridade Máxima
+                        </span>
+                    </div>
+
+                    {criticalTasks.length > 0 ? (
+                        <div className="space-y-3">
+                            {criticalTasks.map((task, idx) => (
+                                <HeroTaskCard
+                                    key={task.id}
+                                    task={task}
+                                    index={idx}
+                                    completing={completingIds.has(task.id)}
+                                    onComplete={handleComplete}
+                                    onExecute={handleExecute}
+                                />
+                            ))}
+                        </div>
+                    ) : (
+                        <div className="bg-white rounded-2xl border border-gray-200 p-8 text-center flex flex-col items-center justify-center dashed-border">
+                            <div className="w-12 h-12 bg-green-50 rounded-full flex items-center justify-center mb-3">
+                                <PartyPopper className="text-green-500" size={24} />
+                            </div>
+                            <h3 className="text-gray-900 font-bold mb-1">Tudo limpo por aqui!</h3>
+                            <p className="text-gray-500 text-sm">Nenhuma tarefa crítica pendente no momento.</p>
+                        </div>
+                    )}
+                </div>
+
+                {/* RADAR DE OPORTUNIDADES */}
+                <div>
+                    <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center gap-2">
+                            <TrendingUp className="text-blue-500" size={20} />
+                            <h2 className="text-lg font-bold text-gray-900">Radar de Oportunidades</h2>
+                        </div>
+                    </div>
+
+                    <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide -mx-4 px-4 sm:mx-0 sm:px-0">
+                        {radarLeads.length > 0 ? (
+                            radarLeads.map(lead => (
+                                <RadarLeadCard key={lead.id} lead={lead} />
+                            ))
+                        ) : (
+                            <div className="text-sm text-gray-400 italic p-4">Nenhuma atividade recente no radar.</div>
+                        )}
+                    </div>
+                </div>
+
+            </div>
+
+            {/* Quick Actions Bar (Bottom) */}
+            <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-white/90 backdrop-blur-md border border-gray-200 shadow-xl rounded-full px-6 py-3 flex items-center gap-4 z-50">
+                <button
+                    onClick={() => navigate('/campaigns')}
+                    className="flex items-center gap-2 text-sm font-semibold text-gray-600 hover:text-orange-600 transition-colors"
+                >
+                    <Users size={16} />
+                    Novo Lead Manual
+                </button>
+                <div className="w-px h-4 bg-gray-300" />
+                <button
+                    onClick={() => navigate('/missions')}
+                    className="flex items-center gap-2 text-sm font-bold text-orange-600 hover:text-orange-700 transition-colors"
+                >
+                    <Trophy size={16} />
+                    Abrir Cockpit Completo
+                </button>
+            </div>
+        </div>
+    )
+}
+
+// ═══════════════════════════════════════════════════
+// SUB-COMPONENTS
+// ═══════════════════════════════════════════════════
+
+const ProgressRing = ({ percent, size = 110, stroke = 8 }) => {
+    const radius = (size - stroke) / 2
+    const circumference = 2 * Math.PI * radius
+    const offset = circumference - (percent / 100) * circumference
+    const color = percent === 100 ? '#16a34a' : '#f97316' // green-600 : orange-500
+
+    return (
+        <div className="relative" style={{ width: size, height: size }}>
+            <svg width={size} height={size} className="transform -rotate-90">
+                <circle
+                    cx={size / 2} cy={size / 2} r={radius}
+                    fill="none" stroke="#f3f4f6" // gray-100
+                    strokeWidth={stroke}
+                />
+                <circle
+                    cx={size / 2} cy={size / 2} r={radius}
+                    fill="none" stroke={color}
+                    strokeWidth={stroke}
+                    strokeLinecap="round"
+                    strokeDasharray={circumference}
+                    strokeDashoffset={offset}
+                    style={{ transition: 'stroke-dashoffset 1s ease-out, stroke 0.5s ease' }}
+                />
+            </svg>
+        </div>
+    )
+}
+
+const KpiCard = ({ icon, label, value, accent = 'text-gray-900' }) => (
+    <div className="bg-white rounded-2xl border border-gray-200 p-5 flex flex-col gap-3 hover:shadow-md hover:border-gray-300 transition-all duration-300">
+        <div className="flex items-center gap-2 text-gray-400">
+            {icon}
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">{label}</span>
+        </div>
+        <span className={`text-3xl font-bold ${accent} tracking-tight`}>{value}</span>
+    </div>
+)
+
+const HeroTaskCard = ({ task, index, completing, onComplete, onExecute }) => {
+    const lead = task.leads || {}
+    const initial = lead.nome?.charAt(0)?.toUpperCase() || '?'
+    const stage = lead.cadence_stage || ''
+    const stageStyle = CADENCE_STYLES[stage] || 'bg-gray-100 text-gray-500 border-gray-200'
+    const interactionCount = lead.total_interactions_count || 0
+    const isFirstContact = interactionCount === 0
+
+    const borderColors = ['border-l-red-500', 'border-l-orange-500', 'border-l-amber-500']
+    const borderColor = borderColors[index] || borderColors[2]
+
+    return (
+        <div
+            className={`
+                bg-white rounded-2xl border border-gray-200 p-5 border-l-[4px] ${borderColor}
+                transition-all duration-300 ease-out
+                hover:shadow-lg hover:border-gray-300
+                ${completing ? 'opacity-0 scale-95 pointer-events-none' : 'opacity-100 scale-100'}
+            `}
+        >
+            <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+                {/* Lead Info */}
+                <div className="flex items-center gap-3 flex-1 min-w-0">
+                    {lead.avatar_url ? (
+                        <img
+                            src={lead.avatar_url}
+                            alt={lead.nome}
+                            className="w-11 h-11 rounded-xl shrink-0 object-cover border border-gray-200"
+                        />
+                    ) : (
+                        <div className="w-11 h-11 rounded-xl shrink-0 bg-gray-100 border border-gray-200 flex items-center justify-center">
+                            <span className="text-sm font-bold text-gray-700">{initial}</span>
+                        </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-0.5">
+                            <h4 className="text-sm font-bold text-gray-900 truncate">{lead.nome || 'Lead'}</h4>
+                            {stage && (
+                                <span className={`shrink-0 text-[9px] font-bold px-2 py-0.5 rounded-md border ${stageStyle}`}>
+                                    {stage}
+                                </span>
+                            )}
+                        </div>
+                        <p className="text-[11px] text-gray-500 truncate">
+                            {lead.headline || ''}
+                            {lead.empresa && lead.headline ? ` · ${lead.empresa}` : lead.empresa || ''}
+                        </p>
+                    </div>
+                </div>
+
+                {/* AI Instruction */}
+                {task.instruction && (
+                    <div className="flex-1 min-w-0 hidden md:block">
+                        <p className="text-[11px] text-gray-500 leading-relaxed line-clamp-2 bg-gray-50 rounded-lg px-3 py-2 border border-gray-100">
+                            <span className="mr-1">💡</span>{task.instruction}
+                        </p>
+                    </div>
+                )}
+
+                {/* Actions */}
+                <div className="flex items-center gap-2 shrink-0">
+                    {lead?.id && (
+                        <button
+                            onClick={() => onExecute(lead.id)}
+                            className={`
+                                flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-semibold transition-all duration-200
+                                ${isFirstContact
+                                    ? 'bg-orange-50 text-orange-600 border border-orange-200 hover:bg-orange-100'
+                                    : 'bg-orange-500 text-white border border-orange-500 hover:bg-orange-600'
+                                }
+                            `}
+                        >
+                            {isFirstContact ? <><HandMetal size={13} /> Icebreaker</> : <><MessageCircle size={13} /> Conversar</>}
+                        </button>
+                    )}
+                    <button
+                        onClick={() => onComplete(task.id)}
+                        disabled={completing}
+                        className="p-2.5 rounded-xl bg-gray-50 text-gray-400 border border-gray-200 hover:bg-green-50 hover:text-green-600 hover:border-green-200 transition-all duration-200"
+                        title="Concluir tarefa"
+                    >
+                        {completing ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
+                    </button>
+                </div>
+            </div>
+
+            {/* Mobile instruction */}
+            {task.instruction && (
+                <div className="mt-3 md:hidden">
+                    <p className="text-[11px] text-gray-500 leading-relaxed line-clamp-2 bg-gray-50 rounded-lg px-3 py-2 border border-gray-100">
+                        <span className="mr-1">💡</span>{task.instruction}
+                    </p>
+                </div>
+            )}
+        </div>
+    )
+}
+
+const RadarLeadCard = ({ lead }) => {
+    const initial = lead.nome?.charAt(0)?.toUpperCase() || '?'
+    const stage = lead.cadence_stage || ''
+    const stageStyle = CADENCE_STYLES[stage] || 'bg-gray-100 text-gray-500 border-gray-200'
+
+    const timeAgo = (dateStr) => {
+        if (!dateStr) return ''
+        const diff = Date.now() - new Date(dateStr).getTime()
+        const mins = Math.floor(diff / 60000)
+        if (mins < 60) return `${mins}min`
+        const hours = Math.floor(mins / 60)
+        if (hours < 24) return `${hours}h`
+        const days = Math.floor(hours / 24)
+        return `${days}d`
+    }
+
+    return (
+        <div className="bg-white rounded-xl border border-gray-200 p-4 min-w-[200px] max-w-[240px] shrink-0 hover:shadow-md hover:border-gray-300 transition-all duration-300 cursor-default">
+            <div className="flex items-center gap-3 mb-3">
+                {lead.avatar_url ? (
+                    <img
+                        src={lead.avatar_url}
+                        alt={lead.nome}
+                        className="w-9 h-9 rounded-lg shrink-0 object-cover border border-gray-200"
+                    />
+                ) : (
+                    <div className="w-9 h-9 rounded-lg shrink-0 bg-gray-100 border border-gray-200 flex items-center justify-center shrink-0">
+                        <span className="text-xs font-bold text-gray-600">{initial}</span>
+                    </div>
+                )}
+                <div className="min-w-0 flex-1">
+                    <h4 className="text-xs font-semibold text-gray-900 truncate">{lead.nome || 'Lead'}</h4>
+                    <p className="text-[10px] text-gray-500 truncate">{lead.empresa || lead.headline || ''}</p>
+                </div>
+            </div>
+
+            <div className="flex items-center justify-between mb-3">
+                <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${stageStyle}`}>
+                    {stage || 'Novo'}
+                </span>
+                <span className="text-[9px] text-gray-400 flex items-center gap-1">
+                    <MessageCircle size={10} /> {lead.total_interactions_count || 0}
+                </span>
+            </div>
+
+            <div className="flex items-center justify-between pt-3 border-t border-gray-100">
+                <span className="text-[10px] text-gray-400">{timeAgo(lead.updated_at)} atrás</span>
+                {lead.linkedin_profile_url && (
+                    <a
+                        href={lead.linkedin_profile_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-[10px] font-bold text-orange-600 hover:text-orange-700 hover:underline"
+                    >
+                        Ver perfil
+                    </a>
+                )}
+            </div>
+        </div>
+    )
+}
+
+export default AdminPanel
+
+```
 
 ## File: ARCHITECTURE.md
 ```md
@@ -65,6 +707,45 @@ A visualização de lista deve ser tratada como um Kanban de Prioridades baseada
 
 ```
 
+## File: content_library_migration.sql
+```sql
+-- Create the content_library table
+CREATE TABLE IF NOT EXISTS public.content_library (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    content_name TEXT NOT NULL,
+    content_description TEXT,
+    content_url TEXT NOT NULL,
+    content_type TEXT NOT NULL CHECK (content_type IN ('Video', 'Post', 'Artigo', 'Outro')),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- Enable Row Level Security (RLS)
+ALTER TABLE public.content_library ENABLE ROW LEVEL SECURITY;
+
+-- Create Policies
+-- Create policy to allow users to ONLY select their own content
+CREATE POLICY "Users can view own content" ON public.content_library
+    FOR SELECT USING (auth.uid() = user_id);
+
+-- Create policy to allow users to ONLY insert their own content
+CREATE POLICY "Users can insert own content" ON public.content_library
+    FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+-- Create policy to allow users to ONLY update their own content
+CREATE POLICY "Users can update own content" ON public.content_library
+    FOR UPDATE USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+
+-- Create policy to allow users to ONLY delete their own content
+CREATE POLICY "Users can delete own content" ON public.content_library
+    FOR DELETE USING (auth.uid() = user_id);
+
+-- Grant access to authenticated users
+GRANT ALL ON TABLE public.content_library TO authenticated;
+GRANT ALL ON TABLE public.content_library TO service_role;
+
+```
+
 ## File: eslint.config.js
 ```javascript
 import js from '@eslint/js'
@@ -96,6 +777,51 @@ export default defineConfig([
     },
   },
 ])
+
+```
+
+## File: history_sync_progress_migration.sql
+```sql
+-- ============================================================
+-- Migration: create history_sync_progress table
+-- Run in Supabase SQL Editor (Dashboard > SQL Editor > New query)
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS public.history_sync_progress (
+    id           uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+    client_id    integer     NOT NULL REFERENCES public.clients(id) ON DELETE CASCADE UNIQUE,
+    status       text        NOT NULL DEFAULT 'idle'
+                               CHECK (status IN ('idle', 'running', 'completed', 'cancelled', 'error')),
+    total_leads  integer     DEFAULT 0,
+    processed    integer     DEFAULT 0,
+    failures     integer     DEFAULT 0,
+    started_at   timestamptz,
+    completed_at timestamptz,
+    created_at   timestamptz NOT NULL DEFAULT now(),
+    updated_at   timestamptz
+);
+
+-- Indexes
+CREATE INDEX IF NOT EXISTS idx_history_sync_progress_client_id
+    ON public.history_sync_progress (client_id);
+
+-- Enable Row-Level Security
+ALTER TABLE public.history_sync_progress ENABLE ROW LEVEL SECURITY;
+
+-- Policy: authenticated clients may only see and edit their own rows
+CREATE POLICY "Clients see own sync progress"
+    ON public.history_sync_progress
+    FOR ALL
+    USING (
+        client_id = (
+            SELECT client_id FROM public.profiles WHERE id = auth.uid()
+        )
+    )
+    WITH CHECK (
+        client_id = (
+            SELECT client_id FROM public.profiles WHERE id = auth.uid()
+        )
+    );
 
 ```
 
@@ -155,6 +881,7 @@ export default defineConfig([
     "eslint-plugin-react-refresh": "^0.4.24",
     "globals": "^16.5.0",
     "postcss": "^8.5.6",
+    "tailwind-scrollbar-hide": "^4.0.0",
     "tailwindcss": "^3.4.17",
     "vite": "^7.2.4"
   }
@@ -15787,23 +16514,54 @@ export default {
     theme: {
         extend: {
             colors: {
+                // OBSIDIAN GLASS THEME
                 obsidian: '#030303',
                 charcoal: '#0a0a0a',
-                primary: '#ff4d00',
-                glass: 'rgba(255, 255, 255, 0.03)',
-                'glass-border': 'rgba(255, 255, 255, 0.08)',
-                'surface': 'rgba(255, 255, 255, 0.05)',
-                'surface-hover': 'rgba(255, 255, 255, 0.08)',
+                primary: {
+                    DEFAULT: '#ff4d00',
+                    glow: 'rgba(255, 77, 0, 0.4)',
+                    dim: 'rgba(255, 77, 0, 0.1)',
+                },
+                glass: {
+                    DEFAULT: 'rgba(255, 255, 255, 0.03)',
+                    hover: 'rgba(255, 255, 255, 0.06)',
+                    border: 'rgba(255, 255, 255, 0.08)',
+                    shine: 'rgba(255, 255, 255, 0.15)',
+                },
+                text: {
+                    heading: '#ffffff',
+                    body: '#94a3b8',
+                    muted: '#64748b',
+                    highlight: '#e2e8f0',
+                },
+                // Status Colors
+                success: {
+                    DEFAULT: '#10b981',
+                    glow: 'rgba(16, 185, 129, 0.4)',
+                },
+                danger: {
+                    DEFAULT: '#ef4444',
+                    glow: 'rgba(239, 68, 68, 0.4)',
+                }
+            },
+            fontFamily: {
+                main: ['Plus Jakarta Sans', 'system-ui', 'sans-serif'],
             },
             backdropBlur: {
                 xs: '2px',
             },
             boxShadow: {
                 glow: '0 0 20px rgba(255, 77, 0, 0.3)',
+                'glow-lg': '0 0 30px rgba(255, 77, 0, 0.4)',
+            },
+            borderRadius: {
+                '4xl': '2rem',
             }
         },
     },
-    plugins: [],
+    plugins: [
+        require('tailwind-scrollbar-hide')
+    ],
 }
 
 ```
@@ -15838,6 +16596,819 @@ export default defineConfig({
 
 ```
 
+## File: .kombai\resources\design-review-adminpanel-1740054000.md
+```md
+# Design Review Results: AdminPanel (Main Dashboard)
+
+**Review Date**: February 20, 2026
+**Route**: `/` (AdminPanel - Main Dashboard)
+**Focus Areas**: UX/Usability, Micro-interactions/Motion, Consistency
+
+> **Note**: This review was conducted through static code analysis only. Visual inspection via browser would provide additional insights into layout rendering, interactive behaviors, and actual appearance.
+
+## Summary
+
+The AdminPanel serves as the command center for the Link&Lead system, displaying daily stats, critical tasks, and radar opportunities. The review identified **18 issues** across UX/Usability (8), Micro-interactions (4), and Consistency (6). Critical issues include navigation confusion from window.location.href usage, lack of loading skeletons, and severe design system inconsistency between pages. The light theme dashboard contradicts the declared "Obsidian Glass" dark theme in global styles.
+
+## Issues
+
+| # | Issue | Criticality | Category | Location |
+|---|-------|-------------|----------|----------|
+| 1 | Quick Actions Bar uses `window.location.href` instead of React Router navigation, causing full page reloads and losing application state | 🔴 Critical | UX/Usability | `src/pages/AdminPanel.jsx:334-347` |
+| 2 | Design system chaos: AdminPanel uses light theme (`bg-gray-50`, white cards) while `index.css` defines dark "Obsidian Glass" theme with CSS variables that aren't being used | 🔴 Critical | Consistency | `src/pages/AdminPanel.jsx:213`, `src/index.css:8-53` |
+| 3 | PostsPage.css defines completely different CSS variables (`:root` vars like `--primary-color: #0f172a`) conflicting with index.css dark theme variables | 🔴 Critical | Consistency | `src/pages/PostsPage.css:1-8`, `src/index.css:8-53` |
+| 4 | No loading skeletons - shows spinner on blank screen instead of skeleton UI, poor perceived performance | 🟠 High | UX/Usability | `src/pages/AdminPanel.jsx:204-210` |
+| 5 | Fixed Quick Actions Bar at bottom may overlap content on smaller viewports or long pages, no safe area padding | 🟠 High | UX/Usability | `src/pages/AdminPanel.jsx:332-348` |
+| 6 | Refresh button has no visual feedback beyond icon spin - users may not know data is updating (no loading state on cards) | 🟠 High | UX/Usability | `src/pages/AdminPanel.jsx:229-236` |
+| 7 | Critical Tasks display "Foco Total" heading even when empty state is shown, creates confusion about priority | 🟠 High | UX/Usability | `src/pages/AdminPanel.jsx:276-306` |
+| 8 | No keyboard navigation support - buttons and interactive elements missing proper focus states and keyboard handlers | 🟠 High | UX/Usability | `src/pages/AdminPanel.jsx:229-236`, `src/pages/AdminPanel.jsx:334-347`, `src/pages/AdminPanel.jsx:457-469` |
+| 9 | Task completion uses optimistic update but no undo mechanism if user clicks by mistake | 🟡 Medium | UX/Usability | `src/pages/AdminPanel.jsx:149-177` |
+| 10 | "Novo Lead Manual" button label misleading - actually navigates to campaigns page, not a lead creation form | 🟡 Medium | UX/Usability | `src/pages/AdminPanel.jsx:333-339` |
+| 11 | Missing error state UI - if `fetchData` fails, page shows last cached data with no error message to user | 🟡 Medium | UX/Usability | `src/pages/AdminPanel.jsx:133-138` |
+| 12 | Hardcoded colors throughout component (`text-orange-500`, `bg-gray-50`) instead of using Tailwind theme tokens or CSS variables | 🔴 Critical | Consistency | `src/pages/AdminPanel.jsx:213-556` |
+| 13 | ProgressRing animation only on `strokeDashoffset`, but color change has no transition delay causing abrupt switch at 100% | 🟡 Medium | Micro-interactions | `src/pages/AdminPanel.jsx:357-383` |
+| 14 | HeroTaskCard hover transition is smooth but `completing` state uses opacity/scale without stagger - all cards fade simultaneously if multiple completed | 🟡 Medium | Micro-interactions | `src/pages/AdminPanel.jsx:407-413` |
+| 15 | RadarLeadCard horizontal scroll has no scroll indicators (arrows/shadows) to show more content exists | ⚪ Low | UX/Usability | `src/pages/AdminPanel.jsx:318-327` |
+| 16 | No animation on stats counter updates - numbers change instantly without count-up animation or transition | ⚪ Low | Micro-interactions | `src/pages/AdminPanel.jsx:239-273` |
+| 17 | AdminLayout sidebar uses deprecated CSS file (`AdminPanel.css` is empty but still imported) instead of Tailwind | 🟡 Medium | Consistency | `src/components/AdminLayout.jsx:22` |
+| 18 | PostsPage uses separate `.css` file with different design tokens while AdminPanel uses inline Tailwind - no unified styling approach | 🟠 High | Consistency | `src/pages/PostsPage.jsx:19`, `src/pages/PostsPage.css:1-475` |
+| 19 | Quick Actions Bar buttons use inconsistent styling - first button is gray, second is orange, no clear hierarchy or disabled states | 🟡 Medium | Consistency | `src/pages/AdminPanel.jsx:333-347` |
+| 20 | Empty radar state shows italic text instead of proper empty state card like critical tasks section | ⚪ Low | Consistency | `src/pages/AdminPanel.jsx:323-325` |
+| 21 | No transition animation when activeLead changes or when switching between sections | ⚪ Low | Micro-interactions | `src/pages/AdminPanel.jsx` (general) |
+
+## Criticality Legend
+- 🔴 **Critical**: Breaks functionality or violates accessibility standards
+- 🟠 **High**: Significantly impacts user experience or design quality
+- 🟡 **Medium**: Noticeable issue that should be addressed
+- ⚪ **Low**: Nice-to-have improvement
+
+## Detailed Analysis by Category
+
+### UX/Usability (8 issues)
+
+**Navigation & Information Architecture:**
+- The Quick Actions Bar uses `window.location.href` for navigation (#1), which breaks React Router's SPA behavior and causes full page reloads
+- Button labels don't match their actual destination (#10) - "Novo Lead Manual" goes to campaigns
+- Fixed bottom bar may cause overlap issues on mobile (#5)
+
+**Feedback & State Management:**
+- No loading skeletons (#4) - poor perceived performance
+- Refresh button provides minimal feedback (#6)
+- No error state handling (#11) if API calls fail
+- No undo for accidental task completion (#9)
+
+**Accessibility:**
+- Missing keyboard navigation and focus states (#8) throughout the interface
+
+### Micro-interactions/Motion (4 issues)
+
+**Transitions & Animations:**
+- ProgressRing color change is abrupt at 100% (#13)
+- Multiple task completions fade simultaneously without stagger (#14)
+- Stats updates have no count-up animation (#16)
+- No transitions between sections or states (#21)
+
+### Consistency (6 issues)
+
+**Design System Fragmentation:**
+- **Most Critical**: Three conflicting design systems exist in the same app (#2, #3):
+  1. `index.css` declares dark "Obsidian Glass" theme with CSS variables (`--color-bg: #030303`, `--color-primary: #ff4d00`)
+  2. `PostsPage.css` overrides with light theme variables (`--primary-color: #0f172a`, `--bg-body: #f1f5f9`)
+  3. AdminPanel ignores both and uses hardcoded Tailwind classes (`bg-gray-50`, `text-orange-500`)
+
+**Implementation Inconsistency:**
+- Mixing CSS files and Tailwind (#17, #18) - no unified approach
+- Hardcoded colors instead of theme tokens (#12)
+- Inconsistent component patterns (#19, #20)
+
+## Recommendations by Priority
+
+### 🔴 Critical (Must Fix)
+
+1. **Unify Design System** (#2, #3, #12)
+   - **Decision needed**: Choose ONE design system (dark vs light theme)
+   - If keeping dark theme: Update AdminPanel to use `index.css` CSS variables
+   - If keeping light theme: Remove/update `index.css` dark theme variables
+   - Remove conflicting `PostsPage.css` variables
+   - Create Tailwind theme config that uses the chosen CSS variables
+   - Replace all hardcoded colors with theme tokens
+
+2. **Fix Navigation** (#1)
+   - Replace `window.location.href` with `navigate()` from React Router
+   ```jsx
+   // Change from:
+   onClick={() => window.location.href = '/campaigns'}
+   // To:
+   onClick={() => navigate('/campaigns')}
+   ```
+
+### 🟠 High Priority
+
+3. **Add Loading Skeletons** (#4)
+   - Create reusable skeleton components for stats cards, task cards, and radar cards
+   - Show skeleton UI during initial load instead of blank screen with spinner
+
+4. **Implement Keyboard Navigation** (#8)
+   - Add visible focus states to all interactive elements
+   - Ensure tab order is logical (stats → tasks → radar → quick actions)
+   - Add keyboard shortcuts for common actions (e.g., `r` for refresh)
+
+5. **Improve Refresh Feedback** (#6)
+   - Show loading skeleton overlay on cards during refresh
+   - Add subtle pulse animation to refreshing cards
+   - Consider toast notification "Data updated successfully"
+
+6. **Unify Styling Approach** (#17, #18)
+   - Migrate all pages to Tailwind classes
+   - Remove deprecated CSS files
+   - Document the decision in a STYLING.md guide
+
+### 🟡 Medium Priority
+
+7. **Add Undo for Task Completion** (#9)
+   - Show toast with "Undo" button after completing task
+   - Keep task in memory for 5 seconds before permanent removal
+
+8. **Fix Button Labels** (#10)
+   - Rename "Novo Lead Manual" to "Gerenciar Campanhas" or similar
+   - Consider if this action belongs in quick actions or if different action is needed
+
+9. **Improve Progress Ring Animation** (#13)
+   - Add transition delay to color change matching the stroke animation duration
+   ```jsx
+   style={{ transition: 'stroke-dashoffset 1s ease-out, stroke 1s ease 0.5s' }}
+   ```
+
+10. **Add Error States** (#11)
+    - Create error boundary for AdminPanel
+    - Show friendly error message with retry button if fetch fails
+
+### ⚪ Low Priority
+
+11. **Add Scroll Indicators** (#15)
+    - Add fade gradient at edges of horizontal scroll
+    - Add arrow buttons for manual scroll navigation
+
+12. **Animate Stats Counters** (#16)
+    - Add count-up animation when stats change
+    - Use library like `react-countup` or implement custom animation
+
+13. **Standardize Empty States** (#20)
+    - Create reusable EmptyState component
+    - Apply consistently across all sections
+
+## Next Steps
+
+**Phase 1 - Foundation (Week 1)**
+- Audit and document current theme usage across all pages
+- Make design system decision (dark vs light)
+- Create unified Tailwind config with theme tokens
+- Fix critical navigation issues
+
+**Phase 2 - UX Polish (Week 2)**
+- Implement loading skeletons
+- Add keyboard navigation and focus states
+- Improve feedback mechanisms (refresh, errors)
+
+**Phase 3 - Refinement (Week 3)**
+- Migrate all pages to unified styling approach
+- Add micro-interactions and animations
+- Polish empty states and edge cases
+
+## Additional Notes
+
+**Positive Aspects:**
+- Clean information hierarchy with clear sections
+- Responsive grid layout adapts well to different screen sizes
+- Optimistic updates provide snappy feel to task completion
+- Time-based greeting (`getGreeting()`) adds personalization
+- Progress ring visual is engaging and informative
+
+**Questions for Product Team:**
+- Should we commit to dark theme (Obsidian Glass) or light theme for the admin panel?
+- Is the Quick Actions Bar essential, or can those actions live in the sidebar?
+- What's the expected behavior when user has no client selected in ClientSelector?
+
+```
+
+## File: .kombai\resources\design-review-consolidated-summary.md
+```md
+# Consolidated Design Review Summary
+
+**Review Date**: February 20, 2026
+**Pages Reviewed**: AdminPanel, Sales Inbox
+**Focus Areas**: UX/Usability, Micro-interactions/Motion, Consistency
+
+## Executive Summary
+
+Comprehensive review of the Link&Lead System revealed **38 total issues** across 2 critical pages. The application shows strong product thinking with AI integration, kanban workflows, and strategic lead management, but suffers from **severe design system inconsistency** that undermines the user experience. The codebase mixes 3 different design systems (dark Obsidian Glass theme, light PostsPage theme, and hardcoded Tailwind values), creating a fragmented visual identity and maintainability nightmare.
+
+## Critical Findings
+
+### 🚨 Design System Crisis
+
+**Problem**: Three conflicting design systems exist simultaneously:
+
+1. **`index.css`** declares dark "Obsidian Glass" theme:
+   ```css
+   --color-bg: #030303
+   --color-primary: #ff4d00
+   --color-surface: rgba(255, 255, 255, 0.03)
+   ```
+
+2. **`PostsPage.css`** overrides with light theme:
+   ```css
+   --primary-color: #0f172a
+   --bg-body: #f1f5f9
+   ```
+
+3. **Components** ignore both and use hardcoded values:
+   - AdminPanel: `bg-gray-50`, `text-orange-500`
+   - SalesInbox: `bg-[#0d0d0d]`, `bg-[#111111]`, `bg-black/40`
+
+**Impact**:
+- Impossible to maintain consistent visual identity
+- Theme changes require updating hundreds of lines
+- New developers confused about which system to use
+- Accessibility issues from ad-hoc color choices
+
+**Solution Required**:
+- **Week 1 Decision**: Choose ONE design system (recommend dark theme since Sales Inbox already uses it)
+- Create unified `tailwind.config.js` theme extending chosen CSS variables
+- Deprecate all conflicting CSS files
+- Document in DESIGN_SYSTEM.md
+
+### 🚨 Navigation Anti-Pattern
+
+**AdminPanel Quick Actions Bar**:
+```jsx
+onClick={() => window.location.href = '/campaigns'}
+```
+
+**Problems**:
+- Full page reload loses React state
+- Breaks browser back button
+- Slow user experience
+- Defeats purpose of SPA architecture
+
+**Fix**:
+```jsx
+const navigate = useNavigate();
+onClick={() => navigate('/campaigns')}
+```
+
+### 🚨 Responsive Design Gaps
+
+Both pages use fixed widths that break on tablet/small desktop:
+- AdminPanel: Radar cards horizontal scroll with no indicators
+- SalesInbox: Three `w-80` fixed sidebars don't fit 1024px screens
+- No mobile layouts defined for any reviewed pages
+
+## Issue Breakdown by Page
+
+### AdminPanel (`/`)
+- **21 issues total**: 4 Critical, 7 High, 7 Medium, 3 Low
+- **Top concerns**: Design system chaos, navigation bugs, missing loading skeletons, no keyboard nav
+
+### Sales Inbox (`/sales/inbox`)
+- **19 issues total**: 2 Critical, 5 High, 7 Medium, 5 Low
+- **Top concerns**: Fixed layout widths, dark theme inconsistency, AI race condition, poor keyboard support
+
+### Performance Metrics (Sales Inbox)
+
+| Metric | Value | Status | Target |
+|--------|-------|--------|--------|
+| FCP | 1768ms | 🟡 Fair | < 1800ms |
+| LCP | 2896ms | 🔴 Poor | < 2500ms |
+| CLS | 0.273 | 🔴 Poor | < 0.1 |
+| INP | 472ms | 🔴 Poor | < 200ms |
+| Page Size | 9MB | 🔴 Poor | < 2MB |
+
+**Issues**:
+- Layout shift from missing image dimensions
+- Slow interactions from heavy re-renders
+- Huge bundle size from unoptimized assets
+
+## Recurring Patterns
+
+### Consistency Issues (Across Both Pages)
+
+| Pattern | AdminPanel | SalesInbox | Impact |
+|---------|-----------|------------|--------|
+| Hardcoded colors | ✅ Yes | ✅ Yes | 🔴 Critical |
+| Missing CSS variables | ✅ Yes | ✅ Yes | 🔴 Critical |
+| Undefined utility classes | ⚪ No | ✅ Yes (`custom-scrollbar`) | 🟠 High |
+| Inconsistent empty states | ✅ Yes | ✅ Yes | 🟡 Medium |
+
+### UX Issues (Across Both Pages)
+
+| Pattern | AdminPanel | SalesInbox | Impact |
+|---------|-----------|------------|--------|
+| No loading skeletons | ✅ Yes | ⚪ No | 🟠 High |
+| No keyboard navigation | ✅ Yes | ✅ Yes | 🟠 High |
+| Poor error messages | ✅ Yes | ✅ Yes | 🟡 Medium |
+| Missing ARIA labels | ✅ Yes | ✅ Yes | 🟠 High |
+| Fixed widths on responsive | ✅ Yes | ✅ Yes | 🔴 Critical |
+
+### Micro-interactions Issues (Across Both Pages)
+
+| Pattern | AdminPanel | SalesInbox | Impact |
+|---------|-----------|------------|--------|
+| No view transitions | ✅ Yes | ✅ Yes | 🟡 Medium |
+| Abrupt state changes | ✅ Yes | ✅ Yes | 🟡 Medium |
+| Missing hover animations | ⚪ Partial | ✅ Yes | ⚪ Low |
+| No scroll indicators | ✅ Yes | ✅ Yes | 🟠 High |
+
+## Positive Highlights
+
+Despite the issues, the application demonstrates strong product thinking:
+
+### AdminPanel
+- ✅ Smart task prioritization (G4/G5 hot leads)
+- ✅ Progress ring visualization
+- ✅ Optimistic updates for snappy UX
+- ✅ Time-based greetings
+- ✅ Clear information hierarchy
+
+### Sales Inbox
+- ✅ Sophisticated AI integration (SDR Senior agent)
+- ✅ Strategic context "Raio-X" panel
+- ✅ Dual view modes (Kanban/List)
+- ✅ Smart lead categorization
+- ✅ Keyboard shortcut hints (Ctrl+Enter)
+
+## Recommended Action Plan
+
+### 🔴 Phase 1: Foundation (Week 1) - CRITICAL
+
+**Goal**: Establish design system and fix breaking issues
+
+1. **Design System Decision**
+   - [ ] Stakeholder meeting: Dark theme vs Light theme
+   - [ ] Create `DESIGN_SYSTEM.md` documenting decision
+   - [ ] Update `tailwind.config.js` with unified theme tokens
+   - [ ] Mark `PostsPage.css` as deprecated
+
+2. **Critical Fixes**
+   - [ ] Replace `window.location.href` with `navigate()` in AdminPanel
+   - [ ] Fix responsive layouts (make sidebars flexible width)
+   - [ ] Define `.custom-scrollbar` in `index.css`
+   - [ ] Fix AI race condition in SalesInbox
+
+3. **Quick Wins**
+   - [ ] Add loading skeletons to AdminPanel
+   - [ ] Improve error messages (network vs auth vs validation)
+
+**Deliverables**:
+- `DESIGN_SYSTEM.md`
+- Updated `tailwind.config.js`
+- 4 critical bugs fixed
+
+---
+
+### 🟠 Phase 2: Accessibility & UX (Week 2)
+
+**Goal**: Make application usable and accessible
+
+1. **Keyboard Navigation**
+   - [ ] AdminPanel: Tab order, focus states, shortcuts
+   - [ ] SalesInbox: Escape/Tab/Arrows, focus indicators
+   - [ ] Document keyboard shortcuts in help modal
+
+2. **ARIA & Accessibility**
+   - [ ] Add `aria-label` to all icon buttons
+   - [ ] Add `aria-pressed` to toggle buttons
+   - [ ] Ensure color contrast meets WCAG AA
+   - [ ] Add focus-visible outlines
+
+3. **Visual Feedback**
+   - [ ] Add scroll indicators to horizontal scrollers
+   - [ ] Improve hover states (AdminPanel radar cards)
+   - [ ] Add empty state CTAs
+   - [ ] Reposition toasts (top-right corner)
+
+**Deliverables**:
+- WCAG AA compliance report
+- Keyboard navigation documentation
+- 12+ issues resolved
+
+---
+
+### 🟡 Phase 3: Polish & Performance (Week 3)
+
+**Goal**: Create delightful experience
+
+1. **Micro-interactions**
+   - [ ] Add view mode transitions (fade/slide)
+   - [ ] Animate stats counter updates
+   - [ ] Add stagger to multi-card animations
+   - [ ] Smooth ProgressRing color transition
+
+2. **Performance Optimization**
+   - [ ] Image optimization (reduce 9MB page size)
+   - [ ] Add width/height to images (fix CLS)
+   - [ ] Lazy load off-screen content
+   - [ ] React.memo() for heavy components
+   - [ ] Code splitting for large pages
+
+3. **Refinements**
+   - [ ] Auto-resize textarea
+   - [ ] Scroll-to-bottom in chat
+   - [ ] Undo mechanism for actions
+   - [ ] Timezone-aware timestamps
+
+**Deliverables**:
+- Lighthouse score > 90
+- CLS < 0.1, INP < 200ms
+- Page size < 2MB
+- All animations smooth (60fps)
+
+---
+
+## Metrics & Success Criteria
+
+### Design System Unification
+- ✅ 100% of pages use Tailwind theme tokens (no hardcoded colors)
+- ✅ 0 conflicting CSS variable declarations
+- ✅ Design system documented and followed by all developers
+
+### Accessibility
+- ✅ WCAG AA compliance on all reviewed pages
+- ✅ Keyboard navigation works for all primary flows
+- ✅ Screen reader tested and functional
+
+### Performance
+- ✅ LCP < 2.5s
+- ✅ CLS < 0.1
+- ✅ INP < 200ms
+- ✅ Page size < 2MB
+
+### User Experience
+- ✅ Zero navigation bugs (proper SPA routing)
+- ✅ Loading states on all async operations
+- ✅ Helpful error messages (not generic)
+- ✅ Responsive on 320px to 4K screens
+
+## ROI & Impact
+
+### Developer Experience
+- **Before**: Confusion about which CSS system to use, inconsistent patterns
+- **After**: Clear design system, documented patterns, faster development
+
+### User Experience
+- **Before**: Inconsistent appearance, slow navigation, poor accessibility
+- **After**: Polished interface, snappy interactions, accessible to all users
+
+### Business Impact
+- **Before**: Users frustrated by bugs, support tickets for UI issues
+- **After**: Confident product, ready for scale, professional appearance
+
+## Next Steps
+
+1. **Immediate**: Schedule design system decision meeting with stakeholders
+2. **This Week**: Implement Phase 1 critical fixes
+3. **Week 2-3**: Execute accessibility and polish improvements
+4. **Week 4**: Full QA testing and user acceptance
+
+## Appendices
+
+- Detailed review: [AdminPanel](./.kombai/resources/design-review-adminpanel-1740054000.md)
+- Detailed review: [Sales Inbox](./.kombai/resources/design-review-salesinbox-1740054100.md)
+- Design system proposal: [To be created]
+- Accessibility audit: [To be created in Phase 2]
+
+```
+
+## File: .kombai\resources\design-review-salesinbox-1740054100.md
+```md
+# Design Review Results: Sales Inbox (Inbox Inteligente)
+
+**Review Date**: February 20, 2026
+**Route**: `/sales/inbox`
+**Focus Areas**: UX/Usability, Micro-interactions/Motion, Consistency
+
+## Summary
+
+The Sales Inbox serves as the primary communication hub for managing lead conversations with kanban and list views, AI-powered reply generation, and strategic context panels. The review identified **17 issues** across UX/Usability (9), Micro-interactions (3), and Consistency (5). Critical issues include poor mobile responsiveness with hardcoded widths, inconsistent dark theme implementation, and missing keyboard shortcuts. The page shows significant effort in AI integration but suffers from layout inflexibility and accessibility gaps.
+
+## Issues
+
+| # | Issue | Criticality | Category | Location |
+|---|-------|-------------|----------|----------|
+| 1 | Hardcoded fixed widths (`w-80`) on sidebars break layout on tablet/small desktop screens (768-1280px) - no responsive breakpoints | 🔴 Critical | UX/Usability | `src/pages/SalesInboxPage.jsx:502`, `src/pages/SalesInboxPage.jsx:640` |
+| 2 | Dark theme uses inconsistent color values - mixing `bg-[#0d0d0d]`, `bg-black/40`, and `bg-[#111111]` instead of CSS variables or Tailwind theme tokens | 🔴 Critical | Consistency | `src/pages/SalesInboxPage.jsx:502-791` |
+| 3 | Lead list scrollbar has `custom-scrollbar` class but class is undefined in stylesheets, causing default ugly scrollbar | 🟠 High | Consistency | `src/pages/SalesInboxPage.jsx:510`, global CSS |
+| 4 | No keyboard shortcuts despite Ctrl+Enter hint in placeholder - missing Escape to clear, Tab navigation, Arrow keys for lead selection | 🟠 High | UX/Usability | `src/pages/SalesInboxPage.jsx:603-608` |
+| 5 | AI suggestion generation uses 5-second `setTimeout` with no cancel mechanism - if user switches leads, orphaned request updates wrong lead | 🟠 High | UX/Usability | `src/pages/SalesInboxPage.jsx:342-364` |
+| 6 | Kanban view horizontal scroll has no scroll indicators or snap behavior - users unaware of hidden columns on smaller screens | 🟠 High | UX/Usability | `src/pages/SalesInboxPage.jsx:429-495` |
+| 7 | View mode toggle buttons lack ARIA labels and keyboard focus indicators for accessibility | 🟠 High | UX/Usability | `src/pages/SalesInboxPage.jsx:411-424` |
+| 8 | Search input on dark background has light text (`text-white`) but uses `bg-black/40` making it hard to read when empty | 🟡 Medium | UX/Usability | `src/pages/SalesInboxPage.jsx:394-409` |
+| 9 | Message send button shows generic error "Tente novamente" with no specific guidance (network vs validation vs auth) | 🟡 Medium | UX/Usability | `src/pages/SalesInboxPage.jsx:258-260`, `src/pages/SalesInboxPage.jsx:285-287` |
+| 10 | Empty state in chat shows icon but no actionable CTA - could offer "Start conversation" or "Generate icebreaker" button | 🟡 Medium | UX/Usability | `src/pages/SalesInboxPage.jsx:573-577` |
+| 11 | Toast notification appears over input area potentially obscuring user's typing - should be top-right corner instead | 🟡 Medium | UX/Usability | `src/pages/SalesInboxPage.jsx:621-628` |
+| 12 | No transition animation when switching between kanban and list view - abrupt content swap | 🟡 Medium | Micro-interactions | `src/pages/SalesInboxPage.jsx:428-794` |
+| 13 | "Usar no Chat" button immediately replaces input text with no undo - should show confirmation or make reversible | ⚪ Low | UX/Usability | `src/pages/SalesInboxPage.jsx:742-751` |
+| 14 | Lead cards in list use exact same hover state for active and inactive - only border color differs, needs stronger visual differentiation | ⚪ Low | Micro-interactions | `src/pages/SalesInboxPage.jsx:514-537` |
+| 15 | Textarea auto-resize not implemented - fixed `rows="1"` forces single line, but messages can be long requiring manual newlines | ⚪ Low | UX/Usability | `src/pages/SalesInboxPage.jsx:596-609` |
+| 16 | Copy to clipboard (line 293) has success feedback via `copiedIdx` state but feature appears unused in rendered UI | ⚪ Low | Consistency | `src/pages/SalesInboxPage.jsx:292-296` |
+| 17 | Message timestamps use `toLocaleString()` without timezone awareness - may confuse international users | ⚪ Low | UX/Usability | `src/pages/SalesInboxPage.jsx:587` |
+| 18 | No scroll-to-bottom button in chat when new messages arrive - users must manually scroll in long conversations | ⚪ Low | Micro-interactions | `src/pages/SalesInboxPage.jsx:570-591` |
+| 19 | AI reasoning display only shows if `generatedReasoning` exists but API may not always return it - no fallback message | 🟡 Medium | Consistency | `src/pages/SalesInboxPage.jsx:712-720` |
+
+## Criticality Legend
+- 🔴 **Critical**: Breaks functionality or violates accessibility standards
+- 🟠 **High**: Significantly impacts user experience or design quality
+- 🟡 **Medium**: Noticeable issue that should be addressed
+- ⚪ **Low**: Nice-to-have improvement
+
+## Detailed Analysis by Category
+
+### UX/Usability (9 issues)
+
+**Layout & Responsiveness:**
+- Fixed sidebar widths (#1) break the 3-column layout on screens between 768-1280px
+- Sidebars should use flexible widths: `w-80 lg:w-96 xl:w-80` or `min-w-[280px] max-w-[320px]`
+- No mobile layout - entire page likely unusable on phones
+
+**Interaction Patterns:**
+- Keyboard navigation severely limited (#4) - only Ctrl+Enter works, no Escape, Tab, or Arrow keys
+- Search UX poor (#8) - light text on semi-transparent background hard to read
+- No actionable empty states (#10) - missed opportunity to guide user actions
+
+**Error Handling:**
+- Generic error messages (#9) don't help user understand what went wrong
+- AI timeout race condition (#5) - switching leads during 5s delay causes wrong lead update
+
+**Feedback & Affordances:**
+- Kanban scroll not discoverable (#6)
+- Toast placement blocks input (#11)
+- No message history navigation (#18)
+
+### Micro-interactions/Motion (3 issues)
+
+**Transitions:**
+- View mode switch is jarring (#12) - no fade/slide animation between kanban and list
+- Lead hover states too subtle (#14) - users can't easily tell which lead is selected
+- Missing chat scroll animation (#18)
+
+### Consistency (5 issues)
+
+**Design Token Usage:**
+- Dark theme inconsistency (#2) - three different black values used (`#0d0d0d`, `#111111`, `rgba(0,0,0,0.4)`)
+- Should define: `--bg-surface-dark: #0d0d0d`, `--bg-surface-darker: #111111`, `--bg-overlay: rgba(0,0,0,0.4)`
+- Missing scrollbar styles (#3) - `custom-scrollbar` class referenced but undefined
+
+**Component Patterns:**
+- Copy feature implemented but not exposed to user (#16)
+- AI reasoning sometimes missing with no explanation (#19)
+
+## Recommendations by Priority
+
+### 🔴 Critical (Must Fix)
+
+1. **Fix Responsive Layout** (#1)
+   ```jsx
+   // Change from:
+   <div className="w-80 flex flex-col...">
+   
+   // To:
+   <div className="hidden lg:flex lg:w-72 xl:w-80 flex-col...">
+   // Add mobile/tablet handling:
+   // - On mobile: Full-screen modal for lead details
+   // - On tablet: Collapsible sidebar or single column view
+   ```
+
+2. **Unify Dark Theme Colors** (#2)
+   - Add to `tailwind.config.js`:
+   ```js
+   colors: {
+     'surface-dark': '#0d0d0d',
+     'surface-darker': '#111111',
+     'overlay-dark': 'rgba(0, 0, 0, 0.4)',
+   }
+   ```
+   - Replace all hardcoded hex values with tokens
+
+### 🟠 High Priority
+
+3. **Implement Keyboard Navigation** (#4)
+   ```jsx
+   // Add keyboard event handler at component level:
+   useEffect(() => {
+     const handleKeyPress = (e) => {
+       if (e.key === 'Escape') { setSearchTerm(''); setActiveLead(null); }
+       if (e.key === 'ArrowDown' && !activeLead) selectNextLead();
+       if (e.key === 'ArrowUp' && !activeLead) selectPrevLead();
+       // etc.
+     };
+     window.addEventListener('keydown', handleKeyPress);
+     return () => window.removeEventListener('keydown', handleKeyPress);
+   }, [/* dependencies */]);
+   ```
+
+4. **Fix AI Request Race Condition** (#5)
+   ```jsx
+   // Use useRef to track active lead ID:
+   const activeLeadIdRef = useRef(null);
+   useEffect(() => { activeLeadIdRef.current = activeLead?.id; }, [activeLead]);
+   
+   // In setTimeout callback:
+   if (activeLeadIdRef.current !== leadId) {
+     console.log('Lead changed, ignoring stale update');
+     return;
+   }
+   ```
+
+5. **Add Kanban Scroll Indicators** (#6)
+   - Add gradient overlays at left/right edges
+   - Add arrow buttons for manual navigation
+   - Consider horizontal snap scrolling: `scroll-snap-type: x mandatory`
+
+6. **Define Custom Scrollbar Styles** (#3)
+   ```css
+   /* Add to index.css */
+   .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+   .custom-scrollbar::-webkit-scrollbar-track { background: #1a1a1a; }
+   .custom-scrollbar::-webkit-scrollbar-thumb { 
+     background: #333; 
+     border-radius: 3px; 
+   }
+   .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #ff4d00; }
+   ```
+
+7. **Add ARIA Labels** (#7)
+   ```jsx
+   <button
+     aria-label="Switch to kanban view"
+     aria-pressed={viewMode === 'kanban'}
+     // ... rest of props
+   >
+   ```
+
+### 🟡 Medium Priority
+
+8. **Improve Search Input Contrast** (#8)
+   - Use `bg-white/10` instead of `bg-black/40`
+   - Or add subtle inner shadow: `shadow-inner`
+
+9. **Better Error Messages** (#9)
+   ```jsx
+   catch (err) {
+     const errorMsg = err.message.includes('network')
+       ? 'Erro de conexão. Verifique sua internet.'
+       : err.message.includes('auth')
+       ? 'Sessão expirada. Faça login novamente.'
+       : 'Erro ao enviar mensagem. Tente novamente.';
+     showToast(errorMsg, 'error');
+   }
+   ```
+
+10. **Add Empty State CTA** (#10)
+    ```jsx
+    <div className="text-center text-gray-500 text-sm py-10">
+      <MessageSquare size={24} className="opacity-20 mx-auto mb-3" />
+      <p>Nenhuma mensagem trocada ainda.</p>
+      <button 
+        onClick={generateAISuggestion}
+        className="mt-4 px-4 py-2 bg-primary rounded-lg text-white text-sm"
+      >
+        Gerar Icebreaker
+      </button>
+    </div>
+    ```
+
+11. **Reposition Toast** (#11)
+    ```jsx
+    // Change from bottom-20 to top-4
+    <div className="absolute top-4 right-4 ...">
+    ```
+
+12. **Add View Transition** (#12)
+    ```jsx
+    <div className={`transition-opacity duration-300 ${
+      viewMode === 'kanban' ? 'opacity-100' : 'opacity-0 hidden'
+    }`}>
+      {/* Kanban content */}
+    </div>
+    ```
+
+13. **Add AI Reasoning Fallback** (#19)
+    ```jsx
+    {generatedReasoning ? (
+      <div className="flex gap-2 text-gray-400 text-xs">
+        <span className="text-primary/60">💡</span>
+        <p>{generatedReasoning}</p>
+      </div>
+    ) : sdrSeniorGenerated && (
+      <p className="text-gray-500 text-xs italic">
+        Sugestão gerada com base no contexto do lead.
+      </p>
+    )}
+    ```
+
+### ⚪ Low Priority
+
+14. **Add Undo for "Usar no Chat"** (#13)
+    - Store previous message value
+    - Show small "Undo" button for 3 seconds after replacement
+
+15. **Improve Lead Selection Visual** (#14)
+    ```jsx
+    className={`... ${activeLead?.id === lead.id
+      ? 'bg-primary/20 border-primary/50 scale-[1.02] shadow-lg shadow-primary/20'
+      : 'border-transparent hover:bg-white/10 hover:border-white/10 hover:scale-[1.01]'
+    }`}
+    ```
+
+16. **Auto-resize Textarea** (#15)
+    ```jsx
+    const textareaRef = useRef(null);
+    useEffect(() => {
+      if (textareaRef.current) {
+        textareaRef.current.style.height = 'auto';
+        textareaRef.current.style.height = textareaRef.current.scrollHeight + 'px';
+      }
+    }, [newMessage]);
+    ```
+
+17. **Add Scroll to Bottom Button** (#18)
+    - Show floating button when user scrolls up
+    - Auto-hide when at bottom
+    - Badge with unread count if new messages arrive
+
+18. **Add Timezone to Timestamps** (#17)
+    ```jsx
+    {new Date(msg.interaction_date).toLocaleString('pt-BR', { 
+      hour: '2-digit', 
+      minute: '2-digit',
+      timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone 
+    })}
+    ```
+
+## Additional Observations
+
+### Performance Concerns
+
+From browser metrics:
+- **CLS: 0.273** - High cumulative layout shift indicates layout instability
+- **INP: 472ms** - Interaction to Next Paint is slow (should be < 200ms)
+- **Page Size: 9MB** - Very large, likely from unoptimized assets
+
+**Recommendations:**
+- Add `width`/`height` to images to prevent layout shift
+- Lazy load off-screen kanban columns
+- Optimize/compress images and fonts
+- Use React.memo() for lead cards to prevent unnecessary re-renders
+
+### Console Errors
+
+Multiple 400 errors from Supabase tasks query - likely schema mismatch:
+```
+Failed: /rest/v1/tasks?select=id,leads!inner(client_id)&status=eq.DONE...
+```
+
+This suggests the relationship between `tasks` and `leads` tables may have configuration issues. Check:
+- Foreign key constraints
+- RLS policies
+- Join syntax in Supabase query
+
+### Positive Aspects
+
+- **Excellent AI Integration**: SDR Senior agent with reasoning display is sophisticated
+- **Good Information Architecture**: 3-column layout (leads/chat/context) is logical
+- **Strategic Context Card**: Showing negotiation "Raio-X" provides valuable insights
+- **Dual View Modes**: Kanban and List options serve different user preferences
+- **Smart Categorization**: Lead sorting by priority/response status is thoughtful
+
+### Questions for Product Team
+
+- Should mobile users have full access to Sales Inbox or is it desktop-only?
+- What's the expected behavior when multiple tabs are open with Sales Inbox?
+- Should sent messages sync in real-time across users/devices?
+- Is there a character limit for LinkedIn messages that should be enforced?
+- Should old conversations auto-archive after X days of inactivity?
+
+## Next Steps
+
+**Phase 1 - Critical Fixes (Week 1)**
+- Fix responsive layout for tablet/small desktop
+- Unify dark theme color tokens
+- Fix AI race condition
+
+**Phase 2 - Accessibility & UX (Week 2)**
+- Implement keyboard navigation
+- Add ARIA labels
+- Define custom scrollbar styles
+- Improve error messaging
+
+**Phase 3 - Polish (Week 3)**
+- Add transitions and micro-interactions
+- Implement scroll indicators
+- Add empty state CTAs
+- Performance optimization
+
+```
+
 ## File: src\App.css
 ```css
 /* App.css */
@@ -15868,6 +17439,7 @@ import CampaignLeadsPage from './pages/CampaignLeadsPage'
 import SystemInfoPage from './pages/SystemInfoPage'
 import LinkedInEngagementPage from './pages/LinkedInEngagementPage'
 import MissionsPage from './pages/MissionsPage'
+import ContentLibraryPage from './pages/ContentLibraryPage'
 import AdminLayout from './components/AdminLayout'
 
 // Client Portal New (Ideas/Insights)
@@ -16031,6 +17603,7 @@ function App() {
                 <Route path="/system-info" element={<SystemInfoPage />} />
                 <Route path="/engagement" element={<LinkedInEngagementPage />} />
                 <Route path="/missions" element={<MissionsPage />} />
+                <Route path="/content-library" element={<ContentLibraryPage />} />
               </Route>
 
               {/* Fallback */}
@@ -16540,52 +18113,37 @@ import {
     LogOut,
     Plus,
     Lightbulb,
-    Menu, // Added
-    X, // Added
-    Briefcase, // Added
-    Database, // Added
+    Menu,
+    X,
     ChevronDown,
     ChevronRight,
-    MessageCircle, // Added
-    Target, // Added
-    Flame, // Cockpit de Vendas
-    Info,
-    ThumbsUp
+    MessageCircle,
+    Target,
+    Flame,
+    ThumbsUp,
+    Library
 } from 'lucide-react'
 import CreatePostModal from './CreatePostModal'
 import ClientSelector from './ClientSelector'
-// Reusing AdminPanel styles as requested/implied for consistency without full CSS refactor
 import '../pages/AdminPanel.css'
 
 import { useLanguage } from '../contexts/LanguageContext'
 
 const AdminLayout = () => {
     const { signOut } = useAuth()
-    const { t, language, setLanguage } = useLanguage()
+    const { t } = useLanguage()
     const [showModal, setShowModal] = useState(false)
-    const [isSidebarOpen, setSidebarOpen] = useState(false) // Mobile State
+    const [isSidebarOpen, setSidebarOpen] = useState(false)
     const location = useLocation()
 
-    const isActive = (path) => {
-        return location.pathname === path ? 'nav-item active' : 'nav-item'
-    }
-
+    const isActive = (path) => location.pathname === path ? 'nav-item active' : 'nav-item'
     const toggleSidebar = () => setSidebarOpen(!isSidebarOpen)
 
-    const [expandedGroups, setExpandedGroups] = useState({
-        creative: true,
-        sales: true
-    })
-
-    const toggleGroup = (group) => {
-        setExpandedGroups(prev => ({ ...prev, [group]: !prev[group] }))
-    }
-
-
+    const [showCreative, setShowCreative] = useState(false)
 
     return (
         <div className="dashboard-layout">
-            {/* MOBILE HEADER (VISIBLE ONLY ON MOBILE) */}
+            {/* MOBILE HEADER */}
             <div className="mobile-header">
                 <button onClick={toggleSidebar} className="menu-btn">
                     <Menu size={24} />
@@ -16595,89 +18153,77 @@ const AdminLayout = () => {
 
             {/* OVERLAY FOR MOBILE */}
             {isSidebarOpen && (
-                <div
-                    className="sidebar-overlay"
-                    onClick={() => setSidebarOpen(false)}
-                />
+                <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)} />
             )}
 
-            {/* GLOBAL SIDEBAR */}
+            {/* SIDEBAR */}
             <aside className={`sidebar ${isSidebarOpen ? 'open' : ''}`}>
-
-                {/* Mobile Close Button */}
-                {/* Sidebar Close Button Removed as requested */}
-
-
                 <div className="logo-area">
                     <img src="/logo-linklead.png" alt="Link&Lead" style={{ maxWidth: '160px', height: 'auto' }} />
                 </div>
-                <nav className="nav-menu" style={{ gap: '0.5rem' }}>
 
-                    {/* GROUP 1: Gestão Criativa */}
-                    <div className="nav-group">
-                        <button
-                            onClick={() => toggleGroup('creative')}
-                            style={{
-                                width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                                background: 'transparent', border: 'none', color: '#94a3b8',
-                                padding: '0.5rem 1.5rem', cursor: 'pointer', fontSize: '0.75rem', fontWeight: '700', letterSpacing: '0.05em'
-                            }}
-                        >
-                            GESTÃO CRIATIVA
-                            {expandedGroups.creative ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                        </button>
+                <nav className="nav-menu" style={{ gap: '0.25rem' }}>
 
-                        {expandedGroups.creative && (
-                            <div className="nav-group-items" style={{ animation: 'fadeIn 0.2s' }}>
-                                <Link to="/" className={isActive('/')}>
-                                    <LayoutDashboard size={20} /> {t('dashboard')}
-                                </Link>
-                                <Link to="/posts" className={isActive('/posts')}>
-                                    <FileText size={20} /> {t('posts')}
-                                </Link>
-                                <Link to="/ideas" className={isActive('/ideas')}>
-                                    <Lightbulb size={20} /> {t('ideas')}
-                                </Link>
-                            </div>
-                        )}
+                    {/* ═══ PRIMARY: Máquina de Vendas (always visible, no toggle) ═══ */}
+                    <div className="px-6 py-2 text-[10px] font-extrabold tracking-widest text-primary uppercase opacity-70">
+                        Máquina de Vendas
                     </div>
 
-                    {/* GROUP 2: Máquina de Vendas */}
-                    <div className="nav-group">
+                    <div className="nav-group-items">
+                        <Link to="/" className={isActive('/')}>
+                            <LayoutDashboard size={18} /> Visão Geral
+                        </Link>
+                        <Link to="/campaigns" className={isActive('/campaigns')}>
+                            <Target size={18} /> Campanhas
+                        </Link>
+                        <Link to="/missions" className={isActive('/missions')}>
+                            <Flame size={18} /> Cockpit de Vendas
+                        </Link>
+                        <Link to="/sales/inbox" className={isActive('/sales/inbox')}>
+                            <MessageCircle size={18} /> Inbox Inteligente
+                        </Link>
+                        <Link to="/clients" className={isActive('/clients')}>
+                            <Users size={18} /> Clientes
+                        </Link>
+                        <Link to="/engagement" className={isActive('/engagement')}>
+                            <ThumbsUp size={18} /> Engajamento
+                        </Link>
+                    </div>
+
+                    {/* ═══ SECONDARY: Gestão Criativa (collapsible, subtle) ═══ */}
+                    <div style={{ marginTop: '1.5rem' }}>
                         <button
-                            onClick={() => toggleGroup('sales')}
+                            onClick={() => setShowCreative(prev => !prev)}
                             style={{
-                                width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                                background: 'transparent', border: 'none', color: '#94a3b8',
-                                padding: '0.5rem 1.5rem', marginTop: '1rem', cursor: 'pointer', fontSize: '0.75rem', fontWeight: '700', letterSpacing: '0.05em'
+                                width: '100%',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                background: 'transparent',
+                                border: 'none',
+                                color: '#a1a1aa',
+                                padding: '0.4rem 1.5rem',
+                                cursor: 'pointer',
+                                fontSize: '0.6rem',
+                                fontWeight: '700',
+                                letterSpacing: '0.08em',
+                                textTransform: 'uppercase'
                             }}
                         >
-                            MÁQUINA DE VENDAS
-                            {expandedGroups.sales ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                            Conteúdo
+                            {showCreative ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
                         </button>
 
-                        {expandedGroups.sales && (
+                        {showCreative && (
                             <div className="nav-group-items" style={{ animation: 'fadeIn 0.2s' }}>
-                                <Link to="/campaigns" className={isActive('/campaigns')}>
-                                    <Target size={20} /> Campanhas & Prospecção
+                                <Link to="/posts" className={isActive('/posts')}>
+                                    <FileText size={18} /> {t('posts')}
                                 </Link>
-                                <Link to="/missions" className={isActive('/missions')}>
-                                    <Flame size={20} /> Cockpit de Vendas
+                                <Link to="/ideas" className={isActive('/ideas')}>
+                                    <Lightbulb size={18} /> {t('ideas')}
                                 </Link>
-                                <Link to="/sales/inbox" className={isActive('/sales/inbox')}>
-                                    <div style={{ position: 'relative' }}>
-                                        <MessageCircle size={20} />
-                                    </div>
-                                    Inbox Inteligente
-                                </Link>
-                                <Link to="/clients" className={isActive('/clients')}>
-                                    <Users size={20} /> Gerenciar Clientes
-                                </Link>
-                                <Link to="/engagement" className={isActive('/engagement')}>
-                                    <ThumbsUp size={20} /> Engajamento LinkedIn
-                                </Link>
-                                <Link to="/system-info" className={isActive('/system-info')}>
-                                    <Info size={20} /> Informações do Sistema
+                                <Link to="/content-library" className={isActive('/content-library')}>
+                                    <Library size={18} /> Biblioteca
                                 </Link>
                             </div>
                         )}
@@ -16687,26 +18233,21 @@ const AdminLayout = () => {
 
                     <button
                         type="button"
-                        onClick={(e) => {
-                            e.preventDefault()
-                            signOut()
-                        }}
+                        onClick={(e) => { e.preventDefault(); signOut() }}
                         className="nav-item"
                         style={{
-                            marginTop: '0',
                             background: 'transparent',
                             border: 'none',
                             cursor: 'pointer',
                             color: '#ef4444',
                             width: '100%',
-                            justifyContent: 'flex-start',
-                            position: 'relative',
-                            zIndex: 50
+                            justifyContent: 'flex-start'
                         }}
                     >
-                        <LogOut size={20} /> {t('logout')}
+                        <LogOut size={18} /> {t('logout')}
                     </button>
                 </nav>
+
                 <div className="sidebar-footer">
                     <button className="btn-new-post" onClick={() => setShowModal(true)}>
                         <Plus size={18} /> {t('newPost')}
@@ -16714,20 +18255,13 @@ const AdminLayout = () => {
                 </div>
             </aside>
 
-            {/* MAIN CONTENT AREA */}
+            {/* MAIN CONTENT */}
             <main className="main-content">
-                {/* Sales Context Header */}
-                {(location.pathname.startsWith('/sales') || location.pathname.startsWith('/leads') || location.pathname.startsWith('/campaigns') || location.pathname.startsWith('/engagement') || location.pathname.startsWith('/missions')) && (
-                    <div className="context-header" style={{
-                        padding: '0.75rem 1.5rem',
-                        background: 'rgba(255, 255, 255, 0.03)',
-                        borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between'
-                    }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                            <span style={{ fontSize: '0.9rem', color: '#5F5F5F' }}>Contexto:</span>
+                {/* Client Context Header for sales-related pages */}
+                {(location.pathname === '/' || location.pathname.startsWith('/sales') || location.pathname.startsWith('/leads') || location.pathname.startsWith('/campaigns') || location.pathname.startsWith('/engagement') || location.pathname.startsWith('/missions')) && (
+                    <div className="px-6 py-3 bg-white/5 border-b border-white/10 flex items-center justify-between backdrop-blur-md">
+                        <div className="flex items-center gap-4">
+                            <span className="text-sm text-text-muted font-medium">Contexto:</span>
                             <ClientSelector />
                         </div>
                     </div>
@@ -16736,28 +18270,21 @@ const AdminLayout = () => {
             </main>
 
             {/* GLOBAL CREATE MODAL */}
-            {
-                showModal && (
-                    <CreatePostModal
-                        onClose={() => setShowModal(false)}
-                        onSuccess={() => {
-                            // Ideally we trigger a refresh here. 
-                            // Since we are in Layout, we might need a context or simple page reload for now.
-                            // Or we pass a context method. 
-                            // For simplicity in this request (focus on Layout), I'll just close it.
-                            // The user can refresh individual pages or we rely on React Query (not installed) or Realtime (installed).
-                            // I'll force a soft reload of the current view if possible, or just close.
-                            setShowModal(false)
-                            window.location.reload() // Bruteforce refresh to ensure lists update on all pages
-                        }}
-                    />
-                )
-            }
-        </div >
+            {showModal && (
+                <CreatePostModal
+                    onClose={() => setShowModal(false)}
+                    onSuccess={() => {
+                        setShowModal(false)
+                        window.location.reload()
+                    }}
+                />
+            )}
+        </div>
     )
 }
 
 export default AdminLayout
+
 
 ```
 
@@ -18084,6 +19611,160 @@ export default ErrorBoundary;
 
 ```
 
+## File: src\components\HistorySyncModal.jsx
+```javascript
+import React from 'react'
+import { X, History, CheckCircle2, AlertCircle, Loader2, Ban } from 'lucide-react'
+
+const HistorySyncModal = ({
+    isOpen,
+    onClose,
+    onCancel,
+    syncProgress = null, // { status, current, total, failures }
+}) => {
+    if (!isOpen) return null
+
+    const { status = 'idle', current = 0, total = 0, failures = 0 } = syncProgress || {}
+    const isRunning = status === 'running'
+    const isCompleted = status === 'completed'
+    const isCancelled = status === 'cancelled'
+    const isError = status === 'error'
+    const isDone = isCompleted || isCancelled || isError
+
+    const progressPercent = total > 0 ? Math.round((current / total) * 100) : 0
+    const estimateMinutes = Math.ceil(total * 2 / 60)
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={isDone ? onClose : undefined} />
+
+            <div className="relative z-10 w-full max-w-md bg-white rounded-2xl shadow-2xl border border-slate-100 overflow-hidden">
+                {/* Header */}
+                <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-gradient-to-r from-amber-50 to-orange-50">
+                    <div className="flex items-center gap-3">
+                        <div className="p-2 bg-amber-100 rounded-lg">
+                            <History size={20} className={`text-amber-600 ${isRunning ? 'animate-spin' : ''}`} style={{ animationDuration: '3s' }} />
+                        </div>
+                        <div>
+                            <h2 className="font-bold text-slate-800 text-sm">O Arqueólogo</h2>
+                            <p className="text-xs text-slate-500">Importação de histórico de mensagens</p>
+                        </div>
+                    </div>
+                    {isDone && (
+                        <button onClick={onClose} className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors" aria-label="Fechar">
+                            <X size={16} />
+                        </button>
+                    )}
+                </div>
+
+                {/* Body */}
+                <div className="px-6 py-5 space-y-4">
+                    {/* Status message */}
+                    {isRunning && (
+                        <div className="flex items-start gap-3">
+                            <Loader2 size={20} className="animate-spin text-amber-500 mt-0.5 shrink-0" />
+                            <div>
+                                <p className="font-semibold text-slate-800 text-sm">
+                                    Processando lead {current} de {total}...
+                                </p>
+                                <p className="text-slate-500 text-xs mt-1">
+                                    Cada lead leva ~2 segundos. Estimativa total: ~{estimateMinutes} minuto{estimateMinutes > 1 ? 's' : ''}.
+                                </p>
+                            </div>
+                        </div>
+                    )}
+
+                    {isCompleted && (
+                        <div className="flex items-start gap-3">
+                            <CheckCircle2 size={20} className="text-emerald-500 mt-0.5 shrink-0" />
+                            <div>
+                                <p className="font-semibold text-slate-800 text-sm">
+                                    ✅ Importação concluída — {total} leads enviados para processamento
+                                </p>
+                                {failures > 0 && (
+                                    <p className="text-amber-600 text-xs mt-1">
+                                        ⚠️ {failures} lead{failures > 1 ? 's' : ''} falharam no envio (registrado no console).
+                                    </p>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                    {isCancelled && (
+                        <div className="flex items-start gap-3">
+                            <Ban size={20} className="text-slate-400 mt-0.5 shrink-0" />
+                            <div>
+                                <p className="font-semibold text-slate-800 text-sm">
+                                    Importação cancelada pelo usuário
+                                </p>
+                                <p className="text-slate-500 text-xs mt-1">
+                                    {current} de {total} leads foram enviados antes do cancelamento.
+                                </p>
+                            </div>
+                        </div>
+                    )}
+
+                    {isError && (
+                        <div className="flex items-start gap-3">
+                            <AlertCircle size={20} className="text-red-500 mt-0.5 shrink-0" />
+                            <p className="font-semibold text-red-700 text-sm">
+                                Erro durante a importação — tente novamente.
+                            </p>
+                        </div>
+                    )}
+
+                    {/* Progress bar */}
+                    {(isRunning || isDone) && total > 0 && (
+                        <div>
+                            <div className="flex justify-between text-[11px] text-slate-500 mb-1.5 font-medium">
+                                <span>{current} / {total} leads</span>
+                                <span>{progressPercent}%</span>
+                            </div>
+                            <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden">
+                                <div
+                                    className={`h-full rounded-full transition-all duration-500 ease-out ${isCompleted ? 'bg-emerald-500' :
+                                            isCancelled ? 'bg-slate-400' :
+                                                isError ? 'bg-red-400' :
+                                                    'bg-amber-500'
+                                        }`}
+                                    style={{ width: `${progressPercent}%` }}
+                                />
+                            </div>
+                            {failures > 0 && isRunning && (
+                                <p className="text-[11px] text-amber-600 mt-1">{failures} falha{failures > 1 ? 's' : ''} até agora</p>
+                            )}
+                        </div>
+                    )}
+                </div>
+
+                {/* Footer */}
+                <div className="px-6 pb-5 flex gap-3">
+                    {isRunning && (
+                        <button
+                            onClick={onCancel}
+                            className="w-full py-2.5 rounded-xl border border-red-200 text-red-600 hover:bg-red-50 font-semibold text-sm transition-colors"
+                        >
+                            Cancelar importação
+                        </button>
+                    )}
+                    {isDone && (
+                        <button
+                            onClick={onClose}
+                            className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-semibold text-sm transition-colors"
+                        >
+                            Fechar
+                        </button>
+                    )}
+                </div>
+            </div>
+        </div>
+    )
+}
+
+export default HistorySyncModal
+
+```
+
 ## File: src\components\ImportContactsModal.jsx
 ```javascript
 import React, { useState, useEffect } from 'react'
@@ -18959,6 +20640,7 @@ export default MissionCard
 ## File: src\components\SalesCockpit.jsx
 ```javascript
 import React, { useState, useEffect, useMemo, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { supabase } from '../services/supabaseClient'
 import { useClientSelection } from '../contexts/ClientSelectionContext'
 import {
@@ -19070,7 +20752,7 @@ const SalesCockpit = () => {
             const [pendingResult, doneResult] = await Promise.all([
                 supabase
                     .from('tasks')
-                    .select('*, leads!inner(client_id, nome, empresa, headline, linkedin_profile_url, cadence_stage, total_interactions_count)')
+                    .select('*, leads!inner(id, client_id, nome, empresa, headline, linkedin_profile_url, cadence_stage, total_interactions_count, avatar_url)')
                     .eq('leads.client_id', selectedClientId)
                     .eq('status', 'PENDING')
                     .order('created_at', { ascending: true }),
@@ -19078,7 +20760,8 @@ const SalesCockpit = () => {
                     .from('tasks')
                     .select('id, leads!inner(client_id)', { count: 'exact' })
                     .eq('leads.client_id', selectedClientId)
-                    .eq('status', 'DONE')
+                    .eq('status', 'COMPLETED')
+                    .gte('completed_at', `${new Date().toISOString().split('T')[0]}T00:00:00`)
                     .limit(1)
             ])
 
@@ -19107,7 +20790,7 @@ const SalesCockpit = () => {
         try {
             const { error: updateError } = await supabase
                 .from('tasks')
-                .update({ status: 'DONE' })
+                .update({ status: 'COMPLETED', completed_at: new Date().toISOString() })
                 .eq('id', taskId)
 
             if (updateError) throw updateError
@@ -19123,20 +20806,24 @@ const SalesCockpit = () => {
         }
     }
 
-    const handleExecute = (linkedinUrl) => {
-        if (linkedinUrl) {
-            window.open(linkedinUrl, '_blank', 'noopener,noreferrer')
+    const navigate = useNavigate()
+
+    const handleExecute = (leadId) => {
+        if (leadId) {
+            navigate(`/sales/inbox?leadId=${leadId}`)
         }
     }
 
-    // Split by cadence_stage: G4/G5 → hot, rest → cold
+    // Split by priority: HIGH → hot, rest → cold
     const { hotTasks, coldTasks } = useMemo(() => {
         const hot = []
         const cold = []
 
         tasks.forEach(task => {
-            const stage = task.leads?.cadence_stage
-            if (HOT_STAGES.includes(stage)) {
+            const isHighPriority = task.priority === 'HIGH'
+            const isIcpHot = task.leads?.icp_score === 'A' && HOT_STAGES.includes(task.leads?.cadence_stage)
+
+            if (isHighPriority || isIcpHot) {
                 hot.push(task)
             } else {
                 cold.push(task)
@@ -19453,9 +21140,17 @@ const TaskCard = ({ task, themeKey, completing, onComplete, onExecute }) => {
         >
             {/* Row 1: Avatar + Lead Info + Stage Badge */}
             <div className="flex items-start gap-3 mb-2">
-                <div className="w-9 h-9 rounded-lg shrink-0 bg-gradient-to-br from-gray-800 to-gray-900 border border-white/[0.08] flex items-center justify-center">
-                    <span className="text-xs font-bold text-gray-300">{initial}</span>
-                </div>
+                {lead?.avatar_url ? (
+                    <img
+                        src={lead.avatar_url}
+                        alt={lead.nome || 'Lead'}
+                        className="w-9 h-9 rounded-lg shrink-0 object-cover border border-white/[0.1]"
+                    />
+                ) : (
+                    <div className="w-9 h-9 rounded-lg shrink-0 bg-gradient-to-br from-gray-800 to-gray-900 border border-white/[0.08] flex items-center justify-center">
+                        <span className="text-xs font-bold text-gray-300">{initial}</span>
+                    </div>
+                )}
                 <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-0.5">
                         <h4 className="text-sm font-semibold text-white truncate">{lead.nome || 'Lead'}</h4>
@@ -19465,7 +21160,7 @@ const TaskCard = ({ task, themeKey, completing, onComplete, onExecute }) => {
                             </span>
                         )}
                     </div>
-                    <p className="text-[11px] text-gray-500 truncate leading-tight">
+                    <p className="text-[11px] text-gray-500 leading-tight">
                         {lead.headline || ''}
                         {lead.empresa && lead.headline ? ` · ${lead.empresa}` : lead.empresa || ''}
                     </p>
@@ -19475,7 +21170,7 @@ const TaskCard = ({ task, themeKey, completing, onComplete, onExecute }) => {
             {/* Row 2: AI Instruction */}
             {task.instruction && (
                 <div className="mb-3">
-                    <p className="text-[11px] text-gray-400 leading-relaxed line-clamp-2 bg-white/[0.02] rounded-lg px-3 py-2 border border-white/[0.04]">
+                    <p className="text-[11px] text-gray-400 leading-relaxed bg-white/[0.02] rounded-lg px-3 py-2 border border-white/[0.04]">
                         <span className="mr-1">💡</span>{task.instruction}
                     </p>
                 </div>
@@ -19486,7 +21181,7 @@ const TaskCard = ({ task, themeKey, completing, onComplete, onExecute }) => {
                 {/* PRIMARY: Smart LinkedIn Action */}
                 {lead.linkedin_profile_url && (
                     <button
-                        onClick={() => onExecute(lead.linkedin_profile_url)}
+                        onClick={() => onExecute(lead?.id)}
                         className={`
                             flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-[11px] font-semibold
                             transition-all duration-200
@@ -19516,18 +21211,21 @@ const TaskCard = ({ task, themeKey, completing, onComplete, onExecute }) => {
                     onClick={() => onComplete(task.id)}
                     disabled={completing}
                     className="
-                        shrink-0 flex items-center justify-center gap-1 px-3 py-2 rounded-lg text-[11px] font-semibold
-                        bg-white/[0.04] text-gray-400 border border-white/[0.08]
-                        hover:bg-emerald-500/15 hover:text-emerald-400 hover:border-emerald-500/25
-                        transition-all duration-200
+                        shrink-0 flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-[12px] font-semibold
+                        bg-white/[0.08] text-gray-300 border border-white/[0.12]
+                        hover:bg-emerald-500/20 hover:text-emerald-400 hover:border-emerald-500/30 hover:shadow-md
+                        transition-all duration-200 shadow-sm
                         disabled:opacity-50 disabled:cursor-not-allowed
                     "
                     title="Marcar como concluída"
                 >
                     {completing ? (
-                        <Loader2 size={13} className="animate-spin" />
+                        <Loader2 size={15} className="animate-spin" />
                     ) : (
-                        <CheckCircle2 size={13} />
+                        <>
+                            <CheckCircle2 size={15} />
+                            <span>Concluir</span>
+                        </>
                     )}
                 </button>
             </div>
@@ -19647,10 +21345,48 @@ export default SchedulePostModal
 
 ```
 
+## File: src\components\Skeleton.jsx
+```javascript
+import React from 'react'
+
+export const Skeleton = ({ className }) => (
+    <div className={`animate-pulse bg-white/10 rounded-xl ${className}`} />
+)
+
+export const KpiCardSkeleton = () => (
+    <div className="bg-white rounded-2xl border border-gray-200 p-5 flex flex-col gap-3">
+        <div className="flex items-center gap-2">
+            <Skeleton className="w-4 h-4" />
+            <Skeleton className="w-24 h-3" />
+        </div>
+        <Skeleton className="w-16 h-8" />
+    </div>
+)
+
+export const HeroTaskCardSkeleton = () => (
+    <div className="bg-white rounded-2xl border border-gray-200 p-5 border-l-[4px] border-l-gray-200">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+            <div className="flex items-center gap-3 flex-1">
+                <Skeleton className="w-11 h-11 rounded-xl shrink-0" />
+                <div className="flex-1 space-y-2">
+                    <Skeleton className="w-32 h-4" />
+                    <Skeleton className="w-48 h-3" />
+                </div>
+            </div>
+            <div className="flex items-center gap-2">
+                <Skeleton className="w-24 h-10 rounded-xl" />
+                <Skeleton className="w-10 h-10 rounded-xl" />
+            </div>
+        </div>
+    </div>
+)
+
+```
+
 ## File: src\components\StrategicContextCard.jsx
 ```javascript
 import React, { useState } from 'react'
-import { ShieldAlert, Brain, Radio, Target, TrendingUp, Loader2 } from 'lucide-react'
+import { ShieldAlert, Brain, Radio, Target, TrendingUp, Loader2, Sparkles } from 'lucide-react'
 
 // Cadence level configurations
 const CADENCE_LEVELS = {
@@ -19667,7 +21403,7 @@ const getCadenceConfig = (level) => {
     return CADENCE_LEVELS[key] || CADENCE_LEVELS['G1']
 }
 
-const StrategicContextCard = ({ lead }) => {
+const StrategicContextCard = ({ lead, isIcebreaker = false }) => {
     const [showTooltip, setShowTooltip] = useState(false)
 
     if (!lead) return null
@@ -19691,11 +21427,22 @@ const StrategicContextCard = ({ lead }) => {
                     <h4 className="text-xs font-bold text-primary uppercase tracking-wider">Raio-X da Negociação</h4>
                 </div>
                 <div className="flex flex-col items-center justify-center py-6 gap-3">
-                    <Loader2 size={24} className="text-gray-500 animate-spin" />
-                    <p className="text-xs text-gray-500 text-center leading-relaxed">
-                        Aguardando Análise da IA...<br />
-                        <span className="text-gray-600">Disponível após o próximo processamento.</span>
-                    </p>
+                    {isIcebreaker ? (
+                        <>
+                            <Sparkles size={24} className="text-amber-400/70" />
+                            <p className="text-xs text-gray-400 text-center leading-relaxed">
+                                Gere o Icebreaker para ativar<br />a análise estratégica.
+                            </p>
+                        </>
+                    ) : (
+                        <>
+                            <Loader2 size={24} className="text-gray-500 animate-spin" />
+                            <p className="text-xs text-gray-500 text-center leading-relaxed">
+                                Aguardando Análise da IA...<br />
+                                <span className="text-gray-600">Disponível após o próximo processamento.</span>
+                            </p>
+                        </>
+                    )}
                 </div>
             </div>
         )
@@ -20536,268 +22283,610 @@ export function cn(...inputs) {
 
 ## File: src\pages\AdminPanel.jsx
 ```javascript
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { supabase } from '../services/supabaseClient'
 import { useAuth } from '../contexts/AuthContext'
-import { Link } from 'react-router-dom'
+import { useClientSelection } from '../contexts/ClientSelectionContext'
+import { KpiCardSkeleton, HeroTaskCardSkeleton, Skeleton } from '../components/Skeleton'
 import {
+    Crosshair,
+    Flame,
+    Trophy,
+    PartyPopper,
     Loader2,
-    Briefcase,
-    ExternalLink,
-    Link as LinkIcon,
+    RefreshCw,
+    TrendingUp,
     Users,
-    ArrowUpRight
+    HandMetal,
+    MessageCircle,
+    CheckCircle2,
+    Zap,
+    Star
 } from 'lucide-react'
-import SalesCockpit from '../components/SalesCockpit'
+
+// ═══════════════════════════════════════════════
+// CONSTANTS
+// ═══════════════════════════════════════════════
+
+const HOT_STAGES = ['G4', 'G5']
+
+// Light theme cadence styles
+const CADENCE_STYLES = {
+    G1: 'bg-gray-100 text-gray-600 border-gray-300',
+    G2: 'bg-blue-50 text-blue-600 border-blue-200',
+    G3: 'bg-cyan-50 text-cyan-700 border-cyan-200',
+    G4: 'bg-orange-50 text-orange-600 border-orange-200',
+    G5: 'bg-red-50 text-red-600 border-red-200',
+}
+
+// ═══════════════════════════════════════════════
+// MAIN COMPONENT — ADMIN PANEL (Command Center)
+// ═══════════════════════════════════════════════
 
 const AdminPanel = () => {
-    const { profile, loading: authLoading } = useAuth()
-    const [clients, setClients] = useState([])
-    const [posts, setPosts] = useState([])
+    const { user, profile } = useAuth()
+    const { selectedClientId } = useClientSelection()
+
     const [loading, setLoading] = useState(true)
-    const [unreadCounts, setUnreadCounts] = useState({})
+    const [refreshing, setRefreshing] = useState(false)
+    const [stats, setStats] = useState({
+        doneToday: 0,
+        pendingTotal: 0,
+        hotLeads: 0
+    })
+    const [criticalTasks, setCriticalTasks] = useState([])
+    const [radarLeads, setRadarLeads] = useState([])
+    const [completingIds, setCompletingIds] = useState(new Set())
 
-    useEffect(() => {
-        if (authLoading) return
+    // ───────────────────────────────────────────
+    // DATA FETCHING
+    // ───────────────────────────────────────────
 
-        if (profile) {
-            fetchDashboardData()
-        } else {
-            setLoading(false)
-        }
-    }, [authLoading, profile])
+    const fetchData = useCallback(async (isRefresh = false) => {
+        if (!user?.id) return
+        if (isRefresh) setRefreshing(true)
+        else setLoading(true)
 
-    const fetchDashboardData = async () => {
         try {
-            setLoading(true)
+            const today = new Date().toISOString().split('T')[0]
 
-            // 1. Fetch Clients
-            const { data: clientsData, error: clientsError } = await supabase
-                .from('clients')
-                .select('*')
-                .order('name')
+            // 1. Stats: Done Today
+            let doneQuery = supabase
+                .from('tasks')
+                .select('id, leads!inner(client_id)', { count: 'exact', head: true })
+                .eq('status', 'COMPLETED')
+                .gte('completed_at', `${today}T00:00:00`)
 
-            if (clientsError) throw clientsError
+            if (selectedClientId) doneQuery = doneQuery.eq('leads.client_id', selectedClientId)
 
-            // 2. Fetch All Posts
-            let postsQuery = supabase
-                .from('tabela_projetofred1')
-                .select('id, nome_cliente, status')
+            // 2. Stats: Pending Total
+            let pendingStatsQuery = supabase
+                .from('tasks')
+                .select('id, leads!inner(client_id)', { count: 'exact', head: true })
+                .eq('status', 'PENDING')
 
-            if (profile.role === 'client') {
-                if (profile.nome_empresa) {
-                    postsQuery = postsQuery.eq('nome_cliente', profile.nome_empresa)
-                }
-            }
+            if (selectedClientId) pendingStatsQuery = pendingStatsQuery.eq('leads.client_id', selectedClientId)
 
-            const { data: postsData, error: postsError } = await postsQuery
-            if (postsError) throw postsError
+            // 3. Critical Tasks (Focus) - G4/G5
+            let pendingQuery = supabase
+                .from('tasks')
+                .select('*, leads!inner(id, client_id, nome, empresa, headline, linkedin_profile_url, cadence_stage, total_interactions_count, avatar_url)')
+                .eq('status', 'PENDING')
+                .order('created_at', { ascending: true })
 
-            // NEW: Fetch Unread Comments for Badge
-            const { data: unreadData, error: unreadError } = await supabase
-                .from('post_comments')
-                .select('post_id')
-                .eq('role', 'client')
-                .eq('read_by_admin', false)
+            if (selectedClientId) pendingQuery = pendingQuery.eq('leads.client_id', selectedClientId)
 
-            if (unreadError) throw unreadError
+            // 4. Radar Leads (Responding/Hot)
+            let radarQuery = supabase
+                .from('leads')
+                .select('id, nome, empresa, headline, cadence_stage, total_interactions_count, updated_at, linkedin_profile_url, avatar_url')
+                .gt('total_interactions_count', 0)
+                .order('updated_at', { ascending: false })
+                .limit(10)
 
-            // Map unread comments to clients
-            const counts = {}
-            if (unreadData && postsData) {
-                unreadData.forEach(comment => {
-                    // Find which client owns this post
-                    const post = postsData.find(p => p.id === comment.post_id)
-                    if (post && post.nome_cliente) {
-                        counts[post.nome_cliente] = (counts[post.nome_cliente] || 0) + 1
-                    }
-                })
-            }
-            setUnreadCounts(counts)
-            setClients(clientsData || [])
-            setPosts(postsData || [])
+            if (selectedClientId) radarQuery = radarQuery.eq('client_id', selectedClientId)
+
+            // Execute all
+            const [doneRes, pendingStatsRes, tasksRes, radarRes] = await Promise.all([
+                doneQuery,
+                pendingStatsQuery,
+                pendingQuery,
+                radarQuery
+            ])
+
+            if (tasksRes.error) throw tasksRes.error
+            if (radarRes.error) throw radarRes.error
+
+            const allPending = tasksRes.data || []
+
+            // 5. Filter for Foco Total
+            // Rule: priority === 'HIGH' OR (ICP === 'A' AND Stage in ['G4', 'G5'])
+            const focusCandidates = allPending.filter(t => {
+                const isHighPriority = t.priority === 'HIGH'
+                const isIcpHot = t.leads?.icp_score === 'A' && HOT_STAGES.includes(t.leads?.cadence_stage)
+                return isHighPriority || isIcpHot
+            })
+
+            // Sort: HIGH priority first, then ICP A, then oldest first
+            const sortedPriority = focusCandidates.sort((a, b) => {
+                if (a.priority === 'HIGH' && b.priority !== 'HIGH') return -1;
+                if (b.priority === 'HIGH' && a.priority !== 'HIGH') return 1;
+
+                // Tie breaker: oldest task first
+                return new Date(a.created_at) - new Date(b.created_at)
+            })
+
+            const focusTasks = sortedPriority.slice(0, 3);
+
+            const g4g5 = allPending.filter(t => HOT_STAGES.includes(t.leads?.cadence_stage))
+
+            setStats({
+                doneToday: doneRes.count || 0,
+                pendingTotal: pendingStatsRes.count || 0,
+                hotLeads: g4g5.length
+            })
+
+            setCriticalTasks(focusTasks)
+            setRadarLeads(radarRes.data || [])
 
         } catch (err) {
-            console.error('Erro ao carregar dashboard:', err)
+            console.error('Error fetching command center data:', err)
         } finally {
             setLoading(false)
+            setRefreshing(false)
+        }
+    }, [user?.id, selectedClientId])
+
+    useEffect(() => {
+        fetchData()
+    }, [fetchData])
+
+    // ───────────────────────────────────────────
+    // ACTIONS
+    // ───────────────────────────────────────────
+
+    const handleComplete = async (taskId) => {
+        setCompletingIds(prev => new Set(prev).add(taskId))
+
+        // Optimistic update
+        setCriticalTasks(prev => prev.filter(t => t.id !== taskId))
+        setStats(prev => ({
+            ...prev,
+            doneToday: prev.doneToday + 1,
+            pendingTotal: Math.max(0, prev.pendingTotal - 1)
+        }))
+
+        try {
+            const { error } = await supabase
+                .from('tasks')
+                .update({ status: 'COMPLETED', completed_at: new Date().toISOString() })
+                .eq('id', taskId)
+
+            if (error) throw error
+        } catch (err) {
+            console.error('Error completing task:', err)
+            fetchData(true) // Revert on error
+        } finally {
+            setCompletingIds(prev => {
+                const next = new Set(prev)
+                next.delete(taskId)
+                return next
+            })
         }
     }
 
-    // Process Stats Per Client
-    const getClientStats = (clientName) => {
-        const clientPosts = posts.filter(p => p.nome_cliente === clientName)
-        const normalize = (status) => status ? status.toLowerCase() : ''
+    const navigate = useNavigate()
 
-        const drafts = clientPosts.filter(p => {
-            const s = normalize(p.status)
-            return !s || ['rascunho', 'ideia', 'draft', 'idea'].includes(s)
-        }).length
-
-        const waiting = clientPosts.filter(p => {
-            const s = normalize(p.status)
-            return ['aguardando aprovação', 'pending', 'waiting_approval'].includes(s)
-        }).length
-
-        const review = clientPosts.filter(p => {
-            const s = normalize(p.status)
-            return ['revisão', 'review', 'changes_requested', 'revision'].includes(s)
-        }).length
-
-        const approved = clientPosts.filter(p => {
-            const s = normalize(p.status)
-            return ['aprovado', 'postado', 'approved', 'ready', 'published'].includes(s)
-        }).length
-
-        return { drafts, waiting, review, approved }
-    }
-
-    const renderCount = (count, type) => {
-        if (count === 0) return <span className="text-gray-600 font-light">-</span>
-
-        let colorClass = 'text-white'
-        switch (type) {
-            case 'draft': colorClass = 'text-gray-300'; break;
-            case 'waiting': colorClass = 'text-amber-400 font-bold'; break;
-            case 'review': colorClass = 'text-red-400 font-bold'; break;
-            case 'approved': colorClass = 'text-emerald-400 font-bold'; break;
+    const handleExecute = (leadId) => {
+        if (leadId) {
+            navigate(`/sales/inbox?leadId=${leadId}`)
         }
-
-        return <span className={`text-lg ${colorClass}`}>{count}</span>
     }
 
-    const copyLink = (clientName) => {
-        const url = `${window.location.origin}/login`
-        navigator.clipboard.writeText(url)
-        alert('Link do Portal copiado!')
+    const getGreeting = () => {
+        const hour = new Date().getHours()
+        if (hour < 12) return 'Bom dia'
+        if (hour < 18) return 'Boa tarde'
+        return 'Boa noite'
+    }
+
+    const progressPercent = useMemo(() => {
+        const total = stats.doneToday + stats.pendingTotal
+        if (total === 0) return 0
+        return Math.round((stats.doneToday / total) * 100)
+    }, [stats])
+
+    // ───────────────────────────────────────────
+    // RENDER
+    // ───────────────────────────────────────────
+
+    if (loading) {
+        return (
+            <div className="min-h-screen bg-gray-50 text-gray-900 p-4 sm:p-6 lg:p-8">
+                <div className="max-w-6xl mx-auto space-y-6">
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                            <Skeleton className="w-10 h-10 rounded-xl" />
+                            <div className="space-y-2">
+                                <Skeleton className="w-48 h-8" />
+                                <Skeleton className="w-64 h-4" />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <Skeleton className="h-32 rounded-2xl" />
+                        <div className="col-span-2 grid grid-cols-3 gap-4">
+                            <KpiCardSkeleton />
+                            <KpiCardSkeleton />
+                            <KpiCardSkeleton />
+                        </div>
+                    </div>
+
+                    <div className="space-y-4">
+                        <Skeleton className="w-32 h-6" />
+                        <div className="space-y-3">
+                            <HeroTaskCardSkeleton />
+                            <HeroTaskCardSkeleton />
+                            <HeroTaskCardSkeleton />
+                        </div>
+                    </div>
+                </div>
+            </div>
+        )
     }
 
     return (
-        <div className="min-h-screen bg-obsidian text-white p-8 relative overflow-hidden">
-            {/* BACKGROUND ACCENTS */}
-            <div className="fixed top-20 right-20 w-96 h-96 bg-primary/10 blur-[100px] rounded-full pointer-events-none z-0" />
+        <div className="min-h-screen bg-gray-50 text-gray-900 p-4 sm:p-6 lg:p-8">
+            <div className="max-w-6xl mx-auto space-y-6">
 
-            {/* FLOATING HUD HEADER */}
-            <header className="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-4">
-                <div>
-                    <h1 className="text-3xl font-bold tracking-tight text-white mb-1">Progresso da Agência</h1>
-                    <p className="text-gray-400">Visão geral do pipeline por cliente</p>
+                {/* Header */}
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-orange-50 border border-orange-200 flex items-center justify-center">
+                            <Crosshair size={20} className="text-orange-500" />
+                        </div>
+                        <div>
+                            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-gray-900">
+                                {getGreeting()}, {profile?.name?.split(' ')[0] || 'Comandante'} 🎯
+                            </h1>
+                            <p className="text-sm text-gray-500">Command Center · Onde você ganha dinheiro agora</p>
+                        </div>
+                    </div>
+                    <button
+                        onClick={() => fetchData(true)}
+                        className="p-2 text-gray-400 hover:text-orange-500 hover:bg-orange-50 rounded-lg transition-colors"
+                        disabled={refreshing}
+                    >
+                        <RefreshCw size={20} className={refreshing ? 'animate-spin' : ''} />
+                    </button>
                 </div>
-                <div className="flex items-center gap-4">
-                    <Link to="/clients" className="glass-panel px-4 py-2 rounded-full text-sm font-medium text-gray-300 hover:text-white hover:border-primary/50 transition-all flex items-center gap-2">
-                        <Users size={16} />
-                        Gerenciar Clientes
-                    </Link>
-                    <div className="px-4 py-2 rounded-full border border-glass-border bg-white/5 text-sm font-medium text-gray-400">
-                        Admin Agência
+
+                {/* PLACAR DO DIA */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {/* Ring Chart */}
+                    <div className="bg-white rounded-2xl border border-gray-200 p-6 flex items-center justify-between relative overflow-hidden">
+                        <div className="relative z-10">
+                            <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-1">Meta Diária</h3>
+                            <div className="flex items-baseline gap-1">
+                                <span className="text-4xl font-bold text-gray-900">{progressPercent}%</span>
+                                <span className="text-sm text-gray-400">concluído</span>
+                            </div>
+                        </div>
+                        <ProgressRing percent={progressPercent} size={80} stroke={6} />
+                    </div>
+
+                    {/* Stats */}
+                    <div className="col-span-2 grid grid-cols-3 gap-4">
+                        <KpiCard
+                            icon={<CheckCircle2 size={18} />}
+                            label="Concluídas Hoje"
+                            value={stats.doneToday}
+                            accent="text-green-600"
+                        />
+                        <KpiCard
+                            icon={<Loader2 size={18} />}
+                            label="Pendentes"
+                            value={stats.pendingTotal}
+                            accent="text-gray-900"
+                        />
+                        <KpiCard
+                            icon={<Flame size={18} />}
+                            label="Leads Quentes"
+                            value={stats.hotLeads}
+                            accent="text-orange-500"
+                        />
                     </div>
                 </div>
-            </header>
 
-            {/* SALES COCKPIT - Primary Element */}
-            <div className="relative z-10 mb-8">
-                <SalesCockpit />
+                {/* FOCO TOTAL (HERO SECTION) */}
+                <div>
+                    <div className="flex items-center gap-2 mb-4">
+                        <Zap className="text-orange-500" size={20} />
+                        <h2 className="text-lg font-bold text-gray-900">Foco Total</h2>
+                        <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-orange-100 text-orange-700 border border-orange-200">
+                            Prioridade Máxima
+                        </span>
+                    </div>
+
+                    {criticalTasks.length > 0 ? (
+                        <div className="space-y-3">
+                            {criticalTasks.map((task, idx) => (
+                                <HeroTaskCard
+                                    key={task.id}
+                                    task={task}
+                                    index={idx}
+                                    completing={completingIds.has(task.id)}
+                                    onComplete={handleComplete}
+                                    onExecute={handleExecute}
+                                />
+                            ))}
+                        </div>
+                    ) : (
+                        <div className="bg-white rounded-2xl border border-gray-200 p-8 text-center flex flex-col items-center justify-center dashed-border">
+                            <div className="w-12 h-12 bg-green-50 rounded-full flex items-center justify-center mb-3">
+                                <PartyPopper className="text-green-500" size={24} />
+                            </div>
+                            <h3 className="text-gray-900 font-bold mb-1">Tudo limpo por aqui!</h3>
+                            <p className="text-gray-500 text-sm">Nenhuma tarefa crítica pendente no momento.</p>
+                        </div>
+                    )}
+                </div>
+
+                {/* RADAR DE OPORTUNIDADES */}
+                <div>
+                    <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center gap-2">
+                            <TrendingUp className="text-blue-500" size={20} />
+                            <h2 className="text-lg font-bold text-gray-900">Radar de Oportunidades</h2>
+                        </div>
+                    </div>
+
+                    <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide snap-x -mx-4 px-4 sm:mx-0 sm:px-0">
+                        {radarLeads.length > 0 ? (
+                            radarLeads.map(lead => (
+                                <RadarLeadCard key={lead.id} lead={lead} />
+                            ))
+                        ) : (
+                            <div className="text-sm text-gray-400 italic p-4">Nenhuma atividade recente no radar.</div>
+                        )}
+                    </div>
+                </div>
+
             </div>
 
-            {/* GLASS TABLE CONTAINER */}
-            <div className="relative z-10 glass-panel rounded-2xl overflow-hidden border-glass-border/30 shadow-2xl animate-fade-in-up">
-                {loading ? (
-                    <div className="p-12 text-center text-gray-400 flex flex-col items-center gap-4">
-                        <Loader2 className="w-8 h-8 animate-spin text-primary" />
-                        <span className="tracking-wide uppercase text-xs font-bold">Carregando pipeline...</span>
+            {/* Quick Actions Bar (Bottom) */}
+            <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-white/90 backdrop-blur-md border border-gray-200 shadow-xl rounded-full px-6 py-3 flex items-center gap-4 z-50">
+                <button
+                    onClick={() => navigate('/campaigns')}
+                    className="flex items-center gap-2 text-sm font-semibold text-gray-600 hover:text-orange-600 transition-colors"
+                >
+                    <Users size={16} />
+                    Novo Lead Manual
+                </button>
+                <div className="w-px h-4 bg-gray-300" />
+                <button
+                    onClick={() => navigate('/missions')}
+                    className="flex items-center gap-2 text-sm font-bold text-orange-600 hover:text-orange-700 transition-colors"
+                >
+                    <Trophy size={16} />
+                    Abrir Cockpit Completo
+                </button>
+            </div>
+        </div>
+    )
+}
+
+// ═══════════════════════════════════════════════════
+// SUB-COMPONENTS
+// ═══════════════════════════════════════════════════
+
+const ProgressRing = ({ percent, size = 110, stroke = 8 }) => {
+    const radius = (size - stroke) / 2
+    const circumference = 2 * Math.PI * radius
+    const offset = circumference - (percent / 100) * circumference
+    const color = percent === 100 ? '#16a34a' : '#f97316' // green-600 : orange-500
+
+    return (
+        <div className="relative" style={{ width: size, height: size }}>
+            <svg width={size} height={size} className="transform -rotate-90">
+                {/* Empty track */}
+                <circle
+                    cx={size / 2} cy={size / 2} r={radius}
+                    fill="none" stroke="#e5e7eb" // gray-200
+                    strokeWidth={stroke}
+                />
+                <circle
+                    cx={size / 2} cy={size / 2} r={radius}
+                    fill="none" stroke={color}
+                    strokeWidth={stroke}
+                    strokeLinecap="round"
+                    strokeDasharray={circumference}
+                    strokeDashoffset={offset}
+                    style={{ transition: 'stroke-dashoffset 1s ease-out, stroke 0.5s ease' }}
+                />
+            </svg>
+        </div>
+    )
+}
+
+const KpiCard = ({ icon, label, value, accent = 'text-gray-900' }) => (
+    <div className="bg-white rounded-2xl border border-gray-200 p-5 flex flex-col gap-3 hover:shadow-md hover:border-gray-300 transition-all duration-300">
+        <div className="flex items-center gap-2 text-gray-400">
+            {icon}
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">{label}</span>
+        </div>
+        <span className={`text-3xl font-bold ${accent} tracking-tight`}>{value}</span>
+    </div>
+)
+
+const HeroTaskCard = ({ task, index, completing, onComplete, onExecute }) => {
+    const lead = task.leads || {}
+    const initial = lead.nome?.charAt(0)?.toUpperCase() || '?'
+    const stage = lead.cadence_stage || ''
+    const stageStyle = CADENCE_STYLES[stage] || 'bg-gray-100 text-gray-500 border-gray-200'
+    const interactionCount = lead.total_interactions_count || 0
+    const isFirstContact = interactionCount === 0
+
+    const borderColors = ['border-l-red-500', 'border-l-orange-500', 'border-l-amber-500']
+    const borderColor = borderColors[index] || borderColors[2]
+
+    return (
+        <div
+            className={`
+                bg-white rounded-2xl border border-gray-200 p-5 border-l-[4px] ${borderColor}
+                transition-all duration-300 ease-out
+                hover:shadow-lg hover:border-gray-300
+                ${completing ? 'opacity-0 scale-95 pointer-events-none' : 'opacity-100 scale-100'}
+            `}
+        >
+            <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+                {/* Lead Info */}
+                <div className="flex items-center gap-3 flex-1 min-w-0">
+                    {lead.avatar_url ? (
+                        <img
+                            src={lead.avatar_url}
+                            alt={lead.nome}
+                            className="w-11 h-11 rounded-xl shrink-0 object-cover border border-gray-200"
+                        />
+                    ) : (
+                        <div className="w-11 h-11 rounded-xl shrink-0 bg-gray-100 border border-gray-200 flex items-center justify-center">
+                            <span className="text-sm font-bold text-gray-700">{initial}</span>
+                        </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-0.5">
+                            <h4 className="text-sm font-bold text-gray-900 truncate">{lead.nome || 'Lead'}</h4>
+                            {stage && (
+                                <span className={`shrink-0 text-[9px] font-bold px-2 py-0.5 rounded-md border ${stageStyle}`}>
+                                    {stage}
+                                </span>
+                            )}
+                        </div>
+                        <p className="text-[11px] text-gray-500 truncate">
+                            {lead.headline || ''}
+                            {lead.empresa && lead.headline ? ` · ${lead.empresa}` : lead.empresa || ''}
+                        </p>
                     </div>
+                </div>
+
+                {/* AI Instruction */}
+                {task.instruction && (
+                    <div className="flex-1 min-w-0 hidden md:block">
+                        <div className="bg-gray-50 rounded-lg px-3 py-2 border border-gray-100">
+                            <span className="mr-1 inline-block mb-1">💡</span>
+                            <span className="text-[11px] font-bold text-gray-800 break-words mb-1 block">
+                                Ação: {task.instruction.split('. ')[0] + '.'}
+                            </span>
+                            <span className="text-[10px] text-gray-500 leading-relaxed line-clamp-2 block break-words">
+                                Motivo: {task.instruction.split('. ').slice(1).join('. ')}
+                            </span>
+                        </div>
+                    </div>
+                )}
+
+                {/* Actions */}
+                <div className="flex items-center gap-2 shrink-0">
+                    {lead?.id && (
+                        <button
+                            onClick={() => onExecute(lead.id)}
+                            className={`
+                                flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-semibold transition-all duration-200
+                                ${isFirstContact
+                                    ? 'bg-orange-50 text-orange-600 border border-orange-200 hover:bg-orange-100'
+                                    : 'bg-orange-500 text-white border border-orange-500 hover:bg-orange-600'
+                                }
+                            `}
+                        >
+                            {isFirstContact ? <><HandMetal size={13} /> Icebreaker</> : <><MessageCircle size={13} /> Conversar</>}
+                        </button>
+                    )}
+                    <button
+                        onClick={() => onComplete(task.id)}
+                        disabled={completing}
+                        className="p-2.5 rounded-xl bg-gray-50 text-gray-400 border border-gray-200 hover:bg-green-50 hover:text-green-600 hover:border-green-200 transition-all duration-200"
+                        title="Concluir tarefa"
+                    >
+                        {completing ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
+                    </button>
+                </div>
+            </div>
+
+            {/* Mobile instruction */}
+            {task.instruction && (
+                <div className="mt-3 md:hidden">
+                    <div className="bg-gray-50 rounded-lg px-3 py-2 border border-gray-100">
+                        <span className="mr-1 inline-block mb-1">💡</span>
+                        <span className="text-[11px] font-bold text-gray-800 break-words mb-1 block">
+                            Ação: {task.instruction.split('. ')[0] + '.'}
+                        </span>
+                        <span className="text-[10px] text-gray-500 leading-relaxed line-clamp-2 block break-words">
+                            Motivo: {task.instruction.split('. ').slice(1).join('. ')}
+                        </span>
+                    </div>
+                </div>
+            )}
+        </div>
+    )
+}
+
+const RadarLeadCard = ({ lead }) => {
+    const initial = lead.nome?.charAt(0)?.toUpperCase() || '?'
+    const stage = lead.cadence_stage || ''
+    const stageStyle = CADENCE_STYLES[stage] || 'bg-gray-100 text-gray-500 border-gray-200'
+
+    const timeAgo = (dateStr) => {
+        if (!dateStr) return ''
+        const diff = Date.now() - new Date(dateStr).getTime()
+        const mins = Math.floor(diff / 60000)
+        if (mins < 60) return `${mins}min`
+        const hours = Math.floor(mins / 60)
+        if (hours < 24) return `${hours}h`
+        const days = Math.floor(hours / 24)
+        return `${days}d`
+    }
+
+    return (
+        <div className="bg-white rounded-xl border border-gray-200 p-4 min-w-[200px] max-w-[240px] shrink-0 snap-center hover:shadow-md hover:border-gray-300 transition-all duration-300 cursor-default">
+            <div className="flex items-center gap-3 mb-3">
+                {lead.avatar_url ? (
+                    <img
+                        src={lead.avatar_url}
+                        alt={lead.nome}
+                        className="w-9 h-9 rounded-lg shrink-0 object-cover border border-gray-200"
+                    />
                 ) : (
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-left border-collapse">
-                            <thead>
-                                <tr className="border-b border-glass-border">
-                                    <th className="p-5 text-gray-500 font-medium text-xs uppercase tracking-wider pl-8">Cliente</th>
-                                    <th className="p-5 text-center text-gray-500 font-medium text-xs uppercase tracking-wider">Ideias</th>
-                                    <th className="p-5 text-center text-amber-500/80 font-medium text-xs uppercase tracking-wider">Aguardando</th>
-                                    <th className="p-5 text-center text-red-500/80 font-medium text-xs uppercase tracking-wider">Revisão</th>
-                                    <th className="p-5 text-center text-emerald-500/80 font-medium text-xs uppercase tracking-wider">Aprovados</th>
-                                    <th className="p-5 text-right text-gray-500 font-medium text-xs uppercase tracking-wider pr-8">Ações</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-glass-border/50">
-                                {clients.length > 0 ? (
-                                    clients.map(client => {
-                                        const stats = getClientStats(client.name)
-                                        const initial = client.name.charAt(0).toUpperCase()
-
-                                        return (
-                                            <tr key={client.id} className="group hover:bg-white/5 transition-colors duration-200">
-                                                <td className="p-5 pl-8">
-                                                    <div className="flex items-center gap-4">
-                                                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-gray-800 to-black border border-glass-border flex items-center justify-center text-sm font-bold text-gray-300 shadow-inner group-hover:border-primary/50 transition-colors">
-                                                            {initial}
-                                                        </div>
-                                                        <div className="flex flex-col">
-                                                            <span className="font-semibold text-gray-200 group-hover:text-white transition-colors">{client.name}</span>
-                                                            {unreadCounts[client.name] > 0 && (
-                                                                <span className="text-xs text-red-400 animate-pulse font-bold flex items-center gap-1 mt-1">
-                                                                    <span className="w-1.5 h-1.5 rounded-full bg-red-500" />
-                                                                    {unreadCounts[client.name]} nova(s) msg
-                                                                </span>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                </td>
-
-                                                <td className="p-5 text-center">
-                                                    {renderCount(stats.drafts, 'draft')}
-                                                </td>
-
-                                                <td className="p-5 text-center">
-                                                    {renderCount(stats.waiting, 'waiting')}
-                                                </td>
-
-                                                <td className="p-5 text-center">
-                                                    {stats.review > 0 ? (
-                                                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-500/10 text-red-400 border border-red-500/20">
-                                                            {stats.review}
-                                                        </span>
-                                                    ) : (
-                                                        <span className="text-gray-600">-</span>
-                                                    )}
-                                                </td>
-
-                                                <td className="p-5 text-center relative overflow-hidden">
-                                                    {renderCount(stats.approved, 'approved')}
-                                                    {stats.approved > 0 && <div className="absolute inset-x-0 bottom-0 h-0.5 bg-emerald-500/20 group-hover:bg-emerald-500/50 transition-colors" />}
-                                                </td>
-
-                                                <td className="p-5 pr-8 text-right">
-                                                    <div className="flex items-center justify-end gap-2 opacity-60 group-hover:opacity-100 transition-opacity">
-                                                        <Link
-                                                            to={`/posts?client=${encodeURIComponent(client.name)}`}
-                                                            className="p-2 rounded-lg hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
-                                                            title="Abrir Posts"
-                                                        >
-                                                            <ArrowUpRight size={18} />
-                                                        </Link>
-                                                        <button
-                                                            className="p-2 rounded-lg hover:bg-white/10 text-gray-400 hover:text-primary transition-colors"
-                                                            title="Copiar Link do Portal"
-                                                            onClick={() => copyLink(client.name)}
-                                                        >
-                                                            <LinkIcon size={18} />
-                                                        </button>
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        )
-                                    })
-                                ) : (
-                                    <tr>
-                                        <td colSpan="6" className="p-12 text-center text-gray-500">
-                                            Nenhum cliente cadastrado no pipeline.
-                                        </td>
-                                    </tr>
-                                )}
-                            </tbody>
-                        </table>
+                    <div className="w-9 h-9 rounded-lg shrink-0 bg-gray-100 border border-gray-200 flex items-center justify-center shrink-0">
+                        <span className="text-xs font-bold text-gray-600">{initial}</span>
                     </div>
+                )}
+                <div className="min-w-0 flex-1">
+                    <h4 className="text-xs font-semibold text-gray-900 truncate">{lead.nome || 'Lead'}</h4>
+                    <p className="text-[10px] text-gray-500 truncate">{lead.empresa || lead.headline || ''}</p>
+                </div>
+            </div>
+
+            <div className="flex items-center justify-between mb-3">
+                <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${stageStyle}`}>
+                    {stage || 'Novo'}
+                </span>
+                <span className="text-[9px] text-gray-400 flex items-center gap-1">
+                    <MessageCircle size={10} /> {lead.total_interactions_count || 0}
+                </span>
+            </div>
+
+            <div className="flex items-center justify-between pt-3 border-t border-gray-100">
+                <span className="text-[10px] text-gray-400">{timeAgo(lead.updated_at)} atrás</span>
+                {lead.linkedin_profile_url && (
+                    <a
+                        href={lead.linkedin_profile_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-[10px] font-bold text-orange-600 hover:text-orange-700 hover:underline"
+                    >
+                        Ver perfil
+                    </a>
                 )}
             </div>
         </div>
@@ -21362,6 +23451,7 @@ import {
 } from 'lucide-react'
 import AddLeadsModal from '../components/AddLeadsModal'
 import LeadDetailModal from '../components/LeadDetailModal'
+import HistorySyncModal from '../components/HistorySyncModal'
 
 const CampaignLeadsView = () => {
     const { id: campaignId } = useParams()
@@ -21410,7 +23500,7 @@ const CampaignLeadsView = () => {
     const [syncLoading, setSyncLoading] = useState(false)
     const [clientSyncTimestamp, setClientSyncTimestamp] = useState(null) // from clients.last_sync_timestamp
 
-    // NEW: Bulk History Import State
+    // Bulk History Import State (legacy queue kept for backward compat)
     const [importQueue, setImportQueue] = useState({
         active: false,
         current: 0,
@@ -21419,6 +23509,11 @@ const CampaignLeadsView = () => {
         currentLeadName: ''
     })
     const [showImportConfirm, setShowImportConfirm] = useState(false)
+
+    // ARQUEÓLOGO: Sequential orchestration state
+    const [showHistorySyncModal, setShowHistorySyncModal] = useState(false)
+    const [syncProgress, setSyncProgress] = useState({ status: 'idle', current: 0, total: 0, failures: 0 })
+    const cancelRef = useRef(false)
 
 
 
@@ -21668,6 +23763,11 @@ const CampaignLeadsView = () => {
         fetchTopLeads()
     }, [])
 
+    // Reset cancel flag on unmount
+    useEffect(() => {
+        return () => { cancelRef.current = false }
+    }, [])
+
     // --- HANDLERS ---
     const handleSort = (key) => {
         setSortConfig(current => ({
@@ -21774,7 +23874,7 @@ const CampaignLeadsView = () => {
             }
 
             // 2. Call Webhook
-            const response = await fetch('https://n8n-n8n-start.kfocge.easypanel.host/webhook-test/sync-connections', {
+            const response = await fetch('https://n8n-n8n-start.kfocge.easypanel.host/webhook/sync-connections', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -22047,9 +24147,128 @@ const CampaignLeadsView = () => {
         }
     }
 
-    // NEW: Bulk History Import Logic (Workflow B - Mass Action)
-    const handleBulkHistorySync = () => {
-        setShowImportConfirm(true)
+    // ----------------------------------------------------------------
+    // ARQUEÓLOGO: Sequential lead-by-lead webhook orchestration
+    // ----------------------------------------------------------------
+    const handleBulkHistorySync = async () => {
+        if (!selectedClientId || syncProgress.status === 'running') return
+        cancelRef.current = false
+
+        try {
+            // 1. Fetch ALL lead IDs for this client
+            const { data: allLeads, error: leadsError } = await supabase
+                .from('leads')
+                .select('id')
+                .eq('client_id', selectedClientId)
+                .order('id', { ascending: true })
+
+            if (leadsError) throw leadsError
+            if (!allLeads || allLeads.length === 0) {
+                setNotification({ message: 'Nenhum lead encontrado para este cliente.', type: 'error' })
+                setTimeout(() => setNotification(null), 5000)
+                return
+            }
+
+            // 2. Fetch Unipile account ID
+            const { data: client, error: clientError } = await supabase
+                .from('clients')
+                .select('unipile_account_id')
+                .eq('id', selectedClientId)
+                .single()
+
+            if (clientError || !client?.unipile_account_id) {
+                setNotification({ message: 'Conecte uma conta do LinkedIn nas configurações deste cliente.', type: 'error' })
+                setTimeout(() => setNotification(null), 5000)
+                return
+            }
+
+            const totalLeads = allLeads.length
+            const accountId = client.unipile_account_id
+
+            // 3. Open modal + set initial progress
+            setSyncProgress({ status: 'running', current: 0, total: totalLeads, failures: 0 })
+            setShowHistorySyncModal(true)
+
+            // 4. Upsert status in Supabase
+            await supabase
+                .from('history_sync_progress')
+                .upsert([{
+                    client_id: selectedClientId,
+                    status: 'running',
+                    total_leads: totalLeads,
+                    processed: 0,
+                    failures: 0,
+                    started_at: new Date().toISOString(),
+                    completed_at: null,
+                    updated_at: new Date().toISOString()
+                }], { onConflict: 'client_id' })
+
+            // 5. Sequential loop — fire-and-forget per lead, 2s delay
+            let failures = 0
+
+            for (let i = 0; i < totalLeads; i++) {
+                // Check for cancellation
+                if (cancelRef.current) {
+                    setSyncProgress(prev => ({ ...prev, status: 'cancelled' }))
+                    await supabase
+                        .from('history_sync_progress')
+                        .update({ status: 'cancelled', processed: i, failures, updated_at: new Date().toISOString() })
+                        .eq('client_id', selectedClientId)
+                    return
+                }
+
+                const lead = allLeads[i]
+                setSyncProgress(prev => ({ ...prev, current: i + 1 }))
+
+                // Fire-and-forget with 5s timeout
+                try {
+                    const controller = new AbortController()
+                    const timeout = setTimeout(() => controller.abort(), 5000)
+
+                    await fetch('https://n8n-n8n-start.kfocge.easypanel.host/webhook/import-history', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ lead_id: lead.id, account_id: accountId }),
+                        signal: controller.signal
+                    }).catch(() => { }) // Ignore response errors — fire and forget
+
+                    clearTimeout(timeout)
+                } catch (err) {
+                    // Network error or abort — log and continue
+                    console.warn(`[Arqueólogo] Lead ${lead.id} falhou:`, err.message)
+                    failures++
+                    setSyncProgress(prev => ({ ...prev, failures: prev.failures + 1 }))
+                }
+
+                // 2-second delay between calls (skip on last iteration)
+                if (i < totalLeads - 1) {
+                    await new Promise(resolve => setTimeout(resolve, 2000))
+                }
+            }
+
+            // 6. Completed
+            setSyncProgress(prev => ({ ...prev, status: 'completed' }))
+            await supabase
+                .from('history_sync_progress')
+                .update({
+                    status: 'completed',
+                    processed: totalLeads,
+                    failures,
+                    completed_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString()
+                })
+                .eq('client_id', selectedClientId)
+
+        } catch (err) {
+            console.error('[Arqueólogo] Error:', err)
+            setSyncProgress(prev => ({ ...prev, status: 'error' }))
+            setNotification({ message: 'Erro ao iniciar importação. Tente novamente.', type: 'error' })
+            setTimeout(() => setNotification(null), 5000)
+        }
+    }
+
+    const handleCancelSync = async () => {
+        cancelRef.current = true
     }
 
     const cancelImport = () => {
@@ -22083,48 +24302,19 @@ const CampaignLeadsView = () => {
             return
         }
 
-        // 2. PREPARAÇÃO DOS LEADS: Buscar IDs REAIS diretamente do banco
+        // 2. PREPARAÇÃO DOS LEADS: usar o state `leads` (view já é flat, id = ID real do lead)
         let realLeadIds = []
-        setNotification({ message: 'Buscando IDs reais dos leads no banco...', type: 'info' })
+        setNotification({ message: 'Preparando lista de leads...', type: 'info' })
 
-        try {
-            if (selectedLeads.size > 0) {
-                // Se há seleção, buscar apenas os leads selecionados
-                // Precisamos mapear os IDs selecionados (que são de campaign_leads) para os IDs reais dos leads
-                const selectedCampaignLeadIds = Array.from(selectedLeads)
-
-                const { data, error } = await supabase
-                    .from('campaign_leads')
-                    .select('lead_id, leads!inner(id, nome)')
-                    .in('id', selectedCampaignLeadIds)
-                    .eq('campaign_id', campaignId)
-
-                if (error) throw error
-
-                // Extrair os IDs REAIS da tabela leads
-                realLeadIds = data.map(item => ({
-                    id: item.leads.id,  // ID REAL do lead na tabela leads
-                    nome: item.leads.nome
-                }))
-            } else {
-                // Buscar TODOS os leads da campanha diretamente da tabela leads
-                const { data, error } = await supabase
-                    .from('campaign_leads')
-                    .select('lead_id, leads!inner(id, nome)')
-                    .eq('campaign_id', campaignId)
-
-                if (error) throw error
-
-                // Extrair os IDs REAIS
-                realLeadIds = data.map(item => ({
-                    id: item.leads.id,  // ID REAL do lead
-                    nome: item.leads.nome
-                }))
-            }
-        } catch (err) {
-            console.error("Error fetching real lead IDs", err)
-            setNotification({ message: 'Erro ao buscar IDs reais dos leads.', type: 'error' })
-            return
+        if (selectedLeads.size > 0) {
+            // Filtrar apenas os leads selecionados do state
+            const selectedIds = Array.from(selectedLeads)
+            realLeadIds = leads
+                .filter(l => selectedIds.includes(l.id))
+                .map(l => ({ id: l.id, nome: l.nome }))
+        } else {
+            // Usar todos os leads carregados no state
+            realLeadIds = leads.map(l => ({ id: l.id, nome: l.nome }))
         }
 
         if (realLeadIds.length === 0) {
@@ -22440,17 +24630,36 @@ const CampaignLeadsView = () => {
                             </div>
 
 
-                            <button
-                                onClick={handleBulkHistorySync}
-                                disabled={importQueue.active}
-                                className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-semibold text-sm transition-all ${importQueue.active
-                                    ? 'bg-amber-50 text-amber-400 cursor-not-allowed'
-                                    : 'bg-amber-50 text-amber-600 hover:bg-amber-100 hover:text-amber-700 border border-amber-200'
-                                    }`}
-                            >
-                                <History size={16} className={importQueue.active ? "animate-spin" : ""} />
-                                {importQueue.active ? 'Processando...' : 'Sync Histórico'}
-                            </button>
+                            <div className="flex flex-col items-end gap-1">
+                                {/* Sync progress badge */}
+                                {syncProgress.status === 'running' && (
+                                    <div className="flex items-center gap-1.5 text-[11px] font-medium text-amber-600 bg-amber-50 border border-amber-200 rounded-full px-2.5 py-1">
+                                        <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+                                        Lead {syncProgress.current}/{syncProgress.total}...
+                                    </div>
+                                )}
+                                {syncProgress.status === 'completed' && (
+                                    <div className="flex items-center gap-1.5 text-[11px] font-medium text-emerald-600 bg-emerald-50 border border-emerald-200 rounded-full px-2.5 py-1">
+                                        ✅ {syncProgress.total} leads sincronizados
+                                    </div>
+                                )}
+                                {syncProgress.status === 'error' && (
+                                    <div className="flex items-center gap-1.5 text-[11px] font-medium text-red-600 bg-red-50 border border-red-200 rounded-full px-2.5 py-1">
+                                        ❌ Erro na sincronização — tente novamente
+                                    </div>
+                                )}
+                                <button
+                                    onClick={handleBulkHistorySync}
+                                    disabled={syncProgress.status === 'running'}
+                                    className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-semibold text-sm transition-all ${syncProgress.status === 'running'
+                                            ? 'bg-amber-50 text-amber-400 cursor-not-allowed'
+                                            : 'bg-amber-50 text-amber-600 hover:bg-amber-100 hover:text-amber-700 border border-amber-200'
+                                        }`}
+                                >
+                                    <History size={16} className={syncProgress.status === 'running' ? 'animate-spin' : ''} />
+                                    {syncProgress.status === 'running' ? `Sincronizando (${syncProgress.current}/${syncProgress.total})` : 'Importar Histórico'}
+                                </button>
+                            </div>
 
                             <button
                                 onClick={() => setIsAddLeadsModalOpen(true)}
@@ -23075,6 +25284,14 @@ const CampaignLeadsView = () => {
                     </div>
                 </div>
             )}
+
+            {/* HISTORY SYNC MODAL (Arqueólogo) */}
+            <HistorySyncModal
+                isOpen={showHistorySyncModal}
+                onClose={() => setShowHistorySyncModal(false)}
+                onCancel={handleCancelSync}
+                syncProgress={syncProgress}
+            />
 
             {/* LEAD DETAIL MODAL - AI INSIGHTS */}
             {selectedLead && (
@@ -25645,6 +27862,368 @@ export default function ClientsPage() {
         </div>
     );
 }
+
+```
+
+## File: src\pages\ContentLibraryPage.jsx
+```javascript
+import React, { useState, useEffect } from 'react'
+import { supabase } from '../services/supabaseClient'
+import { useAuth } from '../contexts/AuthContext'
+import {
+    Library,
+    Plus,
+    Search,
+    BookOpen,
+    Video,
+    FileText,
+    Link as LinkIcon,
+    Trash2,
+    Edit2,
+    X,
+    Loader2
+} from 'lucide-react'
+
+// Map content types to icons and colors
+const TYPE_CONFIG = {
+    'Video': { icon: Video, color: 'text-blue-500', bg: 'bg-blue-50', border: 'border-blue-200' },
+    'Post': { icon: FileText, color: 'text-orange-500', bg: 'bg-orange-50', border: 'border-orange-200' },
+    'Artigo': { icon: BookOpen, color: 'text-emerald-500', bg: 'bg-emerald-50', border: 'border-emerald-200' },
+    'Outro': { icon: LinkIcon, color: 'text-gray-500', bg: 'bg-gray-50', border: 'border-gray-200' }
+}
+
+const ContentLibraryPage = () => {
+    const { user } = useAuth()
+    const [contents, setContents] = useState([])
+    const [loading, setLoading] = useState(true)
+    const [searchQuery, setSearchQuery] = useState('')
+
+    // Modal state
+    const [isModalOpen, setIsModalOpen] = useState(false)
+    const [editingContent, setEditingContent] = useState(null)
+    const [formData, setFormData] = useState({
+        content_name: '',
+        content_description: '',
+        content_url: '',
+        content_type: 'Video'
+    })
+    const [saving, setSaving] = useState(false)
+
+    useEffect(() => {
+        if (user) {
+            fetchContents()
+        }
+    }, [user])
+
+    const fetchContents = async () => {
+        try {
+            setLoading(true)
+            const { data, error } = await supabase
+                .from('content_library')
+                .select('*')
+                .order('created_at', { ascending: false })
+
+            if (error) throw error
+            setContents(data || [])
+        } catch (err) {
+            console.error('Error fetching content library:', err)
+            // Optionally add toast notifications here
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    const handleOpenModal = (content = null) => {
+        if (content) {
+            setEditingContent(content)
+            setFormData({
+                content_name: content.content_name,
+                content_description: content.content_description || '',
+                content_url: content.content_url,
+                content_type: content.content_type
+            })
+        } else {
+            setEditingContent(null)
+            setFormData({
+                content_name: '',
+                content_description: '',
+                content_url: '',
+                content_type: 'Video'
+            })
+        }
+        setIsModalOpen(true)
+    }
+
+    const handleCloseModal = () => {
+        setIsModalOpen(false)
+        setEditingContent(null)
+    }
+
+    const handleSave = async (e) => {
+        e.preventDefault()
+        if (!user) return
+
+        try {
+            setSaving(true)
+
+            const payload = {
+                ...formData,
+                user_id: user.id
+            }
+
+            if (editingContent) {
+                const { error } = await supabase
+                    .from('content_library')
+                    .update(payload)
+                    .eq('id', editingContent.id)
+                if (error) throw error
+            } else {
+                const { error } = await supabase
+                    .from('content_library')
+                    .insert([payload])
+                if (error) throw error
+            }
+
+            await fetchContents()
+            handleCloseModal()
+        } catch (err) {
+            console.error('Error saving content:', err)
+        } finally {
+            setSaving(false)
+        }
+    }
+
+    const handleDelete = async (id) => {
+        if (!window.confirm('Tem certeza que deseja remover este conteúdo da biblioteca?')) return
+
+        try {
+            const { error } = await supabase
+                .from('content_library')
+                .delete()
+                .eq('id', id)
+
+            if (error) throw error
+            setContents(prev => prev.filter(c => c.id !== id))
+        } catch (err) {
+            console.error('Error deleting content:', err)
+        }
+    }
+
+    // Filter contents based on search query
+    const filteredContents = contents.filter(c =>
+        c.content_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (c.content_description && c.content_description.toLowerCase().includes(searchQuery.toLowerCase()))
+    )
+
+    return (
+        <div className="min-h-screen bg-gray-50 text-gray-900 p-4 sm:p-6 lg:p-8">
+            <div className="max-w-7xl mx-auto space-y-6">
+
+                {/* Header */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div className="flex items-center gap-3">
+                        <div className="w-12 h-12 rounded-2xl bg-orange-50 flex items-center justify-center border border-orange-200/50">
+                            <Library className="text-orange-500" size={24} />
+                        </div>
+                        <div>
+                            <h1 className="text-2xl font-bold tracking-tight text-gray-900">Biblioteca de Conteúdos</h1>
+                            <p className="text-sm text-gray-500">Gerencie links, materiais e templates para usar em abordagens.</p>
+                        </div>
+                    </div>
+                    <button
+                        onClick={() => handleOpenModal()}
+                        className="flex items-center gap-2 px-5 py-2.5 bg-gray-900 text-white font-medium rounded-xl hover:bg-gray-800 transition-all shadow-sm shrink-0"
+                    >
+                        <Plus size={18} />
+                        Adicionar Material
+                    </button>
+                </div>
+
+                {/* Toolbar */}
+                <div className="bg-white p-4 rounded-2xl border border-gray-200">
+                    <div className="relative max-w-md">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                        <input
+                            type="text"
+                            placeholder="Buscar conteúdo por nome ou contexto..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className="w-full pl-10 pr-4 py-2 border border-gray-200 font-medium rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
+                        />
+                    </div>
+                </div>
+
+                {/* Content Grid */}
+                {loading ? (
+                    <div className="flex items-center justify-center py-20">
+                        <Loader2 className="animate-spin text-orange-500" size={32} />
+                    </div>
+                ) : filteredContents.length === 0 ? (
+                    <div className="bg-white border text-center border-gray-200 rounded-3xl p-12 dashed-border">
+                        <div className="w-16 h-16 bg-gray-50 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-gray-100">
+                            <Library className="text-gray-400" size={28} />
+                        </div>
+                        <h3 className="text-gray-900 font-bold text-lg mb-2">Acervo vazio</h3>
+                        <p className="text-sm text-gray-500 mb-6 max-w-sm mx-auto">
+                            {searchQuery ? 'Sua busca não encontrou resultados.' : 'Ainda não há materiais na sua biblioteca de vendas. Adicione links, PDFs, posts ou vídeos.'}
+                        </p>
+                        {!searchQuery && (
+                            <button
+                                onClick={() => handleOpenModal()}
+                                className="px-6 py-2 bg-orange-50 text-orange-600 font-semibold rounded-full hover:bg-orange-100 transition-colors inline-flex items-center gap-2"
+                            >
+                                <Plus size={18} />
+                                Criar primeiro conteúdo
+                            </button>
+                        )}
+                    </div>
+                ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {filteredContents.map(item => {
+                            const typeConf = TYPE_CONFIG[item.content_type] || TYPE_CONFIG['Outro']
+                            const TypeIcon = typeConf.icon
+
+                            return (
+                                <div key={item.id} className="bg-white rounded-2xl border border-gray-200 p-5 hover:shadow-lg hover:border-gray-300 transition-all group flex flex-col h-full">
+                                    <div className="flex items-start justify-between mb-4">
+                                        <div className={`p-2.5 rounded-xl border ${typeConf.bg} ${typeConf.border} ${typeConf.color}`}>
+                                            <TypeIcon size={20} />
+                                        </div>
+                                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <button
+                                                onClick={() => handleOpenModal(item)}
+                                                className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                                            >
+                                                <Edit2 size={15} />
+                                            </button>
+                                            <button
+                                                onClick={() => handleDelete(item.id)}
+                                                className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                                            >
+                                                <Trash2 size={15} />
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex-1 mb-4">
+                                        <h3 className="font-bold text-gray-900 mb-1 line-clamp-2">{item.content_name}</h3>
+                                        {item.content_description && (
+                                            <p className="text-xs text-gray-500 line-clamp-3 leading-relaxed">
+                                                {item.content_description}
+                                            </p>
+                                        )}
+                                    </div>
+
+                                    <div className="pt-4 border-t border-gray-100 flex items-center justify-between mt-auto">
+                                        <span className="text-[10px] font-bold tracking-wider text-gray-400 uppercase bg-gray-50 px-2 py-1 rounded-md">
+                                            {item.content_type}
+                                        </span>
+                                        <a
+                                            href={item.content_url}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            className="text-xs font-semibold text-orange-500 hover:text-orange-600 flex items-center gap-1 hover:underline"
+                                        >
+                                            Abrir link <LinkIcon size={12} />
+                                        </a>
+                                    </div>
+                                </div>
+                            )
+                        })}
+                    </div>
+                )}
+            </div>
+
+            {/* Modal de Criar/Editar */}
+            {isModalOpen && (
+                <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl border border-gray-200 overflow-hidden" style={{ animation: 'slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1)' }}>
+                        <div className="px-6 py-4 flex items-center justify-between border-b border-gray-100 bg-gray-50/50">
+                            <h2 className="text-lg font-bold text-gray-900">
+                                {editingContent ? 'Editar Material' : 'Adicionar ao Acervo'}
+                            </h2>
+                            <button onClick={handleCloseModal} className="text-gray-400 hover:text-gray-600 bg-white p-2 rounded-xl border border-gray-200 shadow-sm">
+                                <X size={18} />
+                            </button>
+                        </div>
+
+                        <form onSubmit={handleSave} className="p-6 space-y-5">
+                            <div>
+                                <label className="block text-xs font-bold text-gray-700 uppercase tracking-widest mb-1">Título/Nome</label>
+                                <input
+                                    required
+                                    type="text"
+                                    value={formData.content_name}
+                                    onChange={e => setFormData({ ...formData, content_name: e.target.value })}
+                                    placeholder="Ex: Vídeo de Demonstração V2"
+                                    className="w-full px-4 py-2.5 font-medium border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-bold text-gray-700 uppercase tracking-widest mb-1">Contexto de Uso</label>
+                                <textarea
+                                    value={formData.content_description}
+                                    onChange={e => setFormData({ ...formData, content_description: e.target.value })}
+                                    placeholder="Ex: Use este vídeo caso o lead questione sobre concorrência..."
+                                    rows={3}
+                                    className="w-full px-4 py-2.5 font-medium border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all resize-none"
+                                />
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-700 uppercase tracking-widest mb-1">Tipo</label>
+                                    <select
+                                        value={formData.content_type}
+                                        onChange={e => setFormData({ ...formData, content_type: e.target.value })}
+                                        className="w-full px-4 py-2.5 font-bold border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all appearance-none bg-gray-50"
+                                    >
+                                        <option value="Video">Vídeo</option>
+                                        <option value="Post">Post (Social)</option>
+                                        <option value="Artigo">Artigo</option>
+                                        <option value="Outro">Outro (PDF, Link)</option>
+                                    </select>
+                                </div>
+                                <div className="col-span-2">
+                                    <label className="block text-xs font-bold text-gray-700 uppercase tracking-widest mb-1">URL (Link Público)</label>
+                                    <input
+                                        required
+                                        type="url"
+                                        value={formData.content_url}
+                                        onChange={e => setFormData({ ...formData, content_url: e.target.value })}
+                                        placeholder="https://..."
+                                        className="w-full px-4 py-2.5 font-medium border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all"
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="pt-4 flex justify-end gap-3">
+                                <button
+                                    type="button"
+                                    onClick={handleCloseModal}
+                                    className="px-5 py-2.5 text-sm font-semibold text-gray-600 hover:bg-gray-50 rounded-xl transition-all border border-transparent"
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={saving}
+                                    className="flex items-center gap-2 px-6 py-2.5 bg-gray-900 border border-transparent text-white text-sm font-bold rounded-xl hover:bg-gray-800 transition-all shadow-md disabled:opacity-70 disabled:cursor-not-allowed"
+                                >
+                                    {saving && <Loader2 size={16} className="animate-spin" />}
+                                    {editingContent ? 'Salvar Alterações' : 'Salvar no Acervo'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+        </div>
+    )
+}
+
+export default ContentLibraryPage
 
 ```
 
@@ -28245,6 +30824,7 @@ export default Login;
 ## File: src\pages\MissionsPage.jsx
 ```javascript
 import React, { useState, useEffect, useMemo, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { supabase } from '../services/supabaseClient'
 import { useAuth } from '../contexts/AuthContext'
 import { useClientSelection } from '../contexts/ClientSelectionContext'
@@ -28271,7 +30851,9 @@ import {
 // ═══════════════════════════════════════════════
 
 const HOT_STAGES = ['G4', 'G5']
+const MAX_DAILY_TASKS = 30
 const VISIBLE_COLD_CARDS = 8
+const ICP_PRIORITY = { A: 0, B: 1, C: 2 }
 
 const CADENCE_LABELS = {
     G1: 'Primeiro Contato',
@@ -28282,39 +30864,45 @@ const CADENCE_LABELS = {
 }
 
 const CADENCE_STYLES = {
-    G1: 'bg-slate-800 text-slate-300 border-slate-600',
-    G2: 'bg-blue-900/50 text-blue-300 border-blue-700',
-    G3: 'bg-cyan-900/50 text-cyan-300 border-cyan-700',
-    G4: 'bg-orange-900/50 text-orange-300 border-orange-700',
-    G5: 'bg-red-900/50 text-red-300 border-red-700',
+    G1: 'bg-gray-100 text-gray-600 border-gray-300',
+    G2: 'bg-blue-50 text-blue-600 border-blue-200',
+    G3: 'bg-cyan-50 text-cyan-700 border-cyan-200',
+    G4: 'bg-orange-50 text-orange-600 border-orange-200',
+    G5: 'bg-red-50 text-red-600 border-red-200',
+}
+
+const ICP_STYLES = {
+    'ICP A': 'bg-green-50 text-green-700 border-green-300 font-bold',
+    'ICP B': 'bg-blue-50 text-blue-600 border-blue-200 font-bold',
+    'ICP C': 'bg-gray-100 text-gray-500 border-gray-300 font-bold',
 }
 
 const COLUMN_THEMES = {
     hot: {
         borderTop: 'linear-gradient(90deg, #ef4444, #f97316)',
-        headerBg: 'bg-red-500/[0.06]',
-        headerBorder: 'border-red-500/15',
-        countBg: 'bg-red-900/40',
-        countText: 'text-red-400',
-        countBorder: 'border-red-700/50',
-        iconColor: 'text-red-400',
-        cardBorder: 'border-l-orange-500/60',
-        columnBg: 'rgba(239, 68, 68, 0.015)',
-        emptyBg: 'bg-red-500/5',
-        emptyBorder: 'border-red-500/10',
+        headerBg: 'bg-orange-50',
+        headerBorder: 'border-orange-200',
+        countBg: 'bg-orange-100',
+        countText: 'text-orange-600',
+        countBorder: 'border-orange-200',
+        iconColor: 'text-orange-500',
+        cardBorder: 'border-l-orange-400',
+        columnBg: '#ffffff',
+        emptyBg: 'bg-orange-50',
+        emptyBorder: 'border-orange-200',
     },
     cold: {
-        borderTop: 'linear-gradient(90deg, #3b82f6, #64748b)',
-        headerBg: 'bg-blue-500/[0.06]',
-        headerBorder: 'border-blue-500/15',
-        countBg: 'bg-blue-900/40',
-        countText: 'text-blue-400',
-        countBorder: 'border-blue-700/50',
-        iconColor: 'text-blue-400',
-        cardBorder: 'border-l-blue-500/30',
-        columnBg: 'rgba(59, 130, 246, 0.015)',
-        emptyBg: 'bg-blue-500/5',
-        emptyBorder: 'border-blue-500/10',
+        borderTop: 'linear-gradient(90deg, #3b82f6, #94a3b8)',
+        headerBg: 'bg-blue-50',
+        headerBorder: 'border-blue-200',
+        countBg: 'bg-blue-100',
+        countText: 'text-blue-600',
+        countBorder: 'border-blue-200',
+        iconColor: 'text-blue-500',
+        cardBorder: 'border-l-blue-300',
+        columnBg: '#ffffff',
+        emptyBg: 'bg-blue-50',
+        emptyBorder: 'border-blue-200',
     }
 }
 
@@ -28347,7 +30935,7 @@ const SalesCockpitPage = () => {
         try {
             let pendingQuery = supabase
                 .from('tasks')
-                .select('*, leads!inner(client_id, nome, empresa, headline, linkedin_profile_url, cadence_stage, total_interactions_count)')
+                .select('*, leads!inner(id, client_id, nome, empresa, headline, linkedin_profile_url, cadence_stage, total_interactions_count, icp_score, avatar_url)')
                 .eq('status', 'PENDING')
                 .order('created_at', { ascending: true })
 
@@ -28358,7 +30946,8 @@ const SalesCockpitPage = () => {
             let doneQuery = supabase
                 .from('tasks')
                 .select('id, leads!inner(client_id)', { count: 'exact' })
-                .eq('status', 'DONE')
+                .eq('status', 'COMPLETED')
+                .gte('completed_at', `${new Date().toISOString().split('T')[0]}T00:00:00`)
 
             if (selectedClientId) {
                 doneQuery = doneQuery.eq('leads.client_id', selectedClientId)
@@ -28370,7 +30959,19 @@ const SalesCockpitPage = () => {
 
             if (pendingResult.error) throw pendingResult.error
 
-            setPendingTasks(pendingResult.data || [])
+            const prioritized = (pendingResult.data || []).sort((a, b) => {
+                const aHot = HOT_STAGES.includes(a.leads?.cadence_stage) ? 0 : 1
+                const bHot = HOT_STAGES.includes(b.leads?.cadence_stage) ? 0 : 1
+                if (aHot !== bHot) return aHot - bHot
+
+                const aIcp = ICP_PRIORITY[a.leads?.icp_score] ?? 3
+                const bIcp = ICP_PRIORITY[b.leads?.icp_score] ?? 3
+                if (aIcp !== bIcp) return aIcp - bIcp
+
+                return new Date(a.created_at) - new Date(b.created_at)
+            }).slice(0, MAX_DAILY_TASKS)
+
+            setPendingTasks(prioritized)
             setDoneCount(doneResult.count || 0)
         } catch (err) {
             console.error('Error fetching cockpit tasks:', err)
@@ -28397,7 +30998,7 @@ const SalesCockpitPage = () => {
         try {
             const { error: updateError } = await supabase
                 .from('tasks')
-                .update({ status: 'DONE' })
+                .update({ status: 'COMPLETED', completed_at: new Date().toISOString() })
                 .eq('id', taskId)
 
             if (updateError) throw updateError
@@ -28413,9 +31014,11 @@ const SalesCockpitPage = () => {
         }
     }
 
-    const handleExecute = (linkedinUrl) => {
-        if (linkedinUrl) {
-            window.open(linkedinUrl, '_blank', 'noopener,noreferrer')
+    const navigate = useNavigate()
+
+    const handleExecute = (leadId, taskId) => {
+        if (leadId) {
+            navigate(`/sales/inbox?leadId=${leadId}${taskId ? `&taskId=${taskId}` : ''}`)
         }
     }
 
@@ -28437,7 +31040,7 @@ const SalesCockpitPage = () => {
         return { hotTasks: hot, coldTasks: cold }
     }, [pendingTasks])
 
-    const totalMissions = pendingTasks.length + doneCount
+    const totalMissions = Math.min(pendingTasks.length + doneCount, MAX_DAILY_TASKS)
     const progressPercent = totalMissions > 0 ? Math.round((doneCount / totalMissions) * 100) : 0
     const allDone = pendingTasks.length === 0 && !loading
     const visibleColdTasks = showAllCold ? coldTasks : coldTasks.slice(0, VISIBLE_COLD_CARDS)
@@ -28456,9 +31059,9 @@ const SalesCockpitPage = () => {
 
     if (loading) {
         return (
-            <div className="min-h-screen bg-obsidian text-white flex items-center justify-center">
+            <div className="min-h-screen bg-gray-50 flex items-center justify-center">
                 <div className="flex flex-col items-center gap-4">
-                    <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                    <Loader2 className="w-8 h-8 animate-spin text-orange-500" />
                     <span className="tracking-wide uppercase text-xs font-bold text-gray-400">Carregando cockpit...</span>
                 </div>
             </div>
@@ -28470,28 +31073,25 @@ const SalesCockpitPage = () => {
     // ───────────────────────────────────────────
 
     return (
-        <div className="min-h-screen bg-obsidian text-white p-4 sm:p-6 lg:p-8 relative overflow-hidden">
-            {/* Background glow */}
-            <div className="fixed top-20 right-20 w-96 h-96 bg-primary/10 blur-[100px] rounded-full pointer-events-none z-0" />
-
-            <div className="relative z-10 max-w-6xl mx-auto">
+        <div className="min-h-screen bg-gray-50 text-gray-900 p-4 sm:p-6 lg:p-8">
+            <div className="max-w-6xl mx-auto">
 
                 {/* ═══════════════════════════════════ */}
                 {/* HEADER + PROGRESS                  */}
                 {/* ═══════════════════════════════════ */}
-                <div className="glass-panel rounded-2xl p-5 sm:p-6 mb-6 relative overflow-hidden">
+                <div className="bg-white rounded-2xl border border-gray-200 p-5 sm:p-6 mb-6">
                     <div className="flex items-start justify-between gap-4 mb-5">
                         <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center">
-                                <Crosshair size={20} className="text-primary" />
+                            <div className="w-10 h-10 rounded-xl bg-orange-50 border border-orange-200 flex items-center justify-center">
+                                <Crosshair size={20} className="text-orange-500" />
                             </div>
                             <div>
-                                <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-white mb-1">
+                                <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-gray-900 mb-1">
                                     {getGreeting()}! 🎯
                                 </h1>
-                                <p className="text-sm text-gray-400">
+                                <p className="text-sm text-gray-500">
                                     {hotTasks.length > 0
-                                        ? <><span className="text-orange-400 font-semibold">{hotTasks.length} lead(s) quente(s)</span> · {coldTasks.length} em prospecção</>
+                                        ? <><span className="text-orange-500 font-semibold">{hotTasks.length} lead(s) quente(s)</span> · {coldTasks.length} em prospecção</>
                                         : pendingTasks.length > 0
                                             ? <>{pendingTasks.length} tarefas aguardando execução.</>
                                             : 'Nenhuma tarefa pendente!'
@@ -28503,7 +31103,7 @@ const SalesCockpitPage = () => {
                         <button
                             onClick={() => fetchTasks(true)}
                             disabled={refreshing}
-                            className="p-2 rounded-lg hover:bg-white/10 transition-colors text-gray-500 hover:text-white"
+                            className="p-2 rounded-lg hover:bg-gray-100 transition-colors text-gray-400 hover:text-gray-700"
                             title="Atualizar tarefas"
                         >
                             <RefreshCw size={16} className={refreshing ? 'animate-spin' : ''} />
@@ -28513,10 +31113,10 @@ const SalesCockpitPage = () => {
                     {/* Progress Bar */}
                     <div className="space-y-2">
                         <div className="flex items-center justify-between">
-                            <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">Progresso do dia</span>
-                            <span className="text-sm font-bold text-gray-300">{doneCount}/{totalMissions} concluídas</span>
+                            <span className="text-xs font-medium text-gray-400 uppercase tracking-wider">Progresso do dia</span>
+                            <span className="text-sm font-bold text-gray-700">{doneCount}/{totalMissions} concluídas</span>
                         </div>
-                        <div className="h-3 bg-white/[0.05] rounded-full overflow-hidden border border-white/[0.08]">
+                        <div className="h-3 bg-gray-100 rounded-full overflow-hidden border border-gray-200">
                             <div
                                 className="h-full rounded-full transition-all duration-700 ease-out"
                                 style={{
@@ -28524,9 +31124,6 @@ const SalesCockpitPage = () => {
                                     background: progressPercent === 100
                                         ? 'linear-gradient(90deg, #10b981, #34d399)'
                                         : 'linear-gradient(90deg, #ff4d00, #ff8800)',
-                                    boxShadow: progressPercent === 100
-                                        ? '0 0 16px rgba(16, 185, 129, 0.6)'
-                                        : '0 0 16px rgba(255, 77, 0, 0.5)',
                                 }}
                             />
                         </div>
@@ -28537,15 +31134,15 @@ const SalesCockpitPage = () => {
                 {/* ERROR STATE                        */}
                 {/* ═══════════════════════════════════ */}
                 {error && (
-                    <div className="glass-panel rounded-2xl p-8 mb-6 border-red-500/20">
+                    <div className="bg-white rounded-2xl border border-red-200 p-8 mb-6">
                         <div className="flex flex-col items-center justify-center py-8 gap-4 text-center">
-                            <div className="w-14 h-14 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center justify-center">
-                                <AlertTriangle size={28} className="text-red-400" />
+                            <div className="w-14 h-14 rounded-2xl bg-red-50 border border-red-200 flex items-center justify-center">
+                                <AlertTriangle size={28} className="text-red-500" />
                             </div>
-                            <p className="text-sm text-gray-400">{error}</p>
+                            <p className="text-sm text-gray-600">{error}</p>
                             <button
                                 onClick={() => fetchTasks()}
-                                className="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-gray-300 text-sm font-medium border border-glass-border transition-all"
+                                className="px-4 py-2 rounded-lg bg-gray-50 hover:bg-gray-100 text-gray-700 text-sm font-medium border border-gray-200 transition-all"
                             >
                                 Tentar novamente
                             </button>
@@ -28557,19 +31154,19 @@ const SalesCockpitPage = () => {
                 {/* ZERO INBOX — ALL DONE              */}
                 {/* ═══════════════════════════════════ */}
                 {allDone && !error && (
-                    <div className="glass-panel rounded-2xl p-10 sm:p-16 text-center">
+                    <div className="bg-white rounded-2xl border border-gray-200 p-10 sm:p-16 text-center">
                         <div className="flex justify-center mb-4">
-                            <div className="w-16 h-16 rounded-2xl bg-emerald-900/30 border border-emerald-500/20 flex items-center justify-center">
+                            <div className="w-16 h-16 rounded-2xl bg-green-50 border border-green-200 flex items-center justify-center">
                                 {doneCount > 0
-                                    ? <Trophy size={32} className="text-emerald-400" />
-                                    : <PartyPopper size={32} className="text-emerald-400" />
+                                    ? <Trophy size={32} className="text-green-500" />
+                                    : <PartyPopper size={32} className="text-green-500" />
                                 }
                             </div>
                         </div>
-                        <h2 className="text-xl font-bold text-white mb-2">
+                        <h2 className="text-xl font-bold text-gray-900 mb-2">
                             {doneCount > 0 ? 'Cockpit Limpo! 🏆' : 'Tudo em dia! 🎉'}
                         </h2>
-                        <p className="text-sm text-gray-400 max-w-sm mx-auto">
+                        <p className="text-sm text-gray-500 max-w-sm mx-auto">
                             {doneCount > 0
                                 ? `Você completou ${doneCount} tarefas hoje. Excelente trabalho!`
                                 : 'Nenhuma tarefa gerada no momento. Quando a IA identificar oportunidades, elas aparecerão aqui.'
@@ -28587,11 +31184,11 @@ const SalesCockpitPage = () => {
                         {/* LEFT: 🔥 PRIORIDADES (G4, G5) */}
                         <KanbanColumn
                             title="Prioridades"
-                            emoji="🔥"
+                            emoji=""
                             icon={<DollarSign size={15} />}
                             count={hotTasks.length}
                             themeKey="hot"
-                            emptyIcon={<Sparkles size={28} className="text-orange-400/40" />}
+                            emptyIcon={<Sparkles size={28} className="text-orange-300" />}
                             emptyTitle="Pipeline limpo"
                             emptyText="Nenhum lead em estágio avançado (G4/G5). Foque na prospecção →"
                         >
@@ -28609,26 +31206,26 @@ const SalesCockpitPage = () => {
 
                         {/* RIGHT: 🔨 MODERADAS */}
                         <KanbanColumn
-                            title="Moderadas"
-                            emoji="🔨"
+                            title="Tarefas de Prospecção"
+                            emoji=""
                             icon={<Users size={15} />}
                             count={coldTasks.length}
                             themeKey="cold"
-                            emptyIcon={<TrendingUp size={28} className="text-blue-400/40" />}
+                            emptyIcon={<TrendingUp size={28} className="text-blue-300" />}
                             emptyTitle="Tudo em dia"
                             emptyText="Nenhuma tarefa de prospecção pendente."
                             footer={
                                 hiddenColdCount > 0 && !showAllCold ? (
                                     <button
                                         onClick={() => setShowAllCold(true)}
-                                        className="w-full py-3 text-center text-xs font-semibold text-blue-400 hover:text-blue-300 bg-blue-500/[0.04] hover:bg-blue-500/[0.08] border-t border-blue-500/10 transition-colors rounded-b-2xl"
+                                        className="w-full py-3 text-center text-xs font-semibold text-blue-500 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 border-t border-blue-200 transition-colors rounded-b-2xl"
                                     >
                                         Mostrar mais {hiddenColdCount} tarefas
                                     </button>
                                 ) : showAllCold && coldTasks.length > VISIBLE_COLD_CARDS ? (
                                     <button
                                         onClick={() => setShowAllCold(false)}
-                                        className="w-full py-3 text-center text-xs font-semibold text-gray-500 hover:text-gray-300 bg-white/[0.02] hover:bg-white/[0.04] border-t border-white/[0.06] transition-colors rounded-b-2xl"
+                                        className="w-full py-3 text-center text-xs font-semibold text-gray-500 hover:text-gray-700 bg-gray-50 hover:bg-gray-100 border-t border-gray-200 transition-colors rounded-b-2xl"
                                     >
                                         Mostrar menos
                                     </button>
@@ -28663,8 +31260,8 @@ const KanbanColumn = ({ title, emoji, icon, count, themeKey, children, emptyIcon
 
     return (
         <div
-            className="rounded-2xl overflow-hidden border border-white/[0.06] flex flex-col"
-            style={{ background: theme.columnBg, backdropFilter: 'blur(12px)' }}
+            className="rounded-2xl overflow-hidden border border-gray-200 flex flex-col shadow-sm"
+            style={{ background: theme.columnBg }}
         >
             {/* Gradient accent bar */}
             <div className="h-[3px] w-full shrink-0" style={{ background: theme.borderTop }} />
@@ -28673,7 +31270,7 @@ const KanbanColumn = ({ title, emoji, icon, count, themeKey, children, emptyIcon
             <div className={`flex items-center justify-between px-4 py-3 ${theme.headerBg} border-b ${theme.headerBorder}`}>
                 <div className="flex items-center gap-2">
                     <span className={theme.iconColor}>{icon}</span>
-                    <h3 className="text-xs font-bold text-gray-300 tracking-wider uppercase">
+                    <h3 className="text-xs font-bold text-gray-700 tracking-wider uppercase">
                         {emoji} {title}
                     </h3>
                 </div>
@@ -28690,13 +31287,13 @@ const KanbanColumn = ({ title, emoji, icon, count, themeKey, children, emptyIcon
                 {isEmpty ? (
                     <div className={`flex flex-col items-center justify-center py-10 gap-2 rounded-xl ${theme.emptyBg} border ${theme.emptyBorder}`}>
                         {emptyIcon}
-                        <p className="text-sm font-semibold text-gray-400">{emptyTitle}</p>
-                        <p className="text-[11px] text-gray-500 text-center px-6">{emptyText}</p>
+                        <p className="text-sm font-semibold text-gray-500">{emptyTitle}</p>
+                        <p className="text-[11px] text-gray-400 text-center px-6">{emptyText}</p>
                     </div>
                 ) : children}
             </div>
 
-            {/* Optional footer (show more / less) */}
+            {/* Optional footer */}
             {footer}
         </div>
     )
@@ -28712,7 +31309,7 @@ const TaskCard = ({ task, themeKey, completing, onComplete, onExecute }) => {
     const initial = lead.nome?.charAt(0)?.toUpperCase() || '?'
 
     const stage = lead.cadence_stage || ''
-    const stageStyle = CADENCE_STYLES[stage] || 'bg-gray-800 text-gray-400 border-gray-700'
+    const stageStyle = CADENCE_STYLES[stage] || 'bg-gray-100 text-gray-500 border-gray-200'
 
     const interactionCount = lead.total_interactions_count || 0
     const isFirstContact = interactionCount === 0
@@ -28720,98 +31317,113 @@ const TaskCard = ({ task, themeKey, completing, onComplete, onExecute }) => {
     return (
         <div
             className={`
-                rounded-xl p-3.5 group
+                rounded-xl group
                 transition-all duration-300 ease-out
-                bg-white/[0.025] border border-white/[0.06]
-                hover:bg-white/[0.055] hover:border-white/[0.13]
-                hover:shadow-lg hover:shadow-black/20
+                bg-white border border-gray-200
+                hover:shadow-md hover:border-gray-300
                 border-l-[3px] ${theme.cardBorder}
                 ${completing
                     ? 'opacity-0 scale-95 translate-x-4 pointer-events-none'
                     : 'opacity-100 scale-100 translate-x-0'
                 }
             `}
-            style={{ backdropFilter: 'blur(8px)' }}
         >
-            {/* Row 1: Avatar + Lead Info + Stage Badge */}
-            <div className="flex items-start gap-3 mb-2">
-                <div className="w-9 h-9 rounded-lg shrink-0 bg-gradient-to-br from-gray-800 to-gray-900 border border-white/[0.08] flex items-center justify-center">
-                    <span className="text-xs font-bold text-gray-300">{initial}</span>
-                </div>
-                <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-0.5">
-                        <h4 className="text-sm font-semibold text-white truncate">{lead.nome || 'Lead'}</h4>
-                        {stage && (
-                            <span className={`shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded border ${stageStyle}`}>
-                                {stage}
-                            </span>
-                        )}
+            {/* Card content */}
+            <div className="p-4">
+                {/* Row 1: Avatar + Lead Info + Stage Badge */}
+                <div className="flex items-start gap-3 mb-3">
+                    {lead?.avatar_url ? (
+                        <img
+                            src={lead.avatar_url}
+                            alt={lead.nome || 'Lead'}
+                            className="w-10 h-10 rounded-lg shrink-0 object-cover border border-gray-200 shadow-sm"
+                        />
+                    ) : (
+                        <div className="w-10 h-10 rounded-lg shrink-0 bg-gray-100 border border-gray-200 flex items-center justify-center shadow-sm">
+                            <span className="text-sm font-bold text-gray-600">{initial}</span>
+                        </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                            <h4 className="text-sm font-semibold text-gray-900 truncate">{lead.nome || 'Lead'}</h4>
+                            {stage && (
+                                <span className={`shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded border ${stageStyle}`}>
+                                    {stage}
+                                </span>
+                            )}
+                            {lead.icp_score && (
+                                <span className={`shrink-0 text-[10px] px-1.5 py-0.5 rounded border ${ICP_STYLES[lead.icp_score] || 'bg-gray-100 text-gray-500 border-gray-200'}`}>
+                                    {lead.icp_score}
+                                </span>
+                            )}
+                        </div>
+                        <p className="text-xs text-gray-500 leading-tight">
+                            {lead.headline || ''}
+                            {lead.empresa && lead.headline ? ` · ${lead.empresa}` : lead.empresa || ''}
+                        </p>
                     </div>
-                    <p className="text-[11px] text-gray-500 truncate leading-tight">
-                        {lead.headline || ''}
-                        {lead.empresa && lead.headline ? ` · ${lead.empresa}` : lead.empresa || ''}
-                    </p>
                 </div>
-            </div>
 
-            {/* Row 2: AI Instruction */}
-            {task.instruction && (
-                <div className="mb-3">
-                    <p className="text-[11px] text-gray-400 leading-relaxed line-clamp-2 bg-white/[0.02] rounded-lg px-3 py-2 border border-white/[0.04]">
-                        <span className="mr-1">💡</span>{task.instruction}
-                    </p>
-                </div>
-            )}
+                {/* Row 2: AI Instruction */}
+                {task.instruction && (
+                    <div className="mb-4">
+                        <p className="text-[11px] text-gray-600 leading-relaxed bg-gray-50 rounded-lg px-3.5 py-2.5 border border-gray-100 shadow-sm">
+                            <span className="mr-1.5 opacity-80">💡</span>{task.instruction}
+                        </p>
+                    </div>
+                )}
 
-            {/* Row 3: Smart Action Buttons */}
-            <div className="flex items-center gap-2">
-                {/* PRIMARY: Smart LinkedIn Action */}
-                {lead.linkedin_profile_url && (
+                {/* Row 3: Action Buttons */}
+                <div className="flex flex-col sm:flex-row items-center gap-2">
+                    {lead.linkedin_profile_url && (
+                        <button
+                            onClick={() => onExecute(lead?.id, task.id)}
+                            className={`
+                                flex-1 w-full sm:w-auto flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-[12px] font-semibold
+                                transition-all duration-200 shadow-sm
+                                ${isFirstContact
+                                    ? 'bg-orange-50 text-orange-600 border border-orange-200 hover:bg-orange-100 hover:shadow-md'
+                                    : 'bg-orange-500 text-white border border-orange-500 hover:bg-orange-600 hover:shadow-md'
+                                }
+                            `}
+                            title={isFirstContact ? 'Enviar primeiro contato' : 'Continuar conversa'}
+                        >
+                            {isFirstContact ? (
+                                <>
+                                    <HandMetal size={15} />
+                                    <span>Enviar Icebreaker</span>
+                                </>
+                            ) : (
+                                <>
+                                    <MessageCircle size={15} />
+                                    <span>Continuar Conversa</span>
+                                </>
+                            )}
+                        </button>
+                    )}
+
                     <button
-                        onClick={() => onExecute(lead.linkedin_profile_url)}
-                        className={`
-                            flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-[11px] font-semibold
-                            transition-all duration-200
-                            ${isFirstContact
-                                ? 'bg-indigo-500/15 text-indigo-300 border border-indigo-500/25 hover:bg-indigo-500/25 hover:border-indigo-500/40'
-                                : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20 hover:border-emerald-500/35'
-                            }
-                        `}
-                        title={isFirstContact ? 'Enviar primeiro contato' : 'Continuar conversa'}
+                        onClick={() => onComplete(task.id)}
+                        disabled={completing}
+                        className="
+                            shrink-0 w-full sm:w-auto flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-[12px] font-semibold
+                            bg-green-50 text-green-700 border border-green-200
+                            hover:bg-green-500 hover:text-white hover:border-green-500 hover:shadow-md
+                            transition-all duration-200 shadow-sm
+                            disabled:opacity-50 disabled:cursor-not-allowed
+                        "
+                        title="Marcar como concluída"
                     >
-                        {isFirstContact ? (
-                            <>
-                                <HandMetal size={13} />
-                                <span>Enviar Icebreaker</span>
-                            </>
+                        {completing ? (
+                            <Loader2 size={15} className="animate-spin" />
                         ) : (
                             <>
-                                <MessageCircle size={13} />
-                                <span>Continuar Conversa</span>
+                                <CheckCircle2 size={15} />
+                                <span>Concluir</span>
                             </>
                         )}
                     </button>
-                )}
-
-                {/* SECONDARY: Concluir */}
-                <button
-                    onClick={() => onComplete(task.id)}
-                    disabled={completing}
-                    className="
-                        shrink-0 flex items-center justify-center gap-1 px-3 py-2 rounded-lg text-[11px] font-semibold
-                        bg-white/[0.04] text-gray-400 border border-white/[0.08]
-                        hover:bg-emerald-500/15 hover:text-emerald-400 hover:border-emerald-500/25
-                        transition-all duration-200
-                        disabled:opacity-50 disabled:cursor-not-allowed
-                    "
-                    title="Marcar como concluída"
-                >
-                    {completing ? (
-                        <Loader2 size={13} className="animate-spin" />
-                    ) : (
-                        <CheckCircle2 size={13} />
-                    )}
-                </button>
+                </div>
             </div>
         </div>
     )
@@ -31044,17 +33656,20 @@ export default SalesHubPage
 ## File: src\pages\SalesInboxPage.jsx
 ```javascript
 import React, { useState, useEffect, useRef } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { supabase } from '../services/supabaseClient'
 import { useClientSelection } from '../contexts/ClientSelectionContext'
 import { Search, Send, MoreVertical, Phone, Mail, MapPin, Briefcase, Zap, Star, Sparkles, MessageSquare, Copy, Check, LayoutGrid, List, Loader2, X } from 'lucide-react'
 
-const N8N_GENERATE_REPLY_URL = 'https://n8n-n8n-start.kfocge.easypanel.host/webhook/generate-reply'
+const N8N_GENERATE_REPLY_URL = 'https://n8n-n8n-start.kfocge.easypanel.host/webhook-test/generate-reply'
+const N8N_SEND_MESSAGE_URL = 'https://n8n-n8n-start.kfocge.easypanel.host/webhook/send-linkedin-message'
 import KanbanColumn from '../components/kanban/KanbanColumn'
 import KanbanLeadCard from '../components/kanban/KanbanLeadCard'
 import StrategicContextCard from '../components/StrategicContextCard'
 
 const SalesInboxPage = () => {
     const { selectedClientId } = useClientSelection()
+    const [searchParams, setSearchParams] = useSearchParams()
     const [leads, setLeads] = useState([])
     const [loadingLeads, setLoadingLeads] = useState(false)
     const [activeLead, setActiveLead] = useState(null)
@@ -31067,6 +33682,8 @@ const SalesInboxPage = () => {
     const [interactions, setInteractions] = useState([])
     const [loadingChat, setLoadingChat] = useState(false)
     const [newMessage, setNewMessage] = useState('')
+    const [isSending, setIsSending] = useState(false)
+    const [toast, setToast] = useState(null)
 
     // AI Actions State
     const [draftMessage, setDraftMessage] = useState('')
@@ -31075,6 +33692,9 @@ const SalesInboxPage = () => {
     const [generatingReply, setGeneratingReply] = useState(false)
     const [sdrSeniorGenerated, setSdrSeniorGenerated] = useState(false)
     const [generatedReasoning, setGeneratedReasoning] = useState(null)
+
+    // Cockpit task auto-complete
+    const [pendingTaskId, setPendingTaskId] = useState(null)
 
     // 1. Fetch Inbox Leads (Score > 0, Sorted Desc)
     useEffect(() => {
@@ -31096,6 +33716,7 @@ const SalesInboxPage = () => {
 
                 // Fetch last interaction direction (is_sender) per lead
                 let lastSenderMap = {}
+                let lastDateMap = {}
                 if (leadIds.length > 0) {
                     const { data: intData } = await supabase
                         .from('interactions')
@@ -31107,6 +33728,7 @@ const SalesInboxPage = () => {
                         intData.forEach(row => {
                             if (!(row.lead_id in lastSenderMap)) {
                                 lastSenderMap[row.lead_id] = row.is_sender
+                                lastDateMap[row.lead_id] = row.interaction_date
                             }
                         })
                     }
@@ -31115,12 +33737,52 @@ const SalesInboxPage = () => {
                 const processedLeads = (data || []).map(lead => ({
                     ...lead,
                     total_interactions_count: lead.total_interactions_count || 0,
-                    last_interaction_date: lead.last_interaction_date || null,
+                    last_interaction_date: lastDateMap[lead.id] || lead.last_interaction_date || null,
                     // is_sender=true → I sent last msg | is_sender=false → lead sent last msg
                     _lastMsgIsSender: lead.id in lastSenderMap ? lastSenderMap[lead.id] : null
-                }))
+                })).sort((a, b) => {
+                    const dateA = a.last_interaction_date ? new Date(a.last_interaction_date).getTime() : 0
+                    const dateB = b.last_interaction_date ? new Date(b.last_interaction_date).getTime() : 0
+                    return dateB - dateA
+                })
 
                 setLeads(processedLeads)
+
+                // Auto-select lead from URL param (e.g. /sales/inbox?leadId=xxx)
+                const targetLeadId = searchParams.get('leadId')
+                if (targetLeadId) {
+                    let targetLead = processedLeads.find(l => String(l.id) === targetLeadId)
+
+                    // Lead not in top 50 — fetch individually and prepend
+                    if (!targetLead) {
+                        const { data: singleLead } = await supabase
+                            .from('leads')
+                            .select('*')
+                            .eq('id', targetLeadId)
+                            .single()
+
+                        if (singleLead) {
+                            targetLead = {
+                                ...singleLead,
+                                total_interactions_count: singleLead.total_interactions_count || 0,
+                                _lastMsgIsSender: null
+                            }
+                            setLeads(prev => [targetLead, ...prev])
+                        }
+                    }
+
+                    if (targetLead) {
+                        setActiveLead(targetLead)
+                        setViewMode('list')
+                    }
+
+                    // Store taskId for auto-complete after sending message
+                    const taskId = searchParams.get('taskId')
+                    if (taskId) setPendingTaskId(taskId)
+
+                    // Clear the params so they don't re-trigger
+                    setSearchParams({}, { replace: true })
+                }
             } catch (err) {
                 console.error('Erro ao buscar leads do inbox:', err)
             } finally {
@@ -31234,35 +33896,103 @@ const SalesInboxPage = () => {
 
     const kanbanData = categorizeLeads(filteredLeads)
 
-    const handleSendMessage = async () => {
-        if (!newMessage.trim() || !activeLead) return
-
-        // Optimistic UI Update
-        const tempMsg = {
-            id: Date.now(),
-            content: newMessage,
-            direction: 'outbound',
-            interaction_date: new Date().toISOString()
-        }
-        setInteractions([tempMsg, ...interactions])
-        setNewMessage('')
+    const showToast = (message, type = 'success') => {
+        setToast({ message, type })
+        setTimeout(() => setToast(null), 3500)
     }
 
-    const handleAiSend = () => {
-        if (!draftMessage.trim() || !activeLead) return
-
-        console.log('[LinkedIn Send] Simulating send:', draftMessage)
-
-        // Optimistic Update
-        const tempMsg = {
-            id: Date.now(),
-            content: draftMessage,
-            direction: 'outbound',
-            interaction_date: new Date().toISOString()
+    const completeTaskIfPending = async () => {
+        if (!pendingTaskId) return
+        try {
+            await supabase
+                .from('tasks')
+                .update({ status: 'COMPLETED', completed_at: new Date().toISOString() })
+                .eq('id', pendingTaskId)
+            setPendingTaskId(null)
+            showToast('✅ Tarefa do Cockpit concluída automaticamente!')
+        } catch (err) {
+            console.error('[Auto-complete] Error:', err)
         }
-        setInteractions([tempMsg, ...interactions])
-        alert('✅ Mensagem enviada via LinkedIn (Simulação)')
-        setDraftMessage('')
+    }
+
+    const sendToWebhook = async (messageText) => {
+        // Fetch the Unipile account_id from the clients table
+        const { data: client, error: clientError } = await supabase
+            .from('clients')
+            .select('unipile_account_id')
+            .eq('id', activeLead.client_id)
+            .single()
+
+        if (clientError || !client?.unipile_account_id) {
+            throw new Error('Não foi possível obter o account_id da Unipile para este cliente.')
+        }
+
+        const response = await fetch(N8N_SEND_MESSAGE_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                account_id: client.unipile_account_id,
+                provider_id: activeLead.provider_id,
+                chat_id: activeLead.chat_id || null,
+                message_text: messageText
+            })
+        })
+        if (!response.ok) throw new Error(`HTTP ${response.status}`)
+        return response
+    }
+
+    const handleSendMessage = async () => {
+        if (!newMessage.trim() || !activeLead || isSending) return
+
+        const messageText = newMessage.trim()
+        setIsSending(true)
+
+        try {
+            await sendToWebhook(messageText)
+
+            const tempMsg = {
+                id: Date.now(),
+                content: messageText,
+                is_sender: true,
+                interaction_date: new Date().toISOString()
+            }
+            setInteractions(prev => [tempMsg, ...prev])
+            setNewMessage('')
+            showToast('Mensagem enviada!')
+            await completeTaskIfPending()
+        } catch (err) {
+            console.error('[Send] Error:', err)
+            showToast('Erro ao enviar mensagem. Tente novamente.', 'error')
+        } finally {
+            setIsSending(false)
+        }
+    }
+
+    const handleAiSend = async () => {
+        if (!draftMessage.trim() || !activeLead || isSending) return
+
+        const messageText = draftMessage.trim()
+        setIsSending(true)
+
+        try {
+            await sendToWebhook(messageText)
+
+            const tempMsg = {
+                id: Date.now(),
+                content: messageText,
+                is_sender: true,
+                interaction_date: new Date().toISOString()
+            }
+            setInteractions(prev => [tempMsg, ...prev])
+            setDraftMessage('')
+            showToast('Mensagem enviada via LinkedIn!')
+            await completeTaskIfPending()
+        } catch (err) {
+            console.error('[AI Send] Error:', err)
+            showToast('Erro ao enviar mensagem. Tente novamente.', 'error')
+        } finally {
+            setIsSending(false)
+        }
     }
 
     const copyToClipboard = (text, idx) => {
@@ -31280,8 +34010,10 @@ const SalesInboxPage = () => {
         try {
             const conversationHistory = interactions
                 .slice().reverse()
-                .map(msg => `${msg.is_sender ? 'Eu' : 'Lead'}: ${msg.content}`)
-                .join('\n')
+                .map(msg => ({
+                    is_sender: !!msg.is_sender,
+                    content: msg.content || ''
+                }))
 
             const payload = {
                 user_id: selectedClientId,
@@ -31372,7 +34104,7 @@ const SalesInboxPage = () => {
                         placeholder="Pesquisar lead..."
                         value={searchTerm}
                         onChange={e => setSearchTerm(e.target.value)}
-                        className="w-full bg-black/40 border border-white/10 rounded-xl pl-9 pr-8 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30 transition-all"
+                        className="w-full bg-black/40 border border-white/10 rounded-xl pl-9 pr-8 py-2 text-sm text-gray-800 placeholder-gray-500 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30 transition-all"
                     />
                     {searchTerm && (
                         <button
@@ -31473,11 +34205,11 @@ const SalesInboxPage = () => {
 
             {/* LIST / DETAIL VIEW */}
             {viewMode === 'list' && (
-                <div className="flex-1 flex gap-6 overflow-hidden">
+                <div className="flex-1 flex gap-4 lg:gap-6 overflow-hidden">
                     {/* LEFT: Lead List */}
-                    <div className="w-80 flex flex-col bg-[#0d0d0d] rounded-2xl border border-white/10 overflow-hidden shrink-0">
-                        <div className="p-4 border-b border-white/10 bg-[#111111] flex justify-between items-center">
-                            <span className="font-semibold text-white">Inbox Prioritário</span>
+                    <div className="hidden md:flex w-72 lg:w-80 flex-col bg-charcoal rounded-2xl border border-glass-border overflow-hidden shrink-0">
+                        <div className="p-4 border-b border-glass-border bg-black/20 flex justify-between items-center">
+                            <span className="font-semibold text-text-heading">Inbox Prioritário</span>
                             <span className="text-xs bg-primary/20 text-primary px-2 py-1 rounded-full font-bold">
                                 {filteredLeads.length}
                             </span>
@@ -31485,34 +34217,54 @@ const SalesInboxPage = () => {
 
                         <div className="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-2">
                             {loadingLeads ? (
-                                <div className="p-8 text-center text-gray-500 text-sm">Carregando...</div>
+                                <div className="p-8 text-center text-text-muted text-sm">Carregando...</div>
                             ) : filteredLeads.map(lead => (
                                 <div
                                     key={lead.id}
                                     onClick={() => setActiveLead(lead)}
                                     className={`p-3 rounded-xl border cursor-pointer transition-all ${activeLead?.id === lead.id
-                                        ? 'bg-primary/20 border-primary/50 shadow-lg shadow-primary/10'
-                                        : 'border-transparent hover:bg-white/10 hover:border-white/10'
+                                        ? 'bg-primary/10 border-primary/40 shadow-lg shadow-primary/5'
+                                        : 'border-transparent hover:bg-glass hover:border-glass-border'
                                         }`}
                                 >
                                     <div className="flex justify-between items-start mb-1">
-                                        <span className={`font-semibold text-sm truncate max-w-[160px] ${activeLead?.id === lead.id ? 'text-white' : 'text-white'}`}>
+                                        <span className={`font-semibold text-sm truncate max-w-[140px] lg:max-w-[160px] text-text-heading`}>
                                             {lead.nome || 'Sem Nome'}
                                         </span>
-                                        <span className="text-[10px] text-gray-400">
+                                        <span className="text-[10px] text-text-muted">
                                             {lead.last_interaction ? new Date(lead.last_interaction).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : ''}
                                         </span>
                                     </div>
-                                    <div className="text-xs text-gray-300 mb-2 truncate">
+                                    <div className="text-xs text-text-body mb-2 truncate">
                                         {lead.headline || 'Lead qualificado'}
                                     </div>
-                                    <div className="flex items-center gap-1 text-[10px] font-bold text-white bg-primary/30 self-start px-2 py-0.5 rounded-md inline-flex">
-                                        <Star size={10} className="text-primary fill-primary" /> {lead.engagement_score} pts
+                                    <div className="flex items-center gap-2 text-[10px]">
+                                        {/* ICP Score */}
+                                        <span className={`font-bold px-1.5 py-0.5 rounded ${lead.icp_score === 'A' ? 'bg-emerald-500/20 text-emerald-400' :
+                                            lead.icp_score === 'B' ? 'bg-amber-500/20 text-amber-400' :
+                                                'bg-slate-500/20 text-slate-400'
+                                            }`}>
+                                            ICP {lead.icp_score || 'C'}
+                                        </span>
+                                        {/* Relative time */}
+                                        <span className="text-text-muted">
+                                            {(() => {
+                                                const d = lead.last_interaction_date
+                                                if (!d) return 'Sem interação'
+                                                const diff = Date.now() - new Date(d).getTime()
+                                                const mins = Math.floor(diff / 60000)
+                                                if (mins < 60) return `💬 há ${mins}m`
+                                                const hrs = Math.floor(mins / 60)
+                                                if (hrs < 24) return `💬 há ${hrs}h`
+                                                const days = Math.floor(hrs / 24)
+                                                return `💬 há ${days}d`
+                                            })()}
+                                        </span>
                                     </div>
                                 </div>
                             ))}
                             {!loadingLeads && filteredLeads.length === 0 && (
-                                <div className="p-8 text-center text-gray-500 text-sm">
+                                <div className="p-8 text-center text-text-muted text-sm">
                                     {searchTerm ? 'Nenhum lead encontrado.' : 'Nenhum lead com engajamento.'}
                                 </div>
                             )}
@@ -31521,11 +34273,11 @@ const SalesInboxPage = () => {
 
                     {/* MIDDLE: Chat Area */}
                     {activeLead ? (
-                        <div className="flex-1 flex flex-col bg-[#0d0d0d] rounded-2xl border border-white/10 overflow-hidden relative">
+                        <div className="flex-1 flex flex-col bg-charcoal rounded-2xl border border-glass-border overflow-hidden relative">
                             {/* Header */}
-                            <div className="p-4 border-b border-white/10 bg-[#111111] flex items-center justify-between z-10">
+                            <div className="p-4 border-b border-glass-border bg-black/20 flex items-center justify-between z-10">
                                 <div className="flex items-center gap-3 flex-1 min-w-0">
-                                    <div className="w-10 h-10 shrink-0 rounded-full bg-gradient-to-br from-gray-700 to-black border border-glass-border flex items-center justify-center text-white font-bold shadow-inner overflow-hidden">
+                                    <div className="w-10 h-10 shrink-0 rounded-full bg-gradient-to-br from-gray-800 to-black border border-glass-border flex items-center justify-center text-white font-bold shadow-inner overflow-hidden">
                                         {activeLead.avatar_url ? (
                                             <img src={activeLead.avatar_url} alt={activeLead.nome} className="w-full h-full object-cover" />
                                         ) : (
@@ -31533,50 +34285,118 @@ const SalesInboxPage = () => {
                                         )}
                                     </div>
                                     <div className="flex-1 min-w-0">
-                                        <div className="font-bold text-white text-sm truncate">{activeLead.nome}</div>
-                                        <div className="text-xs text-gray-400 truncate">{activeLead.headline || activeLead.company}</div>
+                                        <div className="font-bold text-text-heading text-sm truncate">{activeLead.nome}</div>
+                                        <div className="text-xs text-text-muted truncate">{activeLead.headline || activeLead.company}</div>
                                     </div>
                                 </div>
-                                <button className="p-2 rounded-lg hover:bg-white/5 text-gray-400 hover:text-white transition-colors shrink-0">
+                                <button className="p-2 rounded-lg hover:bg-glass text-text-muted hover:text-text-heading transition-colors shrink-0">
                                     <MoreVertical size={18} />
                                 </button>
                             </div>
 
                             {/* Timeline */}
-                            <div className="flex-1 overflow-y-auto p-6 flex flex-col-reverse gap-4 custom-scrollbar bg-black/20">
+                            <div className="flex-1 overflow-y-auto p-4 lg:p-6 flex flex-col-reverse gap-4 custom-scrollbar bg-black/10">
                                 {loadingChat ? (
-                                    <div className="text-center text-gray-500 text-sm py-10">Carregando histórico...</div>
+                                    <div className="text-center text-text-muted text-sm py-10">Carregando histórico...</div>
                                 ) : interactions.length === 0 ? (
-                                    <div className="text-center text-gray-500 text-sm py-10 flex flex-col items-center gap-2">
+                                    <div className="text-center text-text-muted text-sm py-10 flex flex-col items-center gap-2">
                                         <MessageSquare size={24} className="opacity-20" />
                                         Nenhuma mensagem trocada ainda.
                                     </div>
-                                ) : interactions.map(msg => (
-                                    <div key={msg.id} className={`flex flex-col max-w-[80%] ${msg.is_sender === true ? 'self-end items-end' : 'self-start items-start'}`}>
-                                        <div className={`px-4 py-3 rounded-2xl text-sm leading-relaxed ${msg.is_sender === true
-                                            ? 'bg-primary/90 text-white rounded-br-sm shadow-lg shadow-primary/10'
-                                            : 'bg-white/10 text-gray-200 rounded-bl-sm'
-                                            }`}>
-                                            {msg.content}
-                                        </div>
-                                        <span className="text-[10px] text-gray-500 mt-1 px-1">
-                                            {new Date(msg.interaction_date).toLocaleString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                                        </span>
-                                    </div>
-                                ))}
+                                ) : (() => {
+                                    // Build date label helper
+                                    const getDateLabel = (dateStr) => {
+                                        const date = new Date(dateStr)
+                                        const now = new Date()
+                                        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+                                        const msgDay = new Date(date.getFullYear(), date.getMonth(), date.getDate())
+                                        const diffDays = Math.round((today - msgDay) / (1000 * 60 * 60 * 24))
+
+                                        if (diffDays === 0) return 'HOJE'
+                                        if (diffDays === 1) return 'ONTEM'
+                                        if (diffDays < 7) {
+                                            return date.toLocaleDateString('pt-BR', { weekday: 'long' }).toUpperCase()
+                                        }
+                                        const day = date.getDate()
+                                        const month = date.toLocaleDateString('pt-BR', { month: 'short' }).toUpperCase().replace('.', '')
+                                        return `${day} DE ${month}.`
+                                    }
+
+                                    const getDateKey = (dateStr) => {
+                                        const d = new Date(dateStr)
+                                        return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`
+                                    }
+
+                                    // interactions are sorted desc (newest first), rendered with flex-col-reverse
+                                    const elements = []
+                                    let lastDateKey = null
+
+                                    interactions.forEach((msg, idx) => {
+                                        const dateKey = getDateKey(msg.interaction_date)
+
+                                        // When date changes, insert divider BEFORE the message bubble
+                                        // (in reversed layout, this renders ABOVE the group)
+                                        if (dateKey !== lastDateKey) {
+                                            // Look at next message — if it's a different day, the divider goes here
+                                            // For the first message (newest), always show divider
+                                            if (lastDateKey !== null) {
+                                                elements.push(
+                                                    <div key={`divider-${lastDateKey}`} className="flex items-center gap-3 my-2 self-stretch">
+                                                        <div className="flex-1 h-px bg-glass-border" />
+                                                        <span className="text-[10px] font-bold text-text-muted tracking-widest uppercase">
+                                                            {getDateLabel(interactions[idx - 1].interaction_date)}
+                                                        </span>
+                                                        <div className="flex-1 h-px bg-glass-border" />
+                                                    </div>
+                                                )
+                                            }
+                                            lastDateKey = dateKey
+                                        }
+
+                                        elements.push(
+                                            <div key={msg.id} className={`flex flex-col max-w-[85%] lg:max-w-[80%] ${msg.is_sender === true ? 'self-end items-end' : 'self-start items-start'}`}>
+                                                <div className={`px-4 py-3 rounded-2xl text-sm leading-relaxed ${msg.is_sender === true
+                                                    ? 'bg-primary text-white rounded-br-sm shadow-lg shadow-primary/10'
+                                                    : 'bg-glass text-text-body rounded-bl-sm border border-glass-border'
+                                                    }`}>
+                                                    {msg.content}
+                                                </div>
+                                                <span className="text-[10px] text-text-muted mt-1 px-1">
+                                                    {new Date(msg.interaction_date).toLocaleString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                                                </span>
+                                            </div>
+                                        )
+                                    })
+
+                                    // Add divider for the last (oldest) group
+                                    if (lastDateKey !== null) {
+                                        elements.push(
+                                            <div key={`divider-${lastDateKey}`} className="flex items-center gap-3 my-2 self-stretch">
+                                                <div className="flex-1 h-px bg-glass-border" />
+                                                <span className="text-[10px] font-bold text-text-muted tracking-widest uppercase">
+                                                    {getDateLabel(interactions[interactions.length - 1].interaction_date)}
+                                                </span>
+                                                <div className="flex-1 h-px bg-glass-border" />
+                                            </div>
+                                        )
+                                    }
+
+                                    return elements
+                                })()}
                             </div>
 
                             {/* Input Area */}
-                            <div className="p-4 border-t border-glass-border bg-white/[0.02]">
+                            <div className="p-4 border-t border-glass-border bg-black/20">
                                 <div className="relative">
                                     <textarea
-                                        className="w-full bg-black/40 border border-glass-border rounded-xl pl-4 pr-12 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition-all resize-none text-sm"
+                                        className="w-full bg-black/40 border border-glass-border rounded-xl pl-4 pr-12 py-3 text-white placeholder-text-muted focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition-all resize-none text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                                         rows="1"
-                                        placeholder="Digite sua resposta..."
+                                        placeholder={isSending ? 'Enviando...' : 'Digite sua resposta... (Ctrl+Enter para enviar)'}
                                         value={newMessage}
                                         onChange={e => setNewMessage(e.target.value)}
+                                        disabled={isSending}
                                         onKeyDown={e => {
-                                            if (e.key === 'Enter' && !e.shiftKey) {
+                                            if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
                                                 e.preventDefault()
                                                 handleSendMessage()
                                             }
@@ -31584,34 +34404,35 @@ const SalesInboxPage = () => {
                                     />
                                     <button
                                         onClick={handleSendMessage}
-                                        className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-lg bg-primary hover:bg-primary-dark text-white shadow-lg shadow-primary/20 transition-all"
+                                        disabled={isSending || !newMessage.trim()}
+                                        className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-lg bg-primary hover:bg-primary/80 text-white shadow-lg shadow-primary/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                                     >
-                                        <Send size={14} />
+                                        {isSending ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
                                     </button>
                                 </div>
                             </div>
                         </div>
                     ) : (
-                        <div className="flex-1 flex flex-col items-center justify-center bg-[#0d0d0d] rounded-2xl border border-white/10 text-gray-300 gap-4">
+                        <div className="flex-1 flex flex-col items-center justify-center bg-charcoal rounded-2xl border border-glass-border text-text-muted gap-4">
                             <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center">
                                 <Zap size={32} className="text-primary/50" />
                             </div>
-                            <p className="text-sm text-gray-400">Selecione um lead para iniciar o atendimento.</p>
+                            <p className="text-sm text-text-muted">Selecione um lead para iniciar o atendimento.</p>
                         </div>
                     )}
 
                     {/* RIGHT: Context & AI (ENHANCED) */}
-                    <div className="w-80 flex flex-col gap-4 shrink-0 overflow-y-auto custom-scrollbar">
+                    <div className="hidden xl:flex w-80 flex-col gap-4 shrink-0 overflow-y-auto custom-scrollbar">
                         {activeLead ? (
                             <>
                                 {/* Lead Info Card - 3 Main Indicators */}
-                                <div className="bg-[#0d0d0d] rounded-2xl border border-white/10 p-5">
+                                <div className="bg-charcoal rounded-2xl border border-glass-border p-5">
                                     <h4 className="text-xs font-bold text-primary uppercase tracking-wider mb-4">Dados do Lead</h4>
                                     <div className="flex items-center justify-between gap-3">
                                         {/* ICP Score */}
                                         <div className={`flex-1 text-center py-2 px-3 rounded-lg border ${activeLead.icp_score === 'A' ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400' :
                                             activeLead.icp_score === 'B' ? 'bg-amber-500/20 border-amber-500/50 text-amber-400' :
-                                                'bg-slate-500/20 border-slate-500/50 text-slate-400'
+                                                'bg-slate-500/20 border-slate-500/50 text-text-muted'
                                             }`}>
                                             <div className="text-[10px] uppercase tracking-wider opacity-70 mb-1">ICP</div>
                                             <div className="text-lg font-bold">{activeLead.icp_score || 'C'}</div>
@@ -31631,7 +34452,7 @@ const SalesInboxPage = () => {
                                             const style = level >= 5 ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400'
                                                 : level >= 3 ? 'bg-amber-500/20 border-amber-500/50 text-amber-400'
                                                     : level >= 1 ? 'bg-blue-500/20 border-blue-500/50 text-blue-400'
-                                                        : 'bg-slate-500/20 border-slate-500/50 text-slate-400'
+                                                        : 'bg-slate-500/20 border-slate-500/50 text-text-muted'
                                             return (
                                                 <div className={`flex-1 text-center py-2 px-3 rounded-lg border ${style}`}>
                                                     <div className="text-[10px] uppercase tracking-wider opacity-70 mb-1">Cadência</div>
@@ -31643,11 +34464,11 @@ const SalesInboxPage = () => {
                                 </div>
 
                                 {/* Raio-X da Negociação */}
-                                <StrategicContextCard lead={activeLead} />
+                                <StrategicContextCard lead={activeLead} isIcebreaker={interactions.length === 0} />
 
                                 {/* AI Suggestion Card - Always starts clean */}
                                 <div className="relative p-[1px] rounded-2xl bg-gradient-to-br from-primary/50 to-purple-600/50 shadow-lg shadow-primary/10">
-                                    <div className="bg-[#0d0d0d] rounded-2xl p-5 h-full flex flex-col gap-4">
+                                    <div className="bg-charcoal rounded-2xl p-5 h-full flex flex-col gap-4">
                                         <div className="flex items-center gap-2 text-primary font-bold text-sm">
                                             <Sparkles size={16} /> Próximo Passo
                                         </div>
@@ -31667,15 +34488,15 @@ const SalesInboxPage = () => {
                                                         </div>
 
                                                         {/* Message - Prominent Display */}
-                                                        <div className="p-4 rounded-xl bg-white/10 border border-primary/30">
-                                                            <p className="text-white text-sm leading-relaxed whitespace-pre-wrap">
+                                                        <div className="p-4 rounded-xl bg-white/5 border border-primary/30">
+                                                            <p className="text-text-heading text-sm leading-relaxed whitespace-pre-wrap">
                                                                 "{draftMessage}"
                                                             </p>
                                                         </div>
 
                                                         {/* Reasoning (only if available) */}
                                                         {generatedReasoning && (
-                                                            <div className="flex gap-2 text-gray-400 text-xs">
+                                                            <div className="flex gap-2 text-text-muted text-xs">
                                                                 <span className="text-primary/60 shrink-0">💡</span>
                                                                 <p className="leading-relaxed italic">
                                                                     {generatedReasoning}
@@ -31720,7 +34541,7 @@ const SalesInboxPage = () => {
                                             // Default: Empty state → show generate button
                                             return (
                                                 <div className="text-center py-6">
-                                                    <p className="text-sm text-gray-400 mb-5">
+                                                    <p className="text-sm text-text-muted mb-5">
                                                         {isIcebreaker
                                                             ? 'Nenhuma conversa iniciada com este lead.'
                                                             : 'Clique para gerar uma sugestão de resposta com IA.'}
@@ -31749,7 +34570,7 @@ const SalesInboxPage = () => {
                                 </div>
                             </>
                         ) : (
-                            <div className="bg-[#0d0d0d] rounded-2xl border border-white/10 p-8 text-center text-gray-400 text-sm h-40 flex items-center justify-center">
+                            <div className="bg-charcoal rounded-2xl border border-glass-border p-8 text-center text-text-muted text-sm h-40 flex items-center justify-center">
                                 Contexto do lead aparecerá aqui.
                             </div>
                         )}

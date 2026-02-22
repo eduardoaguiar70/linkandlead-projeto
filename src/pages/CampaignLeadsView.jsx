@@ -508,7 +508,7 @@ const CampaignLeadsView = () => {
             }
 
             // 2. Call Webhook with Enriched Payload
-            const response = await fetch('https://n8n-n8n-start.kfocge.easypanel.host/webhook-test/sync-messages', {
+            const response = await fetch('https://n8n-n8n-start.kfocge.easypanel.host/webhook/sync-messages', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -1239,8 +1239,8 @@ const CampaignLeadsView = () => {
                                     onClick={handleBulkHistorySync}
                                     disabled={syncProgress.status === 'running'}
                                     className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-semibold text-sm transition-all ${syncProgress.status === 'running'
-                                            ? 'bg-amber-50 text-amber-400 cursor-not-allowed'
-                                            : 'bg-amber-50 text-amber-600 hover:bg-amber-100 hover:text-amber-700 border border-amber-200'
+                                        ? 'bg-amber-50 text-amber-400 cursor-not-allowed'
+                                        : 'bg-amber-50 text-amber-600 hover:bg-amber-100 hover:text-amber-700 border border-amber-200'
                                         }`}
                                 >
                                     <History size={16} className={syncProgress.status === 'running' ? 'animate-spin' : ''} />

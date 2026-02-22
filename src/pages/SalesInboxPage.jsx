@@ -1,10 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { supabase } from '../services/supabaseClient'
 import { useClientSelection } from '../contexts/ClientSelectionContext'
-import { Search, Send, MoreVertical, Phone, Mail, MapPin, Briefcase, Zap, Star, Sparkles, MessageSquare, Copy, Check, LayoutGrid, List, Loader2, X } from 'lucide-react'
+import { Search, Send, MoreVertical, Phone, Mail, MapPin, Briefcase, Zap, Star, Sparkles, MessageSquare, Copy, Check, LayoutGrid, List, Loader2, X, ClipboardList } from 'lucide-react'
 
-const N8N_GENERATE_REPLY_URL = 'https://n8n-n8n-start.kfocge.easypanel.host/webhook-test/generate-reply'
+const N8N_GENERATE_REPLY_URL = 'https://n8n-n8n-start.kfocge.easypanel.host/webhook/generate-reply'
 const N8N_SEND_MESSAGE_URL = 'https://n8n-n8n-start.kfocge.easypanel.host/webhook/send-linkedin-message'
 import KanbanColumn from '../components/kanban/KanbanColumn'
 import KanbanLeadCard from '../components/kanban/KanbanLeadCard'
@@ -38,6 +38,26 @@ const SalesInboxPage = () => {
 
     // Cockpit task auto-complete
     const [pendingTaskId, setPendingTaskId] = useState(null)
+
+    // Sidebar Tabs: Conversas | Tarefas do Dia
+    const [sidebarTab, setSidebarTab] = useState('conversas')
+    const [sidebarTasks, setSidebarTasks] = useState([])
+    const [loadingTasks, setLoadingTasks] = useState(false)
+    const [pendingTaskCount, setPendingTaskCount] = useState(0)
+
+    // Eager fetch: task count badge (always visible, regardless of active tab)
+    useEffect(() => {
+        if (!selectedClientId) return
+        const fetchCount = async () => {
+            const { data } = await supabase
+                .from('tasks')
+                .select('id, leads!inner(client_id)')
+                .eq('leads.client_id', selectedClientId)
+                .eq('status', 'PENDING')
+            setPendingTaskCount(data?.length || 0)
+        }
+        fetchCount()
+    }, [selectedClientId])
 
     // 1. Fetch Inbox Leads (Score > 0, Sorted Desc)
     useEffect(() => {
@@ -239,6 +259,60 @@ const SalesInboxPage = () => {
 
     const kanbanData = categorizeLeads(filteredLeads)
 
+    // Fetch tasks when sidebar tab is active
+    const fetchSidebarTasks = useCallback(async () => {
+        if (!selectedClientId) return
+        setLoadingTasks(true)
+        try {
+            const { data } = await supabase
+                .from('tasks')
+                .select('*, leads!inner(id, client_id, nome, empresa, headline, cadence_stage, avatar_url, linkedin_profile_url, total_interactions_count)')
+                .eq('leads.client_id', selectedClientId)
+                .eq('status', 'PENDING')
+                .order('created_at', { ascending: true })
+
+            // Sort by temperature: HOT (G4/G5) > WARM (G2/G3) > COLD (G1)
+            const stagePriority = { G5: 0, G4: 1, G3: 2, G2: 3, G1: 4 }
+            const sorted = (data || []).sort((a, b) => {
+                const pa = stagePriority[a.leads?.cadence_stage] ?? 5
+                const pb = stagePriority[b.leads?.cadence_stage] ?? 5
+                return pa - pb
+            })
+            setSidebarTasks(sorted)
+        } catch (err) {
+            console.error('Error fetching sidebar tasks:', err)
+        } finally {
+            setLoadingTasks(false)
+        }
+    }, [selectedClientId])
+
+    useEffect(() => {
+        if (sidebarTab === 'tarefas') fetchSidebarTasks()
+    }, [sidebarTab, fetchSidebarTasks])
+
+    const handleTaskClick = async (task) => {
+        const taskLead = task.leads
+        if (!taskLead?.id) return
+
+        // Try to find the lead in the already-loaded list
+        let lead = leads.find(l => l.id === taskLead.id)
+
+        if (!lead) {
+            // Fetch individual lead
+            const { data } = await supabase.from('leads').select('*').eq('id', taskLead.id).single()
+            if (data) {
+                lead = { ...data, total_interactions_count: data.total_interactions_count || 0, _lastMsgIsSender: null }
+                setLeads(prev => [lead, ...prev])
+            }
+        }
+
+        if (lead) {
+            setActiveLead(lead)
+            setPendingTaskId(task.id)
+            setViewMode('list')
+        }
+    }
+
     const showToast = (message, type = 'success') => {
         setToast({ message, type })
         setTimeout(() => setToast(null), 3500)
@@ -249,7 +323,7 @@ const SalesInboxPage = () => {
         try {
             await supabase
                 .from('tasks')
-                .update({ status: 'DONE' })
+                .update({ status: 'COMPLETED', completed_at: new Date().toISOString() })
                 .eq('id', pendingTaskId)
             setPendingTaskId(null)
             showToast('✅ Tarefa do Cockpit concluída automaticamente!')
@@ -551,65 +625,166 @@ const SalesInboxPage = () => {
                 <div className="flex-1 flex gap-4 lg:gap-6 overflow-hidden">
                     {/* LEFT: Lead List */}
                     <div className="hidden md:flex w-72 lg:w-80 flex-col bg-charcoal rounded-2xl border border-glass-border overflow-hidden shrink-0">
-                        <div className="p-4 border-b border-glass-border bg-black/20 flex justify-between items-center">
-                            <span className="font-semibold text-text-heading">Inbox Prioritário</span>
-                            <span className="text-xs bg-primary/20 text-primary px-2 py-1 rounded-full font-bold">
-                                {filteredLeads.length}
-                            </span>
-                        </div>
-
-                        <div className="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-2">
-                            {loadingLeads ? (
-                                <div className="p-8 text-center text-text-muted text-sm">Carregando...</div>
-                            ) : filteredLeads.map(lead => (
-                                <div
-                                    key={lead.id}
-                                    onClick={() => setActiveLead(lead)}
-                                    className={`p-3 rounded-xl border cursor-pointer transition-all ${activeLead?.id === lead.id
-                                        ? 'bg-primary/10 border-primary/40 shadow-lg shadow-primary/5'
-                                        : 'border-transparent hover:bg-glass hover:border-glass-border'
+                        {/* Sidebar Tabs */}
+                        <div className="p-2 border-b border-glass-border bg-black/20">
+                            <div className="flex bg-black/30 rounded-lg p-0.5 gap-0.5">
+                                <button
+                                    onClick={() => setSidebarTab('conversas')}
+                                    className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-md text-xs font-bold uppercase tracking-wider transition-all ${sidebarTab === 'conversas'
+                                        ? 'bg-primary text-white shadow-lg shadow-primary/20'
+                                        : 'text-gray-400 hover:text-white hover:bg-white/5'
                                         }`}
                                 >
-                                    <div className="flex justify-between items-start mb-1">
-                                        <span className={`font-semibold text-sm truncate max-w-[140px] lg:max-w-[160px] text-text-heading`}>
-                                            {lead.nome || 'Sem Nome'}
-                                        </span>
-                                        <span className="text-[10px] text-text-muted">
-                                            {lead.last_interaction ? new Date(lead.last_interaction).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : ''}
-                                        </span>
-                                    </div>
-                                    <div className="text-xs text-text-body mb-2 truncate">
-                                        {lead.headline || 'Lead qualificado'}
-                                    </div>
-                                    <div className="flex items-center gap-2 text-[10px]">
-                                        {/* ICP Score */}
-                                        <span className={`font-bold px-1.5 py-0.5 rounded ${lead.icp_score === 'A' ? 'bg-emerald-500/20 text-emerald-400' :
-                                            lead.icp_score === 'B' ? 'bg-amber-500/20 text-amber-400' :
-                                                'bg-slate-500/20 text-slate-400'
-                                            }`}>
-                                            ICP {lead.icp_score || 'C'}
-                                        </span>
-                                        {/* Relative time */}
-                                        <span className="text-text-muted">
-                                            {(() => {
-                                                const d = lead.last_interaction_date
-                                                if (!d) return 'Sem interação'
-                                                const diff = Date.now() - new Date(d).getTime()
-                                                const mins = Math.floor(diff / 60000)
-                                                if (mins < 60) return `💬 há ${mins}m`
-                                                const hrs = Math.floor(mins / 60)
-                                                if (hrs < 24) return `💬 há ${hrs}h`
-                                                const days = Math.floor(hrs / 24)
-                                                return `💬 há ${days}d`
-                                            })()}
-                                        </span>
-                                    </div>
-                                </div>
-                            ))}
-                            {!loadingLeads && filteredLeads.length === 0 && (
-                                <div className="p-8 text-center text-text-muted text-sm">
-                                    {searchTerm ? 'Nenhum lead encontrado.' : 'Nenhum lead com engajamento.'}
-                                </div>
+                                    <MessageSquare size={13} />
+                                    Conversas
+                                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${sidebarTab === 'conversas' ? 'bg-white/20' : 'bg-white/10'
+                                        }`}>
+                                        {filteredLeads.length}
+                                    </span>
+                                </button>
+                                <button
+                                    onClick={() => setSidebarTab('tarefas')}
+                                    className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-md text-xs font-bold uppercase tracking-wider transition-all ${sidebarTab === 'tarefas'
+                                        ? 'bg-primary text-white shadow-lg shadow-primary/20'
+                                        : 'text-gray-400 hover:text-white hover:bg-white/5'
+                                        }`}
+                                >
+                                    <ClipboardList size={13} />
+                                    Tarefas
+                                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${sidebarTab === 'tarefas' ? 'bg-white/20' : 'bg-white/10'
+                                        }`}>
+                                        {pendingTaskCount}
+                                    </span>
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* TAB CONTENT */}
+                        <div className="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-2">
+
+                            {/* ── CONVERSAS TAB ── */}
+                            {sidebarTab === 'conversas' && (
+                                <>
+                                    {loadingLeads ? (
+                                        <div className="p-8 text-center text-text-muted text-sm">Carregando...</div>
+                                    ) : filteredLeads.map(lead => (
+                                        <div
+                                            key={lead.id}
+                                            onClick={() => setActiveLead(lead)}
+                                            className={`p-3 rounded-xl border cursor-pointer transition-all ${activeLead?.id === lead.id
+                                                ? 'bg-primary/10 border-primary/40 shadow-lg shadow-primary/5'
+                                                : 'border-transparent hover:bg-glass hover:border-glass-border'
+                                                }`}
+                                        >
+                                            <div className="flex justify-between items-start mb-1">
+                                                <span className={`font-semibold text-sm truncate max-w-[140px] lg:max-w-[160px] text-text-heading`}>
+                                                    {lead.nome || 'Sem Nome'}
+                                                </span>
+                                                <span className="text-[10px] text-text-muted">
+                                                    {lead.last_interaction ? new Date(lead.last_interaction).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : ''}
+                                                </span>
+                                            </div>
+                                            <div className="text-xs text-text-body mb-2 truncate">
+                                                {lead.headline || 'Lead qualificado'}
+                                            </div>
+                                            <div className="flex items-center gap-2 text-[10px]">
+                                                <span className={`font-bold px-1.5 py-0.5 rounded ${lead.icp_score === 'A' ? 'bg-emerald-500/20 text-emerald-400' :
+                                                    lead.icp_score === 'B' ? 'bg-amber-500/20 text-amber-400' :
+                                                        'bg-slate-500/20 text-slate-400'
+                                                    }`}>
+                                                    ICP {lead.icp_score || 'C'}
+                                                </span>
+                                                <span className="text-text-muted">
+                                                    {(() => {
+                                                        const d = lead.last_interaction_date
+                                                        if (!d) return 'Sem interação'
+                                                        const diff = Date.now() - new Date(d).getTime()
+                                                        const mins = Math.floor(diff / 60000)
+                                                        if (mins < 60) return `💬 há ${mins}m`
+                                                        const hrs = Math.floor(mins / 60)
+                                                        if (hrs < 24) return `💬 há ${hrs}h`
+                                                        const days = Math.floor(hrs / 24)
+                                                        return `💬 há ${days}d`
+                                                    })()}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    ))}
+                                    {!loadingLeads && filteredLeads.length === 0 && (
+                                        <div className="p-8 text-center text-text-muted text-sm">
+                                            {searchTerm ? 'Nenhum lead encontrado.' : 'Nenhum lead com engajamento.'}
+                                        </div>
+                                    )}
+                                </>
+                            )}
+
+                            {/* ── TAREFAS DO DIA TAB ── */}
+                            {sidebarTab === 'tarefas' && (
+                                <>
+                                    {loadingTasks ? (
+                                        <div className="p-8 text-center text-text-muted text-sm flex flex-col items-center gap-2">
+                                            <Loader2 size={18} className="animate-spin text-primary" />
+                                            Carregando tarefas...
+                                        </div>
+                                    ) : sidebarTasks.length === 0 ? (
+                                        <div className="p-8 text-center text-text-muted text-sm flex flex-col items-center gap-3">
+                                            <div className="w-12 h-12 rounded-full bg-emerald-500/10 flex items-center justify-center">
+                                                <Check size={20} className="text-emerald-400" />
+                                            </div>
+                                            <span>Nenhuma tarefa pendente! 🎉</span>
+                                        </div>
+                                    ) : sidebarTasks.map(task => {
+                                        const tLead = task.leads || {}
+                                        const stage = tLead.cadence_stage || ''
+                                        const stageColor = stage === 'G4' || stage === 'G5' ? 'bg-red-500/20 text-red-400 border-red-500/30'
+                                            : stage === 'G2' || stage === 'G3' ? 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30'
+                                                : 'bg-blue-500/20 text-blue-400 border-blue-500/30'
+
+                                        const interactionCount = tLead.total_interactions_count || 0
+                                        const isFirstContact = interactionCount === 0
+                                        const actionLabel = isFirstContact ? '✉️ Enviar Icebreaker' : '💬 Continuar Conversa'
+                                        const actionColor = isFirstContact
+                                            ? 'bg-orange-500/15 text-orange-400 border-orange-500/30'
+                                            : 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+
+                                        return (
+                                            <div
+                                                key={task.id}
+                                                onClick={() => handleTaskClick(task)}
+                                                className="p-3 rounded-xl border border-transparent hover:bg-glass hover:border-glass-border cursor-pointer transition-all group"
+                                            >
+                                                <div className="flex items-center gap-2 mb-1.5">
+                                                    {tLead.avatar_url ? (
+                                                        <img src={tLead.avatar_url} alt="" className="w-7 h-7 rounded-full object-cover border border-glass-border" />
+                                                    ) : (
+                                                        <div className="w-7 h-7 rounded-full bg-glass border border-glass-border flex items-center justify-center text-[10px] font-bold text-text-heading">
+                                                            {tLead.nome?.charAt(0) || '?'}
+                                                        </div>
+                                                    )}
+                                                    <div className="flex-1 min-w-0">
+                                                        <span className="text-sm font-semibold text-text-heading truncate block">{tLead.nome || 'Lead'}</span>
+                                                    </div>
+                                                    {stage && (
+                                                        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${stageColor}`}>
+                                                            {stage}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                {/* Action label */}
+                                                <div className="pl-9 mb-1">
+                                                    <span className={`inline-flex items-center text-[10px] font-bold px-2 py-0.5 rounded-full border ${actionColor}`}>
+                                                        {actionLabel}
+                                                    </span>
+                                                </div>
+                                                {task.instruction && (
+                                                    <p className="text-[11px] text-text-muted leading-relaxed line-clamp-2 pl-9">
+                                                        💡 {task.instruction}
+                                                    </p>
+                                                )}
+                                            </div>
+                                        )
+                                    })}
+                                </>
                             )}
                         </div>
                     </div>

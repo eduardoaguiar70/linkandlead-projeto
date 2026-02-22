@@ -70,8 +70,8 @@ const AdminPanel = () => {
             let doneQuery = supabase
                 .from('tasks')
                 .select('id, leads!inner(client_id)', { count: 'exact', head: true })
-                .eq('status', 'COMPLETED')
-                .gte('completed_at', `${today}T00:00:00`)
+                .eq('status', 'DONE')
+                .gte('updated_at', `${today}T00:00:00`)
 
             if (selectedClientId) doneQuery = doneQuery.eq('leads.client_id', selectedClientId)
 
@@ -114,31 +114,10 @@ const AdminPanel = () => {
             if (radarRes.error) throw radarRes.error
 
             const allPending = tasksRes.data || []
-
-            // 5. Filter for Foco Total
-            // Rule: priority === 'HIGH' OR (ICP === 'A' AND Stage in ['G4', 'G5'])
-            const focusCandidates = allPending.filter(t => {
-                const isHighPriority = t.priority === 'HIGH'
-                const isIcpHot = t.leads?.icp_score === 'A' && HOT_STAGES.includes(t.leads?.cadence_stage)
-                return isHighPriority || isIcpHot
-            })
-
-            // Sort: HOT (G4/G5) > MORNOS (G2/G3) > FRIOS (G1), then HIGH priority, then oldest first
-            const STAGE_PRIORITY = { G5: 0, G4: 1, G3: 2, G2: 3, G1: 4 }
-            const sortedPriority = focusCandidates.sort((a, b) => {
-                const sa = STAGE_PRIORITY[a.leads?.cadence_stage] ?? 5
-                const sb = STAGE_PRIORITY[b.leads?.cadence_stage] ?? 5
-                if (sa !== sb) return sa - sb
-
-                if (a.priority === 'HIGH' && b.priority !== 'HIGH') return -1;
-                if (b.priority === 'HIGH' && a.priority !== 'HIGH') return 1;
-
-                return new Date(a.created_at) - new Date(b.created_at)
-            })
-
-            const focusTasks = sortedPriority.slice(0, 3);
-
             const g4g5 = allPending.filter(t => HOT_STAGES.includes(t.leads?.cadence_stage))
+
+            // If we have G4/G5, show them. If not, show G1/G2/G3 (up to 3)
+            const focusTasks = g4g5.length > 0 ? g4g5.slice(0, 3) : allPending.slice(0, 3)
 
             setStats({
                 doneToday: doneRes.count || 0,
@@ -179,7 +158,7 @@ const AdminPanel = () => {
         try {
             const { error } = await supabase
                 .from('tasks')
-                .update({ status: 'COMPLETED', completed_at: new Date().toISOString() })
+                .update({ status: 'DONE' })
                 .eq('id', taskId)
 
             if (error) throw error
@@ -362,7 +341,7 @@ const AdminPanel = () => {
                         </div>
                     </div>
 
-                    <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide snap-x -mx-4 px-4 sm:mx-0 sm:px-0">
+                    <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide -mx-4 px-4 sm:mx-0 sm:px-0">
                         {radarLeads.length > 0 ? (
                             radarLeads.map(lead => (
                                 <RadarLeadCard key={lead.id} lead={lead} />
@@ -410,10 +389,9 @@ const ProgressRing = ({ percent, size = 110, stroke = 8 }) => {
     return (
         <div className="relative" style={{ width: size, height: size }}>
             <svg width={size} height={size} className="transform -rotate-90">
-                {/* Empty track */}
                 <circle
                     cx={size / 2} cy={size / 2} r={radius}
-                    fill="none" stroke="#e5e7eb" // gray-200
+                    fill="none" stroke="#f3f4f6" // gray-100
                     strokeWidth={stroke}
                 />
                 <circle
@@ -493,15 +471,9 @@ const HeroTaskCard = ({ task, index, completing, onComplete, onExecute }) => {
                 {/* AI Instruction */}
                 {task.instruction && (
                     <div className="flex-1 min-w-0 hidden md:block">
-                        <div className="bg-gray-50 rounded-lg px-3 py-2 border border-gray-100">
-                            <span className="mr-1 inline-block mb-1">💡</span>
-                            <span className="text-[11px] font-bold text-gray-800 break-words mb-1 block">
-                                Ação: {task.instruction.split('. ')[0] + '.'}
-                            </span>
-                            <span className="text-[10px] text-gray-500 leading-relaxed line-clamp-2 block break-words">
-                                Motivo: {task.instruction.split('. ').slice(1).join('. ')}
-                            </span>
-                        </div>
+                        <p className="text-[11px] text-gray-500 leading-relaxed line-clamp-2 bg-gray-50 rounded-lg px-3 py-2 border border-gray-100">
+                            <span className="mr-1">💡</span>{task.instruction}
+                        </p>
                     </div>
                 )}
 
@@ -535,15 +507,9 @@ const HeroTaskCard = ({ task, index, completing, onComplete, onExecute }) => {
             {/* Mobile instruction */}
             {task.instruction && (
                 <div className="mt-3 md:hidden">
-                    <div className="bg-gray-50 rounded-lg px-3 py-2 border border-gray-100">
-                        <span className="mr-1 inline-block mb-1">💡</span>
-                        <span className="text-[11px] font-bold text-gray-800 break-words mb-1 block">
-                            Ação: {task.instruction.split('. ')[0] + '.'}
-                        </span>
-                        <span className="text-[10px] text-gray-500 leading-relaxed line-clamp-2 block break-words">
-                            Motivo: {task.instruction.split('. ').slice(1).join('. ')}
-                        </span>
-                    </div>
+                    <p className="text-[11px] text-gray-500 leading-relaxed line-clamp-2 bg-gray-50 rounded-lg px-3 py-2 border border-gray-100">
+                        <span className="mr-1">💡</span>{task.instruction}
+                    </p>
                 </div>
             )}
         </div>
@@ -567,7 +533,7 @@ const RadarLeadCard = ({ lead }) => {
     }
 
     return (
-        <div className="bg-white rounded-xl border border-gray-200 p-4 min-w-[200px] max-w-[240px] shrink-0 snap-center hover:shadow-md hover:border-gray-300 transition-all duration-300 cursor-default">
+        <div className="bg-white rounded-xl border border-gray-200 p-4 min-w-[200px] max-w-[240px] shrink-0 hover:shadow-md hover:border-gray-300 transition-all duration-300 cursor-default">
             <div className="flex items-center gap-3 mb-3">
                 {lead.avatar_url ? (
                     <img

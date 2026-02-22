@@ -75,6 +75,19 @@ const COLUMN_THEMES = {
         columnBg: 'rgba(59, 130, 246, 0.015)',
         emptyBg: 'bg-blue-500/5',
         emptyBorder: 'border-blue-500/10',
+    },
+    warm: {
+        borderTop: 'linear-gradient(90deg, #eab308, #f59e0b)',
+        headerBg: 'bg-yellow-500/[0.06]',
+        headerBorder: 'border-yellow-500/15',
+        countBg: 'bg-yellow-900/40',
+        countText: 'text-yellow-400',
+        countBorder: 'border-yellow-700/50',
+        iconColor: 'text-yellow-400',
+        cardBorder: 'border-l-yellow-500/50',
+        columnBg: 'rgba(234, 179, 8, 0.015)',
+        emptyBg: 'bg-yellow-500/5',
+        emptyBorder: 'border-yellow-500/10',
     }
 }
 
@@ -111,7 +124,7 @@ const SalesCockpit = () => {
             const [pendingResult, doneResult] = await Promise.all([
                 supabase
                     .from('tasks')
-                    .select('*, leads!inner(id, client_id, nome, empresa, headline, linkedin_profile_url, cadence_stage, total_interactions_count, avatar_url)')
+                    .select('*, lead:leads!inner(id, client_id, nome, empresa, headline, linkedin_profile_url, cadence_stage, total_interactions_count, avatar_url)')
                     .eq('leads.client_id', selectedClientId)
                     .eq('status', 'PENDING')
                     .order('created_at', { ascending: true }),
@@ -119,13 +132,16 @@ const SalesCockpit = () => {
                     .from('tasks')
                     .select('id, leads!inner(client_id)', { count: 'exact' })
                     .eq('leads.client_id', selectedClientId)
-                    .eq('status', 'DONE')
+                    .eq('status', 'COMPLETED')
+                    .gte('completed_at', `${new Date().toISOString().split('T')[0]}T00:00:00`)
                     .limit(1)
             ])
 
             if (pendingResult.error) throw pendingResult.error
 
-            setTasks(pendingResult.data || [])
+            const activeTasks = pendingResult.data || []
+            console.log('Tarefas carregadas:', activeTasks)
+            setTasks(activeTasks)
             setDoneCount(doneResult.count || 0)
         } catch (err) {
             console.error('Error fetching cockpit tasks:', err)
@@ -148,7 +164,7 @@ const SalesCockpit = () => {
         try {
             const { error: updateError } = await supabase
                 .from('tasks')
-                .update({ status: 'DONE' })
+                .update({ status: 'COMPLETED', completed_at: new Date().toISOString() })
                 .eq('id', taskId)
 
             if (updateError) throw updateError
@@ -172,21 +188,21 @@ const SalesCockpit = () => {
         }
     }
 
-    // Split by cadence_stage: G4/G5 → hot, rest → cold
-    const { hotTasks, coldTasks } = useMemo(() => {
-        const hot = []
-        const cold = []
+    // Split by cadence_stage (HOT: G4/G5, WARM: G2/G3, COLD: G1)
+    const { hotTasks, warmTasks, coldTasks } = useMemo(() => {
+        const hot = tasks.filter(t =>
+            t.lead?.cadence_stage === 'G4' || t.lead?.cadence_stage === 'G5'
+        );
 
-        tasks.forEach(task => {
-            const stage = task.leads?.cadence_stage
-            if (HOT_STAGES.includes(stage)) {
-                hot.push(task)
-            } else {
-                cold.push(task)
-            }
-        })
+        const warm = tasks.filter(t =>
+            t.lead?.cadence_stage === 'G2' || t.lead?.cadence_stage === 'G3'
+        );
 
-        return { hotTasks: hot, coldTasks: cold }
+        const cold = tasks.filter(t =>
+            t.lead?.cadence_stage === 'G1'
+        );
+
+        return { hotTasks: hot, warmTasks: warm, coldTasks: cold }
     }, [tasks])
 
     const totalMissions = tasks.length + doneCount
@@ -260,7 +276,7 @@ const SalesCockpit = () => {
                             </h2>
                             <p className="text-sm text-gray-400">
                                 {hotTasks.length > 0
-                                    ? <><span className="text-orange-400 font-semibold">{hotTasks.length} quente(s)</span> · {coldTasks.length} em prospecção</>
+                                    ? <><span className="text-red-400 font-semibold">{hotTasks.length} quente(s)</span> · {warmTasks.length} em nutrição · {coldTasks.length} novos contatos</>
                                     : tasks.length > 0
                                         ? <>{tasks.length} tarefa(s) pendente(s)</>
                                         : 'Nenhuma tarefa pendente!'
@@ -327,21 +343,19 @@ const SalesCockpit = () => {
             )}
 
             {/* ═══════════════════════════════════════ */}
-            {/* KANBAN BOARD                            */}
+            {/* 3-COLUMN GRID TASK BOARD                */}
             {/* ═══════════════════════════════════════ */}
             {!allDone && (
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
-                    {/* LEFT: 🔥 FECHAMENTO / QUENTE (G4, G5) */}
-                    <KanbanColumn
-                        title="Fechamento / Quente"
+                    {/* COL 1: 🔥 HOT (G4/G5) */}
+                    <FeedSection
+                        title="HOT (G4/G5)"
                         emoji="🔥"
                         icon={<DollarSign size={15} />}
                         count={hotTasks.length}
                         themeKey="hot"
-                        emptyIcon={<Sparkles size={28} className="text-orange-400/40" />}
-                        emptyTitle="Pipeline limpo"
-                        emptyText="Nenhum lead em G4/G5. Foque na prospecção →"
+                        emptyText="Nenhum lead quente para hoje."
                     >
                         {hotTasks.map(task => (
                             <TaskCard
@@ -353,18 +367,37 @@ const SalesCockpit = () => {
                                 onExecute={handleExecute}
                             />
                         ))}
-                    </KanbanColumn>
+                    </FeedSection>
 
-                    {/* RIGHT: 🔨 PROSPECÇÃO & NUTRIÇÃO (Rest) */}
-                    <KanbanColumn
-                        title="Prospecção & Nutrição"
-                        emoji="🔨"
+                    {/* COL 2: 🟡 MORNOS (G2/G3) */}
+                    <FeedSection
+                        title="MORNOS (G2/G3)"
+                        emoji="🟡"
                         icon={<Users size={15} />}
+                        count={warmTasks.length}
+                        themeKey="warm"
+                        emptyText="Nenhuma tarefa de nutrição."
+                    >
+                        {warmTasks.map(task => (
+                            <TaskCard
+                                key={task.id}
+                                task={task}
+                                themeKey="warm"
+                                completing={completingIds.has(task.id)}
+                                onComplete={handleComplete}
+                                onExecute={handleExecute}
+                            />
+                        ))}
+                    </FeedSection>
+
+                    {/* COL 3: 🧊 FRIOS (G1) */}
+                    <FeedSection
+                        title="FRIOS (G1)"
+                        emoji="🧊"
+                        icon={<Sparkles size={15} />}
                         count={coldTasks.length}
                         themeKey="cold"
-                        emptyIcon={<TrendingUp size={28} className="text-blue-400/40" />}
-                        emptyTitle="Tudo em dia"
-                        emptyText="Nenhuma prospecção pendente no momento."
+                        emptyText="Nenhuma prospecção pendente."
                         footer={
                             hiddenColdCount > 0 && !showAllCold ? (
                                 <button
@@ -393,7 +426,7 @@ const SalesCockpit = () => {
                                 onExecute={handleExecute}
                             />
                         ))}
-                    </KanbanColumn>
+                    </FeedSection>
                 </div>
             )}
         </div>
@@ -401,27 +434,16 @@ const SalesCockpit = () => {
 }
 
 // ═══════════════════════════════════════════════
-// KANBAN COLUMN
+// COLUMN SECTION (3-Column Grid)
 // ═══════════════════════════════════════════════
 
-const KanbanColumn = ({
-    title,
-    emoji,
-    icon,
-    count,
-    themeKey,
-    children,
-    emptyIcon,
-    emptyTitle,
-    emptyText,
-    footer
-}) => {
+const FeedSection = ({ title, emoji, icon, count, themeKey, children, footer, emptyText }) => {
     const theme = COLUMN_THEMES[themeKey]
     const isEmpty = React.Children.count(children) === 0
 
     return (
         <div
-            className="rounded-2xl overflow-hidden border border-white/[0.06] flex flex-col"
+            className="rounded-2xl overflow-hidden border border-white/[0.06] flex flex-col shadow-lg shadow-black/10"
             style={{ background: theme.columnBg, backdropFilter: 'blur(12px)' }}
         >
             {/* Gradient accent bar */}
@@ -440,23 +462,19 @@ const KanbanColumn = ({
                 </span>
             </div>
 
-            {/* Cards area */}
+            {/* Cards area with internal scroll */}
             <div
-                className="flex-1 p-3 space-y-2.5 overflow-y-auto"
-                style={{ maxHeight: '560px', minHeight: '140px' }}
+                className="flex-1 p-3 space-y-3 overflow-y-auto"
+                style={{ maxHeight: '70vh', minHeight: '120px' }}
             >
                 {isEmpty ? (
-                    <div className={`flex flex-col items-center justify-center py-10 gap-2 rounded-xl ${theme.emptyBg} border ${theme.emptyBorder}`}>
-                        {emptyIcon}
-                        <p className="text-sm font-semibold text-gray-400">{emptyTitle}</p>
-                        <p className="text-[11px] text-gray-500 text-center px-6">{emptyText}</p>
+                    <div className={`flex items-center justify-center py-10 px-4 rounded-xl ${theme.emptyBg} border ${theme.emptyBorder}`}>
+                        <p className="text-xs text-gray-500 text-center">{emptyText}</p>
                     </div>
-                ) : (
-                    children
-                )}
+                ) : children}
             </div>
 
-            {/* Optional footer (e.g. "Show more") */}
+            {/* Optional footer */}
             {footer}
         </div>
     )
@@ -467,7 +485,7 @@ const KanbanColumn = ({
 // ═══════════════════════════════════════════════
 
 const TaskCard = ({ task, themeKey, completing, onComplete, onExecute }) => {
-    const lead = task.leads || {}
+    const lead = task.lead || {}
     const theme = COLUMN_THEMES[themeKey]
     const initial = lead.nome?.charAt(0)?.toUpperCase() || '?'
 
@@ -567,18 +585,21 @@ const TaskCard = ({ task, themeKey, completing, onComplete, onExecute }) => {
                     onClick={() => onComplete(task.id)}
                     disabled={completing}
                     className="
-                        shrink-0 flex items-center justify-center gap-1 px-3 py-2 rounded-lg text-[11px] font-semibold
-                        bg-white/[0.04] text-gray-400 border border-white/[0.08]
-                        hover:bg-emerald-500/15 hover:text-emerald-400 hover:border-emerald-500/25
-                        transition-all duration-200
+                        shrink-0 flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-[12px] font-semibold
+                        bg-white/[0.08] text-gray-300 border border-white/[0.12]
+                        hover:bg-emerald-500/20 hover:text-emerald-400 hover:border-emerald-500/30 hover:shadow-md
+                        transition-all duration-200 shadow-sm
                         disabled:opacity-50 disabled:cursor-not-allowed
                     "
                     title="Marcar como concluída"
                 >
                     {completing ? (
-                        <Loader2 size={13} className="animate-spin" />
+                        <Loader2 size={15} className="animate-spin" />
                     ) : (
-                        <CheckCircle2 size={13} />
+                        <>
+                            <CheckCircle2 size={15} />
+                            <span>Concluir</span>
+                        </>
                     )}
                 </button>
             </div>

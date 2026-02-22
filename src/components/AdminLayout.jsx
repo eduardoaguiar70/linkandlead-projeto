@@ -15,7 +15,8 @@ import {
     MessageCircle,
     Target,
     Flame,
-    ThumbsUp
+    ThumbsUp,
+    Library
 } from 'lucide-react'
 import CreatePostModal from './CreatePostModal'
 import ClientSelector from './ClientSelector'
@@ -81,6 +82,9 @@ const AdminLayout = () => {
                         </Link>
                         <Link to="/engagement" className={isActive('/engagement')}>
                             <ThumbsUp size={18} /> Engajamento
+                        </Link>
+                        <Link to="/content-library" className={isActive('/content-library')}>
+                            <Library size={18} /> Biblioteca de Conteúdos
                         </Link>
                     </div>
 
@@ -149,7 +153,7 @@ const AdminLayout = () => {
             {/* MAIN CONTENT */}
             <main className="main-content">
                 {/* Client Context Header for sales-related pages */}
-                {(location.pathname === '/' || location.pathname.startsWith('/sales') || location.pathname.startsWith('/leads') || location.pathname.startsWith('/campaigns') || location.pathname.startsWith('/engagement') || location.pathname.startsWith('/missions')) && (
+                {(location.pathname === '/' || location.pathname.startsWith('/sales') || location.pathname.startsWith('/leads') || location.pathname.startsWith('/campaigns') || location.pathname.startsWith('/engagement') || location.pathname.startsWith('/missions') || location.pathname.startsWith('/content-library')) && (
                     <div className="px-6 py-3 bg-white/5 border-b border-white/10 flex items-center justify-between backdrop-blur-md">
                         <div className="flex items-center gap-4">
                             <span className="text-sm text-text-muted font-medium">Contexto:</span>
