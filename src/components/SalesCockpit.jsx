@@ -24,7 +24,8 @@ import {
     HandMetal,
     MessageCircle,
     Users,
-    DollarSign
+    DollarSign,
+    Snowflake
 } from 'lucide-react'
 
 // ═══════════════════════════════════════════════
@@ -42,50 +43,50 @@ const CADENCE_LABELS = {
 }
 
 const CADENCE_STYLES = {
-    G1: 'bg-slate-800 text-slate-300 border-slate-600',
-    G2: 'bg-blue-900/50 text-blue-300 border-blue-700',
-    G3: 'bg-cyan-900/50 text-cyan-300 border-cyan-700',
-    G4: 'bg-orange-900/50 text-orange-300 border-orange-700',
-    G5: 'bg-red-900/50 text-red-300 border-red-700',
+    G1: 'bg-gray-100 text-gray-600 border-gray-300',
+    G2: 'bg-blue-50 text-blue-600 border-blue-200',
+    G3: 'bg-cyan-50 text-cyan-700 border-cyan-200',
+    G4: 'bg-orange-50 text-orange-600 border-orange-200',
+    G5: 'bg-red-50 text-red-600 border-red-200',
 }
 
 const COLUMN_THEMES = {
     hot: {
         borderTop: 'linear-gradient(90deg, #ef4444, #f97316)',
-        headerBg: 'bg-red-500/[0.06]',
+        headerBg: 'bg-red-500/[0.08]',
         headerBorder: 'border-red-500/15',
-        countBg: 'bg-red-900/40',
+        countBg: 'bg-red-500/10',
         countText: 'text-red-400',
-        countBorder: 'border-red-700/50',
+        countBorder: 'border-red-500/20',
         iconColor: 'text-red-400',
         cardBorder: 'border-l-orange-500/60',
-        columnBg: 'rgba(239, 68, 68, 0.015)',
+        columnBg: 'rgba(239, 68, 68, 0.02)',
         emptyBg: 'bg-red-500/5',
         emptyBorder: 'border-red-500/10',
     },
     cold: {
-        borderTop: 'linear-gradient(90deg, #3b82f6, #64748b)',
-        headerBg: 'bg-blue-500/[0.06]',
+        borderTop: 'linear-gradient(90deg, #3b82f6, #94a3b8)',
+        headerBg: 'bg-blue-500/[0.08]',
         headerBorder: 'border-blue-500/15',
-        countBg: 'bg-blue-900/40',
+        countBg: 'bg-blue-500/10',
         countText: 'text-blue-400',
-        countBorder: 'border-blue-700/50',
+        countBorder: 'border-blue-500/20',
         iconColor: 'text-blue-400',
         cardBorder: 'border-l-blue-500/30',
-        columnBg: 'rgba(59, 130, 246, 0.015)',
+        columnBg: 'rgba(59, 130, 246, 0.02)',
         emptyBg: 'bg-blue-500/5',
         emptyBorder: 'border-blue-500/10',
     },
     warm: {
         borderTop: 'linear-gradient(90deg, #eab308, #f59e0b)',
-        headerBg: 'bg-yellow-500/[0.06]',
+        headerBg: 'bg-yellow-500/[0.08]',
         headerBorder: 'border-yellow-500/15',
-        countBg: 'bg-yellow-900/40',
+        countBg: 'bg-yellow-500/10',
         countText: 'text-yellow-400',
-        countBorder: 'border-yellow-700/50',
+        countBorder: 'border-yellow-500/20',
         iconColor: 'text-yellow-400',
         cardBorder: 'border-l-yellow-500/50',
-        columnBg: 'rgba(234, 179, 8, 0.015)',
+        columnBg: 'rgba(234, 179, 8, 0.02)',
         emptyBg: 'bg-yellow-500/5',
         emptyBorder: 'border-yellow-500/10',
     }
@@ -264,17 +265,17 @@ const SalesCockpit = () => {
             {/* ═══════════════════════════════════════ */}
             {/* HEADER + PROGRESS                      */}
             {/* ═══════════════════════════════════════ */}
-            <div className="glass-panel rounded-2xl p-5 sm:p-6 mb-5">
+            <div className="bg-white rounded-2xl border border-gray-200 p-5 sm:p-6 mb-5 shadow-sm">
                 <div className="flex items-start justify-between gap-4 mb-5">
                     <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center">
-                            <Rocket size={20} className="text-primary" />
+                        <div className="w-10 h-10 rounded-xl bg-orange-50 border border-orange-200 flex items-center justify-center">
+                            <Rocket size={20} className="text-orange-500" />
                         </div>
                         <div>
-                            <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-white mb-0.5">
+                            <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-gray-900 mb-0.5">
                                 Sales Cockpit 🚀
                             </h2>
-                            <p className="text-sm text-gray-400">
+                            <p className="text-sm text-gray-500">
                                 {hotTasks.length > 0
                                     ? <><span className="text-red-400 font-semibold">{hotTasks.length} quente(s)</span> · {warmTasks.length} em nutrição · {coldTasks.length} novos contatos</>
                                     : tasks.length > 0
@@ -287,7 +288,7 @@ const SalesCockpit = () => {
                     <button
                         onClick={() => fetchTasks(true)}
                         disabled={refreshing}
-                        className="p-2 rounded-lg hover:bg-white/10 transition-colors text-gray-500 hover:text-white"
+                        className="p-2 rounded-lg hover:bg-gray-100 transition-colors text-gray-400 hover:text-gray-700"
                         title="Atualizar"
                     >
                         <RefreshCw size={16} className={refreshing ? 'animate-spin' : ''} />
@@ -297,20 +298,17 @@ const SalesCockpit = () => {
                 {/* Progress */}
                 <div className="space-y-2">
                     <div className="flex items-center justify-between">
-                        <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">Progresso do dia</span>
-                        <span className="text-sm font-bold text-gray-300">{doneCount}/{totalMissions} concluídas</span>
+                        <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Progresso do dia</span>
+                        <span className="text-sm font-bold text-gray-700">{doneCount}/{totalMissions} concluídas</span>
                     </div>
-                    <div className="h-3 bg-white/[0.05] rounded-full overflow-hidden border border-white/[0.08]">
+                    <div className="h-3 bg-gray-100 rounded-full overflow-hidden border border-gray-200">
                         <div
                             className="h-full rounded-full transition-all duration-700 ease-out"
                             style={{
                                 width: `${progressPercent}%`,
                                 background: progressPercent === 100
-                                    ? 'linear-gradient(90deg, #10b981, #34d399)'
-                                    : 'linear-gradient(90deg, #ff4d00, #ff8800)',
-                                boxShadow: progressPercent === 100
-                                    ? '0 0 16px rgba(16, 185, 129, 0.6)'
-                                    : '0 0 16px rgba(255, 77, 0, 0.5)',
+                                    ? 'linear-gradient(90deg, #22c55e, #16a34a)'
+                                    : 'linear-gradient(90deg, #f97316, #ea580c)',
                             }}
                         />
                     </div>
@@ -321,19 +319,19 @@ const SalesCockpit = () => {
             {/* ZERO INBOX                             */}
             {/* ═══════════════════════════════════════ */}
             {allDone && (
-                <div className="glass-panel rounded-2xl p-10 sm:p-16 text-center">
+                <div className="bg-white rounded-2xl border border-gray-200 p-10 sm:p-16 text-center shadow-sm">
                     <div className="flex justify-center mb-4">
-                        <div className="w-16 h-16 rounded-2xl bg-emerald-900/30 border border-emerald-500/20 flex items-center justify-center">
+                        <div className="w-16 h-16 rounded-2xl bg-green-50 border border-green-200 flex items-center justify-center">
                             {doneCount > 0
-                                ? <Trophy size={32} className="text-emerald-400" />
-                                : <PartyPopper size={32} className="text-emerald-400" />
+                                ? <Trophy size={32} className="text-green-500" />
+                                : <PartyPopper size={32} className="text-green-500" />
                             }
                         </div>
                     </div>
-                    <h2 className="text-xl font-bold text-white mb-2">
+                    <h2 className="text-xl font-bold text-gray-900 mb-2">
                         {doneCount > 0 ? 'Todas concluídas! 🏆' : 'Zero Inbox! 🎉'}
                     </h2>
-                    <p className="text-sm text-gray-400 max-w-sm mx-auto">
+                    <p className="text-sm text-gray-500 max-w-sm mx-auto">
                         {doneCount > 0
                             ? `Você completou ${doneCount} tarefas hoje. Excelente trabalho!`
                             : 'Nenhuma tarefa gerada. Quando a IA identificar oportunidades, elas aparecerão aqui.'
@@ -348,11 +346,10 @@ const SalesCockpit = () => {
             {!allDone && (
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
-                    {/* COL 1: 🔥 HOT (G4/G5) */}
+                    {/* COL 1: HOT (G4/G5) */}
                     <FeedSection
                         title="HOT (G4/G5)"
-                        emoji="🔥"
-                        icon={<DollarSign size={15} />}
+                        icon={<Flame size={15} />}
                         count={hotTasks.length}
                         themeKey="hot"
                         emptyText="Nenhum lead quente para hoje."
@@ -369,11 +366,10 @@ const SalesCockpit = () => {
                         ))}
                     </FeedSection>
 
-                    {/* COL 2: 🟡 MORNOS (G2/G3) */}
+                    {/* COL 2: MORNOS (G2/G3) */}
                     <FeedSection
                         title="MORNOS (G2/G3)"
-                        emoji="🟡"
-                        icon={<Users size={15} />}
+                        icon={<TrendingUp size={15} />}
                         count={warmTasks.length}
                         themeKey="warm"
                         emptyText="Nenhuma tarefa de nutrição."
@@ -390,11 +386,10 @@ const SalesCockpit = () => {
                         ))}
                     </FeedSection>
 
-                    {/* COL 3: 🧊 FRIOS (G1) */}
+                    {/* COL 3: FRIOS (G1) */}
                     <FeedSection
                         title="FRIOS (G1)"
-                        emoji="🧊"
-                        icon={<Sparkles size={15} />}
+                        icon={<Snowflake size={15} />}
                         count={coldTasks.length}
                         themeKey="cold"
                         emptyText="Nenhuma prospecção pendente."
@@ -402,14 +397,14 @@ const SalesCockpit = () => {
                             hiddenColdCount > 0 && !showAllCold ? (
                                 <button
                                     onClick={() => setShowAllCold(true)}
-                                    className="w-full py-3 text-center text-xs font-semibold text-blue-400 hover:text-blue-300 bg-blue-500/[0.04] hover:bg-blue-500/[0.08] border-t border-blue-500/10 transition-colors"
+                                    className="w-full py-3 text-center text-xs font-semibold text-blue-500 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 border-t border-blue-200 transition-colors rounded-b-2xl"
                                 >
                                     Mostrar mais {hiddenColdCount} tarefas
                                 </button>
                             ) : showAllCold && coldTasks.length > VISIBLE_COLD_CARDS ? (
                                 <button
                                     onClick={() => setShowAllCold(false)}
-                                    className="w-full py-3 text-center text-xs font-semibold text-gray-500 hover:text-gray-300 bg-white/[0.02] hover:bg-white/[0.04] border-t border-white/[0.06] transition-colors"
+                                    className="w-full py-3 text-center text-xs font-semibold text-gray-500 hover:text-gray-700 bg-gray-50 hover:bg-gray-100 border-t border-gray-200 transition-colors rounded-b-2xl"
                                 >
                                     Mostrar menos
                                 </button>
@@ -437,14 +432,14 @@ const SalesCockpit = () => {
 // COLUMN SECTION (3-Column Grid)
 // ═══════════════════════════════════════════════
 
-const FeedSection = ({ title, emoji, icon, count, themeKey, children, footer, emptyText }) => {
+const FeedSection = ({ title, icon, count, themeKey, children, footer, emptyText }) => {
     const theme = COLUMN_THEMES[themeKey]
     const isEmpty = React.Children.count(children) === 0
 
     return (
         <div
-            className="rounded-2xl overflow-hidden border border-white/[0.06] flex flex-col shadow-lg shadow-black/10"
-            style={{ background: theme.columnBg, backdropFilter: 'blur(12px)' }}
+            className="rounded-2xl overflow-hidden border border-gray-200 flex flex-col shadow-sm"
+            style={{ background: '#ffffff' }}
         >
             {/* Gradient accent bar */}
             <div className="h-[3px] w-full shrink-0" style={{ background: theme.borderTop }} />
@@ -453,8 +448,8 @@ const FeedSection = ({ title, emoji, icon, count, themeKey, children, footer, em
             <div className={`flex items-center justify-between px-4 py-3 ${theme.headerBg} border-b ${theme.headerBorder}`}>
                 <div className="flex items-center gap-2">
                     <span className={theme.iconColor}>{icon}</span>
-                    <h3 className="text-xs font-bold text-gray-300 tracking-wider uppercase">
-                        {emoji} {title}
+                    <h3 className="text-xs font-bold text-gray-700 tracking-wider uppercase">
+                        {title}
                     </h3>
                 </div>
                 <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full ${theme.countBg} ${theme.countText} border ${theme.countBorder}`}>
@@ -501,16 +496,14 @@ const TaskCard = ({ task, themeKey, completing, onComplete, onExecute }) => {
             className={`
                 rounded-xl p-3.5 group
                 transition-all duration-300 ease-out
-                bg-white/[0.025] border border-white/[0.06]
-                hover:bg-white/[0.055] hover:border-white/[0.13]
-                hover:shadow-lg hover:shadow-black/20
+                bg-white border border-gray-200
+                hover:shadow-md hover:border-gray-300
                 border-l-[3px] ${theme.cardBorder}
                 ${completing
                     ? 'opacity-0 scale-95 translate-x-4 pointer-events-none'
                     : 'opacity-100 scale-100 translate-x-0'
                 }
             `}
-            style={{ backdropFilter: 'blur(8px)' }}
         >
             {/* Row 1: Avatar + Lead Info + Stage Badge */}
             <div className="flex items-start gap-3 mb-2">
@@ -521,13 +514,13 @@ const TaskCard = ({ task, themeKey, completing, onComplete, onExecute }) => {
                         className="w-9 h-9 rounded-lg shrink-0 object-cover border border-white/[0.1]"
                     />
                 ) : (
-                    <div className="w-9 h-9 rounded-lg shrink-0 bg-gradient-to-br from-gray-800 to-gray-900 border border-white/[0.08] flex items-center justify-center">
-                        <span className="text-xs font-bold text-gray-300">{initial}</span>
+                    <div className="w-9 h-9 rounded-lg shrink-0 bg-gray-100 border border-gray-200 flex items-center justify-center">
+                        <span className="text-xs font-bold text-gray-600">{initial}</span>
                     </div>
                 )}
                 <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-0.5">
-                        <h4 className="text-sm font-semibold text-white truncate">{lead.nome || 'Lead'}</h4>
+                        <h4 className="text-sm font-semibold text-gray-900 truncate">{lead.nome || 'Lead'}</h4>
                         {stage && (
                             <span className={`shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded border ${stageStyle}`}>
                                 {stage}
@@ -544,7 +537,7 @@ const TaskCard = ({ task, themeKey, completing, onComplete, onExecute }) => {
             {/* Row 2: AI Instruction */}
             {task.instruction && (
                 <div className="mb-3">
-                    <p className="text-[11px] text-gray-400 leading-relaxed bg-white/[0.02] rounded-lg px-3 py-2 border border-white/[0.04]">
+                    <p className="text-[11px] text-gray-600 leading-relaxed bg-gray-50 rounded-lg px-3 py-2 border border-gray-100">
                         <span className="mr-1">💡</span>{task.instruction}
                     </p>
                 </div>
@@ -558,10 +551,10 @@ const TaskCard = ({ task, themeKey, completing, onComplete, onExecute }) => {
                         onClick={() => onExecute(lead?.id)}
                         className={`
                             flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-[11px] font-semibold
-                            transition-all duration-200
+                            transition-all duration-200 shadow-sm
                             ${isFirstContact
-                                ? 'bg-indigo-500/15 text-indigo-300 border border-indigo-500/25 hover:bg-indigo-500/25 hover:border-indigo-500/40'
-                                : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20 hover:border-emerald-500/35'
+                                ? 'bg-orange-50 text-orange-600 border border-orange-200 hover:bg-orange-100 hover:shadow-md'
+                                : 'bg-orange-500 text-white border border-orange-500 hover:bg-orange-600 hover:shadow-md'
                             }
                         `}
                         title={isFirstContact ? 'Enviar primeiro contato' : 'Continuar conversa'}
@@ -586,8 +579,8 @@ const TaskCard = ({ task, themeKey, completing, onComplete, onExecute }) => {
                     disabled={completing}
                     className="
                         shrink-0 flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-[12px] font-semibold
-                        bg-white/[0.08] text-gray-300 border border-white/[0.12]
-                        hover:bg-emerald-500/20 hover:text-emerald-400 hover:border-emerald-500/30 hover:shadow-md
+                        bg-green-50 text-green-700 border border-green-200
+                        hover:bg-green-500 hover:text-white hover:border-green-500 hover:shadow-md
                         transition-all duration-200 shadow-sm
                         disabled:opacity-50 disabled:cursor-not-allowed
                     "

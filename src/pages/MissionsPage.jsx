@@ -18,7 +18,8 @@ import {
     HandMetal,
     MessageCircle,
     CheckCircle2,
-    Hammer
+    Hammer,
+    Snowflake
 } from 'lucide-react'
 
 // ═══════════════════════════════════════════════
@@ -277,8 +278,8 @@ const SalesCockpitPage = () => {
                                 <Crosshair size={20} className="text-orange-500" />
                             </div>
                             <div>
-                                <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-gray-900 mb-1">
-                                    {getGreeting()}! 🎯
+                                <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-gray-900 mb-1 leading-tight">
+                                    {getGreeting()}! Faça suas tarefas diárias e cumpra suas metas! 🎯
                                 </h1>
                                 <p className="text-sm text-gray-500">
                                     {hotTasks.length > 0
@@ -372,11 +373,10 @@ const SalesCockpitPage = () => {
                 {!allDone && !error && (
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
-                        {/* COL 1: 🔥 HOT (G4/G5) */}
+                        {/* COL 1: HOT (G4/G5) */}
                         <FeedSection
                             title="HOT (G4/G5)"
-                            emoji="🔥"
-                            icon={<DollarSign size={15} />}
+                            icon={<Flame size={15} />}
                             count={hotTasks.length}
                             themeKey="hot"
                             emptyText="Nenhum lead quente para hoje."
@@ -393,11 +393,10 @@ const SalesCockpitPage = () => {
                             ))}
                         </FeedSection>
 
-                        {/* COL 2: 🟡 MORNOS (G2/G3) */}
+                        {/* COL 2: MORNOS (G2/G3) */}
                         <FeedSection
                             title="MORNOS (G2/G3)"
-                            emoji="🟡"
-                            icon={<Users size={15} />}
+                            icon={<TrendingUp size={15} />}
                             count={warmTasks.length}
                             themeKey="warm"
                             emptyText="Nenhuma tarefa de nutrição."
@@ -414,11 +413,10 @@ const SalesCockpitPage = () => {
                             ))}
                         </FeedSection>
 
-                        {/* COL 3: 🧊 FRIOS (G1) */}
+                        {/* COL 3: FRIOS (G1) */}
                         <FeedSection
                             title="FRIOS (G1)"
-                            emoji="🧊"
-                            icon={<Sparkles size={15} />}
+                            icon={<Snowflake size={15} />}
                             count={coldTasks.length}
                             themeKey="cold"
                             emptyText="Nenhuma prospecção pendente."
@@ -462,7 +460,7 @@ const SalesCockpitPage = () => {
 // COLUMN SECTION (3-Column Grid)
 // ═══════════════════════════════════════════════
 
-const FeedSection = ({ title, emoji, icon, count, themeKey, children, footer, emptyText }) => {
+const FeedSection = ({ title, icon, count, themeKey, children, footer, emptyText }) => {
     const theme = COLUMN_THEMES[themeKey]
     const isEmpty = React.Children.count(children) === 0
 
@@ -479,7 +477,7 @@ const FeedSection = ({ title, emoji, icon, count, themeKey, children, footer, em
                 <div className="flex items-center gap-2">
                     <span className={theme.iconColor}>{icon}</span>
                     <h3 className="text-xs font-bold text-gray-700 tracking-wider uppercase">
-                        {emoji} {title}
+                        {title}
                     </h3>
                 </div>
                 <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full ${theme.countBg} ${theme.countText} border ${theme.countBorder}`}>

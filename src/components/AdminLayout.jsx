@@ -43,7 +43,7 @@ const AdminLayout = () => {
                 <button onClick={toggleSidebar} className="menu-btn">
                     <Menu size={24} />
                 </button>
-                <img src="/logo-linklead.png" alt="Link&Lead" style={{ height: '32px' }} />
+                <img src="/logo-linklead-light.png" alt="Link&Lead" style={{ height: '32px' }} />
             </div>
 
             {/* OVERLAY FOR MOBILE */}
@@ -54,7 +54,7 @@ const AdminLayout = () => {
             {/* SIDEBAR */}
             <aside className={`sidebar ${isSidebarOpen ? 'open' : ''}`}>
                 <div className="logo-area">
-                    <img src="/logo-linklead.png" alt="Link&Lead" style={{ maxWidth: '160px', height: 'auto' }} />
+                    <img src="/logo-linklead-light.png" alt="Link&Lead" style={{ maxWidth: '160px', height: 'auto' }} />
                 </div>
 
                 <nav className="nav-menu" style={{ gap: '0.25rem' }}>
