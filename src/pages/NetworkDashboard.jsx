@@ -40,12 +40,13 @@ import AddLeadsModal from '../components/AddLeadsModal'
 import LeadDetailModal from '../components/LeadDetailModal'
 import HistorySyncModal from '../components/HistorySyncModal'
 
-const CampaignLeadsView = () => {
+const NetworkDashboard = () => {
     const { id: campaignId } = useParams()
     const navigate = useNavigate()
     const { selectedClientId } = useClientSelection()
 
     const [campaign, setCampaign] = useState(null)
+    const [clientName, setClientName] = useState('')
     const [leads, setLeads] = useState([]) // Stores the JOINED object: { ...campaign_lead, leads: { ...lead_data } }
     const [loading, setLoading] = useState(false)
     const [selectedLead, setSelectedLead] = useState(null) // This will store the full enriched object for the drawer
@@ -118,12 +119,12 @@ const CampaignLeadsView = () => {
     }, [searchTerm])
 
     useEffect(() => {
-        if (selectedLead && selectedLead.leads) {
-            setMessageDraft(selectedLead.leads.suggested_message || '')
+        if (selectedLead) {
+            setMessageDraft(selectedLead.suggested_message || '')
         }
 
         // Fetch Interactions (Chat History)
-        if (!selectedLead?.leads?.id) {
+        if (!selectedLead?.id) {
             setInteractions([])
             return // Don't fetch if no lead
         }
@@ -134,7 +135,7 @@ const CampaignLeadsView = () => {
                 const { data, error } = await supabase
                     .from('interactions')
                     .select('*')
-                    .eq('lead_id', selectedLead.leads.id)
+                    .eq('lead_id', selectedLead.id)
                     .order('interaction_date', { ascending: false })
 
                 if (error) throw error
@@ -153,23 +154,22 @@ const CampaignLeadsView = () => {
 
     // Realtime Subscription
     useEffect(() => {
-        if (!campaignId) return
+        if (!selectedClientId) return
 
         const channel = supabase
-            .channel(`campaign_leads_changes_${campaignId}`)
+            .channel(`campaign_leads_changes_client_${selectedClientId}`)
             .on(
                 'postgres_changes',
                 {
                     event: '*',
                     schema: 'public',
                     table: 'campaign_leads',
-                    filter: `campaign_id=eq.${campaignId}`
+                    filter: `client_id=eq.${selectedClientId}`
                 },
                 (payload) => {
-                    // Refresh data on any change for now to be safe
-                    // Optimization: handle INSERT/UPDATE locally
+                    // Refresh data on any change
                     console.log('Realtime update:', payload)
-                    fetchLeads(0, true) // Specific refresh might be better but this ensures consistency
+                    fetchLeads(0, true)
                     fetchStats()
                 }
             )
@@ -178,16 +178,17 @@ const CampaignLeadsView = () => {
         return () => {
             supabase.removeChannel(channel)
         }
-    }, [campaignId])
+    }, [selectedClientId])
 
 
-    const fetchCampaignDetails = async () => {
+    const fetchClientDetails = async () => {
+        if (!selectedClientId) return
         const { data } = await supabase
-            .from('campaigns')
-            .select('*')
-            .eq('id', campaignId)
+            .from('clients')
+            .select('nome')
+            .eq('id', selectedClientId)
             .single()
-        setCampaign(data)
+        if (data) setClientName(data.nome)
     }
 
     const fetchClientSyncTimestamp = async () => {
@@ -208,13 +209,13 @@ const CampaignLeadsView = () => {
     }
 
     const fetchStats = async () => {
-        if (!selectedClientId || !campaignId) return
+        if (!selectedClientId) return
 
         try {
             const { count: totalCount } = await supabase
                 .from('campaign_leads')
                 .select('*', { count: 'exact', head: true })
-                .eq('campaign_id', campaignId)
+                .eq('client_id', selectedClientId) // Multi-tenant guard
 
             setStats(prev => ({ ...prev, total: totalCount || 0 }))
 
@@ -223,12 +224,33 @@ const CampaignLeadsView = () => {
         }
     }
 
-    // Fetch Total Messages (Global Counter)
+    // Fetch Total Messages (Filtered by Client only)
     const fetchTotalMessages = async () => {
+        if (!selectedClientId) return
         try {
+            // 1. Get lead IDs that belong to this client
+            const { data: campaignLeadIds, error: clError } = await supabase
+                .from('campaign_leads')
+                .select('id')
+                .eq('client_id', selectedClientId) // Multi-tenant guard
+
+            if (clError) throw clError
+            if (!campaignLeadIds || campaignLeadIds.length === 0) {
+                setTotalMessages(0)
+                return
+            }
+
+            const leadIds = campaignLeadIds.map(cl => cl.id).filter(Boolean)
+            if (leadIds.length === 0) {
+                setTotalMessages(0)
+                return
+            }
+
+            // 2. Count interactions only for these leads
             const { count, error } = await supabase
                 .from('interactions')
                 .select('*', { count: 'exact', head: true })
+                .in('lead_id', leadIds)
 
             if (error) throw error
             setTotalMessages(count || 0)
@@ -237,14 +259,36 @@ const CampaignLeadsView = () => {
         }
     }
 
-    // Fetch Top Leads (Engagement Ranking)
+    // Fetch Top Leads (Engagement Ranking — Filtered by Client)
     const fetchTopLeads = async () => {
+        if (!selectedClientId) return
         try {
+            // 1. Get lead IDs that belong to this client
+            const { data: campaignLeadIds, error: clError } = await supabase
+                .from('campaign_leads')
+                .select('id')
+                .eq('client_id', selectedClientId) // Multi-tenant guard
+
+            if (clError) throw clError
+            if (!campaignLeadIds || campaignLeadIds.length === 0) {
+                setTopLeads([])
+                return
+            }
+
+            const leadIds = campaignLeadIds.map(cl => cl.id).filter(Boolean)
+            if (leadIds.length === 0) {
+                setTopLeads([])
+                return
+            }
+
+            // 2. Fetch top leads only from this client
             const { data, error } = await supabase
-                .from('leads_with_stats')
-                .select('id, nome, avatar_url, total_interactions, empresa')
-                .gt('total_interactions', 0)
-                .order('total_interactions', { ascending: false })
+                .from('leads')
+                .select('id, nome, avatar_url, total_interactions_count, empresa')
+                .in('id', leadIds)
+                .eq('client_id', selectedClientId) // Double check
+                .gt('total_interactions_count', 0)
+                .order('total_interactions_count', { ascending: false })
                 .limit(5)
 
             if (error) throw error
@@ -256,7 +300,7 @@ const CampaignLeadsView = () => {
 
     // SIMPLIFIED FETCH: Query campaign_leads view directly (flat structure)
     const fetchLeads = async (pageIndex = 0, isRefresh = false) => {
-        if (!selectedClientId || !campaignId) return
+        if (!selectedClientId) return
 
         try {
             if (pageIndex === 0) setLoading(true)
@@ -265,11 +309,11 @@ const CampaignLeadsView = () => {
             const from = pageIndex * ITEMS_per_PAGE
             const to = from + ITEMS_per_PAGE - 1
 
-            // FIXED: Reverted to simple select to fix PGRST200 error (view relationship missing)
+            // Multi-tenant isolation: client_id only (no campaign_id)
             let query = supabase
                 .from('campaign_leads')
                 .select('*', { count: 'exact' })
-                .eq('campaign_id', campaignId)
+                .eq('client_id', selectedClientId) // Multi-tenant guard
                 .range(from, to)
 
             // FIXED: Direct sorting (no foreignTable needed)
@@ -325,30 +369,35 @@ const CampaignLeadsView = () => {
     }
 
     useEffect(() => {
-        if (campaignId && selectedClientId) {
-            // Only fetch details once or if campaignId changes
+        if (selectedClientId) {
+            // Only fetch details once
             if (page === 0) {
-                fetchCampaignDetails()
+                fetchClientDetails()
                 fetchClientSyncTimestamp()
             }
         }
-    }, [campaignId, selectedClientId])
+    }, [selectedClientId])
 
     useEffect(() => {
-        if (campaignId && selectedClientId) {
+        if (selectedClientId) {
             setLeads([])
             setPage(0)
             setHasMore(true)
             fetchLeads(0, true)
             fetchStats()
         }
-    }, [campaignId, selectedClientId, debouncedSearch, sortConfig, filters])
+    }, [selectedClientId, debouncedSearch, sortConfig, filters])
 
-    // Fetch total messages and top leads once on mount
+    // Fetch total messages and top leads when client changes
     useEffect(() => {
-        fetchTotalMessages()
-        fetchTopLeads()
-    }, [])
+        if (selectedClientId) {
+            fetchTotalMessages()
+            fetchTopLeads()
+        } else {
+            setTotalMessages(0)
+            setTopLeads([])
+        }
+    }, [selectedClientId])
 
     // Reset cancel flag on unmount
     useEffect(() => {
@@ -424,8 +473,7 @@ const CampaignLeadsView = () => {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    client_id: selectedClientId,
-                    campaign_id: campaignId
+                    client_id: selectedClientId
                 })
             })
 
@@ -445,7 +493,9 @@ const CampaignLeadsView = () => {
     }
 
     const handleSyncConnections = async () => {
-        if (!selectedClientId || !campaignId) return
+        if (!selectedClientId) return
+
+        setSyncLoading(true)
 
         try {
             // 1. Fetch Client Unipile ID
@@ -457,30 +507,43 @@ const CampaignLeadsView = () => {
 
             if (error || !client?.unipile_account_id) {
                 setNotification({ message: 'Erro: Cliente sem conta Unipile conectada.', type: 'error' })
+                setSyncLoading(false)
+                setTimeout(() => setNotification(null), 5000)
                 return
             }
 
-            // 2. Call Webhook
+            // 2. Call Webhook (Early Return pattern)
             const response = await fetch('https://n8n-n8n-start.kfocge.easypanel.host/webhook/sync-connections', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     client_id: selectedClientId,
-                    unipile_account_id: client.unipile_account_id,
-                    campaign_id: campaignId
+                    unipile_account_id: client.unipile_account_id
                 })
             })
 
             if (response.ok) {
-                setNotification({ message: 'Iniciando captura e qualificação de leads...', type: 'info' })
+                const result = await response.json()
+
+                // Build rich notification message
+                let msg
+                if (result.total_leads && result.total_leads > 0) {
+                    msg = `Iniciamos a leitura de ${result.total_leads.toLocaleString()} conexões. O processo levará cerca de ${result.estimated_time_human || 'alguns minutos'}. Você pode continuar usando o sistema normalmente.`
+                } else {
+                    msg = result.message || 'Sincronização iniciada. A atualização aparecerá em breve.'
+                }
+
+                setNotification({ message: msg, type: 'success' })
             } else {
-                throw new Error('Falha na API')
+                throw new Error(`Falha na API (${response.status})`)
             }
         } catch (e) {
             console.error(e)
             setNotification({ message: 'Erro ao iniciar sincronização.', type: 'error' })
+        } finally {
+            setSyncLoading(false)
+            setTimeout(() => setNotification(null), 10000)
         }
-        setTimeout(() => setNotification(null), 5000)
     }
 
     // NEW: Sync Messages Manual Trigger
@@ -593,13 +656,14 @@ const CampaignLeadsView = () => {
 
     const handleDeleteLead = async (id, e) => {
         e.stopPropagation()
-        if (!confirm('Tem certeza que deseja remover este lead da campanha?')) return
+        if (!confirm('Tem certeza que deseja remover este lead da base?')) return
 
         try {
             const { error } = await supabase
                 .from('campaign_leads')
                 .delete()
                 .eq('id', id)
+                .eq('client_id', selectedClientId) // Multi-tenant guard
 
             if (error) throw error
 
@@ -742,19 +806,24 @@ const CampaignLeadsView = () => {
         cancelRef.current = false
 
         try {
-            // 1. Fetch ALL lead IDs for this client
-            const { data: allLeads, error: leadsError } = await supabase
-                .from('leads')
+            // 1. Fetch lead IDs that belong to THIS client (not campaign)
+            const { data: campaignLeadRows, error: clError } = await supabase
+                .from('campaign_leads')
                 .select('id')
                 .eq('client_id', selectedClientId)
-                .order('id', { ascending: true })
 
-            if (leadsError) throw leadsError
-            if (!allLeads || allLeads.length === 0) {
-                setNotification({ message: 'Nenhum lead encontrado para este cliente.', type: 'error' })
+            if (clError) throw clError
+
+            const leadIds = (campaignLeadRows || []).map(cl => cl.id).filter(Boolean)
+
+            if (leadIds.length === 0) {
+                setNotification({ message: 'Nenhum lead encontrado.', type: 'error' })
                 setTimeout(() => setNotification(null), 5000)
                 return
             }
+
+            // Map to the format expected by the rest of the function
+            const allLeads = leadIds.map(id => ({ id }))
 
             // 2. Fetch Unipile account ID
             const { data: client, error: clientError } = await supabase
@@ -1061,7 +1130,7 @@ const CampaignLeadsView = () => {
                         <p className="text-slate-600 text-center mb-6 text-sm">
                             {selectedLeads.size > 0
                                 ? `Você selecionou ${selectedLeads.size} leads para atualização.`
-                                : `Você não selecionou nenhum lead. Isso iniciará a importação para TODOS os ${stats.total} leads desta campanha.`}
+                                : `Você não selecionou nenhum lead. Isso iniciará a importação para TODOS os ${stats.total} leads da base.`}
                             <br /><br />
                             <span className="font-bold text-slate-800">Atenção:</span> O processo será feito sequencialmente (um por um) para evitar bloqueios, levando cerca de <span className="text-orange-600 font-bold">3 segundos por lead</span>.
                         </p>
@@ -1084,19 +1153,12 @@ const CampaignLeadsView = () => {
             )}
 
             <div className="px-4 mb-6">
-                <button
-                    onClick={() => navigate('/campaigns')}
-                    className="flex items-center gap-2 text-slate-500 hover:text-orange-600 transition-colors text-sm font-semibold mb-4"
-                >
-                    <ArrowLeft size={16} /> Voltar para Campanhas
-                </button>
-
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-2 mb-5">
                     <div>
                         <h1 className="text-2xl font-bold text-slate-900 tracking-tight mb-1">
-                            {campaign ? campaign.name : 'Carregando campanha...'}
+                            {clientName ? `Conexões de ${clientName}` : 'Minha Rede'}
                         </h1>
-                        <p className="text-slate-600 text-base font-medium">Gerencie os leads e cadência desta campanha.</p>
+                        <p className="text-slate-600 text-base font-medium">Gerencie todos os leads e conexões da sua conta.</p>
                     </div>
                 </div>
 
@@ -1104,17 +1166,17 @@ const CampaignLeadsView = () => {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-5">
                     <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
                         <div className="flex items-center gap-3 mb-2 text-slate-600 text-sm font-bold uppercase tracking-wider">
-                            <Users size={16} /> Leads na Campanha
+                            <Users size={16} /> Total de Leads
                         </div>
                         <div className="text-3xl font-extrabold text-slate-900">{stats.total}</div>
                     </div>
 
                     <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
                         <div className="flex items-center gap-3 mb-2 text-slate-600 text-sm font-bold uppercase tracking-wider">
-                            <MessageCircle size={16} /> Total de Mensagens na Base
+                            <MessageCircle size={16} /> Mensagens
                         </div>
                         <div className="text-3xl font-extrabold text-blue-600">{totalMessages.toLocaleString()}</div>
-                        <div className="text-xs text-slate-500 mt-1">Interações registradas no sistema</div>
+                        <div className="text-xs text-slate-500 mt-1">Interações da sua rede</div>
                     </div>
 
                     {/* TOP LEADS RANKING */}
@@ -1144,7 +1206,7 @@ const CampaignLeadsView = () => {
                                             <div className="text-sm font-medium text-slate-800 truncate">{lead.nome}</div>
                                         </div>
                                         <div className="text-xs font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">
-                                            {lead.total_interactions} msg
+                                            {lead.total_interactions_count} msg
                                         </div>
                                     </div>
                                 ))}
@@ -1371,7 +1433,6 @@ const CampaignLeadsView = () => {
                 <AddLeadsModal
                     isOpen={isAddLeadsModalOpen}
                     onClose={() => setIsAddLeadsModalOpen(false)}
-                    campaignId={campaignId}
                     clientId={selectedClientId}
                     onImportConnections={handleSyncConnections}
                 />
@@ -1726,7 +1787,7 @@ const CampaignLeadsView = () => {
             </div>
 
             {/* DRAWER (Slide-Over) */}
-            {selectedLead && selectedLead.leads && (
+            {selectedLead && selectedLead && (
                 <div className="fixed inset-0 z-50 flex justify-end">
                     <div className="absolute inset-0 bg-slate-900/20 backdrop-blur-sm transition-opacity" onClick={() => setSelectedLead(null)} />
                     <div className="relative w-full max-w-lg bg-white h-full shadow-2xl flex flex-col animate-slide-in-right overflow-hidden border-l border-gray-200">
@@ -1748,21 +1809,21 @@ const CampaignLeadsView = () => {
                             <div className="bg-white p-5 rounded-xl border border-orange-100 shadow-sm">
                                 <div className="flex items-start gap-4 mb-4">
                                     <div className="w-14 h-14 rounded-full bg-slate-100 flex items-center justify-center text-lg font-bold text-slate-500 shrink-0 border border-gray-200">
-                                        {selectedLead.leads.avatar_url ? <img src={selectedLead.leads.avatar_url} className="w-full h-full object-cover rounded-full" /> : (selectedLead.leads.nome?.charAt(0) || '?')}
+                                        {selectedLead.avatar_url ? <img src={selectedLead.avatar_url} className="w-full h-full object-cover rounded-full" /> : (selectedLead.nome?.charAt(0) || '?')}
                                     </div>
                                     <div className="flex-1">
                                         <div className="flex justify-between items-start">
-                                            <h3 className="text-lg font-bold text-slate-900 leading-tight">{selectedLead.leads.nome}</h3>
-                                            {selectedLead.leads.company_website && (
-                                                <a href={selectedLead.leads.company_website} target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-blue-600 transition-colors" title="Visitar Site">
+                                            <h3 className="text-lg font-bold text-slate-900 leading-tight">{selectedLead.nome}</h3>
+                                            {selectedLead.company_website && (
+                                                <a href={selectedLead.company_website} target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-blue-600 transition-colors" title="Visitar Site">
                                                     <Globe size={18} />
                                                 </a>
                                             )}
                                         </div>
-                                        <p className="text-sm text-gray-500 mb-1">{selectedLead.leads.headline}</p>
+                                        <p className="text-sm text-gray-500 mb-1">{selectedLead.headline}</p>
                                         <div className="flex flex-wrap gap-2 mt-2">
-                                            {selectedLead.leads.is_high_ticket && <span className="px-2 py-0.5 bg-indigo-50 text-indigo-700 text-[10px] font-bold rounded border border-indigo-100 flex items-center gap-1"><Gem size={10} /> High Ticket</span>}
-                                            {selectedLead.leads.company_size_type && <span className="px-2 py-0.5 bg-gray-100 text-gray-600 text-[10px] font-bold rounded border border-gray-200"><Building2 size={10} className="inline mr-1" />{selectedLead.leads.company_size_type}</span>}
+                                            {selectedLead.is_high_ticket && <span className="px-2 py-0.5 bg-indigo-50 text-indigo-700 text-[10px] font-bold rounded border border-indigo-100 flex items-center gap-1"><Gem size={10} /> High Ticket</span>}
+                                            {selectedLead.company_size_type && <span className="px-2 py-0.5 bg-gray-100 text-gray-600 text-[10px] font-bold rounded border border-gray-200"><Building2 size={10} className="inline mr-1" />{selectedLead.company_size_type}</span>}
                                         </div>
                                     </div>
                                 </div>
@@ -1773,19 +1834,19 @@ const CampaignLeadsView = () => {
                                         <Sparkles size={12} /> Motivo da Qualificação
                                     </h4>
                                     <p className="text-sm text-slate-700 leading-relaxed font-medium">
-                                        {selectedLead.leads.icp_reason || "Este perfil apresenta alta aderência com seu ICP ideal, ocupando cargo de decisão em setor estratégico."}
+                                        {selectedLead.icp_reason || "Este perfil apresenta alta aderência com seu ICP ideal, ocupando cargo de decisão em setor estratégico."}
                                     </p>
                                 </div>
                             </div>
 
                             {/* Skills Tag Cloud (Collapsed/Secondary) */}
-                            {selectedLead.leads.skills && (
+                            {selectedLead.skills && (
                                 <div>
                                     <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 px-2">Habilidades Detectadas</h4>
                                     <div className="flex flex-wrap gap-2 px-2">
                                         {(() => {
                                             try {
-                                                const tags = typeof selectedLead.leads.skills === 'string' ? JSON.parse(selectedLead.leads.skills) : selectedLead.leads.skills
+                                                const tags = typeof selectedLead.skills === 'string' ? JSON.parse(selectedLead.skills) : selectedLead.skills
                                                 return tags.slice(0, 5).map((t, i) => (
                                                     <span key={i} className="px-2 py-1 rounded-md bg-white text-slate-500 text-xs font-medium border border-gray-200 shadow-sm">
                                                         {typeof t === 'string' ? t : t.name}
@@ -1891,5 +1952,5 @@ const CampaignLeadsView = () => {
     )
 }
 
-export default CampaignLeadsView
+export default NetworkDashboard
 

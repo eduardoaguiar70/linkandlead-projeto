@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../services/supabaseClient';
 import { useAuth } from '../contexts/AuthContext'; // Import Auth
-import { Pencil, Upload, FileText, X, Check, Link as LinkIcon, Info, AlertTriangle, Linkedin } from 'lucide-react';
+import { Pencil, Upload, FileText, X, Check, Link as LinkIcon, Info, AlertTriangle, Linkedin, Download } from 'lucide-react';
 
-const N8N_UPLOAD_DOC_URL = 'https://n8n-n8n-start.kfocge.easypanel.host/webhook/upload-client-doc'
+
 
 export default function ClientsPage() {
     const { user } = useAuth(); // Hook Auth
@@ -12,31 +12,7 @@ export default function ClientsPage() {
     const [showModal, setShowModal] = useState(false);
     const [saving, setSaving] = useState(false);
     const [editingClient, setEditingClient] = useState(null);
-    const [toast, setToast] = useState(null); // { message, type }
-
-    // ... (rest of local state) ...
-    // Note: I am NOT changing the lines between 14-27, just re-stating them if needed for context but 'replace_file_content' replaces the block.
-    // To minimize context, I will target specific blocks if possible, but multiple edits are needed.
-    // Better to use a single large block or multiple chunks?
-    // I will use multiple chunks with multi_replace_file_content logic simulated via single call if continuous, or just use replace_file_content for the whole file? No, too large.
-    // I will use replace_file_content for the imports and state first.
-    // Wait, I can't do multiple disparate chunks with replace_file_content.
-    // I should use `multi_replace_file_content` if available? 
-    // Checking tools... `multi_replace_file_content` IS available. 
-    // I will use `default_api:multi_replace_file_content`.
-    // Wait, the user prompt showed `default_api:replace_file_content` and `default_api:multi_replace_file_content` descriptors.
-    // Yes, I have `multi_replace_file_content`.
-
-    // Proceeding with `multi_replace_file_content`.
-
-    // Chunk 1: Imports
-    // Chunk 2: Toast State
-    // Chunk 3: handleCopyLink function
-    // Chunk 4: Button in Table
-    // Chunk 5: Toast UI render
-
-
-    // ... (rest of local state) ...
+    const [toast, setToast] = useState(null);
 
     // File Upload State
     const [filesToUpload, setFilesToUpload] = useState([]);
@@ -44,6 +20,7 @@ export default function ClientsPage() {
 
     const [formData, setFormData] = useState({
         name: '',
+        email_contato: '',
         description: '',
         tone_of_voice: 'Profissional',
         target_audience_default: '',
@@ -71,16 +48,34 @@ export default function ClientsPage() {
     async function fetchClientFiles(clientId) {
         try {
             const { data, error } = await supabase
-                .from('client_knowledge')
-                .select('*')
-                .eq('client_id', clientId);
+                .storage
+                .from('client-docs')
+                .list(`core-docs/${clientId}`, { limit: 50 });
 
             if (error) throw error;
-            setExistingFiles(data || []);
+            const files = (data || []).filter(f => f.name !== '.emptyFolderPlaceholder');
+            setExistingFiles(files);
         } catch (error) {
             console.error('Erro ao buscar arquivos do cliente:', error);
+            setExistingFiles([]);
         }
     }
+
+    const handleDownloadFile = async (fileName) => {
+        if (!editingClient) return;
+        const filePath = `core-docs/${editingClient.id}/${fileName}`;
+        const { data, error } = await supabase
+            .storage
+            .from('client-docs')
+            .createSignedUrl(filePath, 60);
+
+        if (error) {
+            console.error('Erro ao gerar link de download:', error);
+            alert('Erro ao baixar arquivo.');
+            return;
+        }
+        window.open(data.signedUrl, '_blank');
+    };
 
     const handleInputChange = (e) => {
         const { name, value } = e.target;
@@ -105,6 +100,7 @@ export default function ClientsPage() {
         setEditingClient(client);
         setFormData({
             name: client.name || '',
+            email_contato: client.email_contato || '',
             description: client.description || '',
             tone_of_voice: client.tone_of_voice || 'Profissional',
             target_audience_default: client.target_audience_default || '',
@@ -121,6 +117,7 @@ export default function ClientsPage() {
         setEditingClient(null);
         setFormData({
             name: '',
+            email_contato: '',
             description: '',
             tone_of_voice: 'Profissional',
             target_audience_default: '',
@@ -172,42 +169,28 @@ export default function ClientsPage() {
     };
 
     const uploadFiles = async (clientId) => {
-        if (!filesToUpload || filesToUpload.length === 0) return;
+        if (!filesToUpload || filesToUpload.length === 0) return null;
 
-        console.log(`[DEBUG] uploadFiles chamado com clientID: ${clientId} (Tipo: ${typeof clientId})`);
+        const file = filesToUpload[0];
+        if (!file) return null;
 
-        for (const file of filesToUpload) {
-            if (!file) continue;
+        const safeName = sanitizeFileName(file.name);
+        const filePath = `core-docs/${clientId}/${safeName}`;
 
-            console.log(`[DEBUG] Preparando envio de ${file.name} para webhook`);
+        console.log(`[DEBUG] Uploading ${file.name} to Supabase Storage: ${filePath}`);
 
-            // Create FormData with file and clientId
-            const formData = new FormData();
-            formData.append('file', file);
-            formData.append('clientId', clientId);
+        const { data: uploadData, error: uploadError } = await supabase
+            .storage
+            .from('client-docs')
+            .upload(filePath, file, { upsert: true });
 
-            console.log(`[DEBUG] Enviando para webhook: ${N8N_UPLOAD_DOC_URL}`);
-
-            try {
-                const response = await fetch(N8N_UPLOAD_DOC_URL, {
-                    method: 'POST',
-                    body: formData
-                    // Note: Do NOT set Content-Type header - browser will set it automatically with boundary
-                });
-
-                if (!response.ok) {
-                    const errorText = await response.text();
-                    throw new Error(`Webhook retornou erro ${response.status}: ${errorText}`);
-                }
-
-                const result = await response.json();
-                console.log(`[DEBUG] Upload de ${file.name} concluído:`, result);
-
-            } catch (error) {
-                console.error(`[DEBUG] Erro ao enviar ${file.name} para webhook:`, error);
-                throw new Error(`Falha no upload de "${file.name}": ${error.message}`);
-            }
+        if (uploadError) {
+            console.error('[DEBUG] Upload error:', uploadError);
+            throw new Error(`Upload falhou: ${uploadError.message}`);
         }
+
+        console.log('[DEBUG] Upload concluído:', uploadData);
+        return uploadData.path;
     };
 
     const handleSubmit = async (e) => {
@@ -219,21 +202,16 @@ export default function ClientsPage() {
             console.log("2. User ID:", user?.id);
 
             // PAYLOAD CONSTRUCTION & LOGGING
-            let payload = {};
-            try {
-                payload = {
-                    name: formData.name,
-                    description: formData.description,
-                    tone_of_voice: formData.tone_of_voice,
-                    target_audience_default: formData.target_audience_default,
-                    pain_points: formData.pain_points,
-                    unipile_account_id: formData.unipile_account_id
-                    // Add other fields here if needed
-                };
-                console.log("3. Payload montado:", payload);
-            } catch (payloadError) {
-                throw new Error("Erro ao montar o payload: " + payloadError.message);
-            }
+            const payload = {
+                name: formData.name,
+                email_contato: formData.email_contato,
+                description: formData.description,
+                tone_of_voice: formData.tone_of_voice,
+                target_audience_default: formData.target_audience_default,
+                pain_points: formData.pain_points,
+                unipile_account_id: formData.unipile_account_id
+            };
+            console.log("3. Payload montado:", payload);
 
             // --- EXECUTE SUPABASE CALLS AFTER PAYLOAD IS READY ---
             let clientData = null;
@@ -268,10 +246,21 @@ export default function ClientsPage() {
             console.log("[DEBUG] ID Numérico capturado:", realClientId);
             if (!realClientId) throw new Error("Erro crítico: ID do cliente é inválido.");
 
-            // UPLOAD
+            // UPLOAD + UPDATE core_doc_id
             if (filesToUpload.length > 0) {
-                console.log(`[DEBUG] Iniciando uploads para ID: ${realClientId}`);
-                await uploadFiles(realClientId);
+                console.log(`[DEBUG] Iniciando upload para ID: ${realClientId}`);
+                const docPath = await uploadFiles(realClientId);
+                if (docPath) {
+                    const { error: updateError } = await supabase
+                        .from('clients')
+                        .update({ core_doc_id: docPath })
+                        .eq('id', realClientId);
+                    if (updateError) {
+                        console.error('[DEBUG] Erro ao atualizar core_doc_id:', updateError);
+                    } else {
+                        console.log('[DEBUG] core_doc_id atualizado:', docPath);
+                    }
+                }
             }
 
             // SUCCESS
@@ -477,6 +466,18 @@ export default function ClientsPage() {
                             </div>
 
                             <div>
+                                <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem' }}>Email de Contato</label>
+                                <input
+                                    type="email"
+                                    name="email_contato"
+                                    value={formData.email_contato}
+                                    onChange={handleInputChange}
+                                    placeholder="email@empresa.com"
+                                    style={{ width: '100%', padding: '0.5rem', border: '1px solid #d1d5db', borderRadius: '0.25rem', color: '#1f2937' }}
+                                />
+                            </div>
+
+                            <div>
                                 <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem' }}>Descrição do Negócio</label>
                                 <textarea
                                     required
@@ -583,16 +584,28 @@ export default function ClientsPage() {
                                     </div>
                                 )}
 
-                                {/* LISTA DE ARQUIVOS JÁ EXISTENTES */}
+                                {/* LISTA DE ARQUIVOS JÁ EXISTENTES (Storage) */}
                                 {existingFiles.length > 0 && (
                                     <div>
                                         <p style={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#4b5563', marginBottom: '0.25rem' }}>Arquivos Anteriores:</p>
                                         <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
                                             {existingFiles.map((file) => (
-                                                <li key={file.id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.875rem', color: '#059669', marginBottom: '0.25rem' }}>
-                                                    <Check size={14} />
-                                                    <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{file.file_name}</span>
-                                                    <span style={{ fontSize: '0.75rem', color: '#6b7280' }}>- Enviado</span>
+                                                <li
+                                                    key={file.id || file.name}
+                                                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.875rem', color: '#059669', marginBottom: '0.25rem', background: '#f0fdf4', padding: '0.25rem 0.5rem', borderRadius: '0.25rem' }}
+                                                >
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', overflow: 'hidden' }}>
+                                                        <Check size={14} />
+                                                        <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{file.name}</span>
+                                                    </div>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleDownloadFile(file.name)}
+                                                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#2563eb', padding: '2px', display: 'flex', alignItems: 'center' }}
+                                                        title="Baixar arquivo"
+                                                    >
+                                                        <Download size={14} />
+                                                    </button>
                                                 </li>
                                             ))}
                                         </ul>

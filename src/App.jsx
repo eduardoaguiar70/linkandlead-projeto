@@ -15,9 +15,7 @@ import ClientsPage from './pages/ClientsPage'
 import IdeasPage from './pages/IdeasPage'
 import SalesHubPage from './pages/SalesHubPage'
 import SalesInboxPage from './pages/SalesInboxPage'
-import CampaignsPage from './pages/CampaignsPage'
-import CampaignLeadsView from './pages/CampaignLeadsView'
-import CampaignLeadsPage from './pages/CampaignLeadsPage'
+import NetworkDashboard from './pages/NetworkDashboard'
 import SystemInfoPage from './pages/SystemInfoPage'
 import LinkedInEngagementPage from './pages/LinkedInEngagementPage'
 import MissionsPage from './pages/MissionsPage'
@@ -177,10 +175,7 @@ function App() {
                 <Route path="/clients" element={<ClientsPage />} />
                 <Route path="/ideas" element={<IdeasPage />} />
                 <Route path="/sales" element={<SalesHubPage />} />
-                <Route path="/campaigns" element={<CampaignsPage />} />
-                <Route path="/campaigns" element={<CampaignsPage />} />
-                <Route path="/campaigns/:id" element={<CampaignLeadsView />} />
-                <Route path="/campaigns/:campaignId/leads" element={<CampaignLeadsPage />} />
+                <Route path="/network" element={<NetworkDashboard />} />
                 <Route path="/sales/inbox" element={<SalesInboxPage />} />
                 <Route path="/system-info" element={<SystemInfoPage />} />
                 <Route path="/engagement" element={<LinkedInEngagementPage />} />

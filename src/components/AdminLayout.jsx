@@ -68,8 +68,8 @@ const AdminLayout = () => {
                         <Link to="/" className={isActive('/')}>
                             <LayoutDashboard size={18} /> Visão Geral
                         </Link>
-                        <Link to="/campaigns" className={isActive('/campaigns')}>
-                            <Target size={18} /> Campanhas
+                        <Link to="/network" className={isActive('/network')}>
+                            <Users size={18} /> Minha Rede
                         </Link>
                         <Link to="/missions" className={isActive('/missions')}>
                             <Flame size={18} /> Cockpit de Vendas
@@ -153,7 +153,7 @@ const AdminLayout = () => {
             {/* MAIN CONTENT */}
             <main className="main-content">
                 {/* Client Context Header for sales-related pages */}
-                {(location.pathname === '/' || location.pathname.startsWith('/sales') || location.pathname.startsWith('/leads') || location.pathname.startsWith('/campaigns') || location.pathname.startsWith('/engagement') || location.pathname.startsWith('/missions') || location.pathname.startsWith('/content-library')) && (
+                {(location.pathname === '/' || location.pathname.startsWith('/sales') || location.pathname.startsWith('/leads') || location.pathname.startsWith('/campaigns') || location.pathname.startsWith('/network') || location.pathname.startsWith('/engagement') || location.pathname.startsWith('/missions') || location.pathname.startsWith('/content-library')) && (
                     <div className="px-6 py-3 bg-white/5 border-b border-white/10 flex items-center justify-between backdrop-blur-md">
                         <div className="flex items-center gap-4">
                             <span className="text-sm text-text-muted font-medium">Contexto:</span>

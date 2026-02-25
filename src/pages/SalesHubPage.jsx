@@ -75,18 +75,26 @@ const SalesHubPage = () => {
             })
 
             if (response.ok) {
-                setNotification({ message: 'A mineração começou! Os leads aparecerão na tela automaticamente.', type: 'info' })
+                const result = await response.json()
+
+                let msg
+                if (result.total_leads && result.total_leads > 0) {
+                    msg = `Iniciamos a leitura de ${result.total_leads.toLocaleString()} conexões. O processo levará cerca de ${result.estimated_time_human || 'alguns minutos'}. Você pode continuar usando o sistema normalmente.`
+                } else {
+                    msg = result.message || 'Sincronização iniciada. A atualização aparecerá em breve.'
+                }
+
+                setNotification({ message: msg, type: 'success' })
             } else {
-                setNotification({ message: 'Erro ao iniciar sincronização (Webhook).', type: 'error' })
-                setSyncLoading(false)
+                setNotification({ message: `Erro ao iniciar sincronização (${response.status}).`, type: 'error' })
             }
         } catch (error) {
             console.error(error)
             setNotification({ message: 'Erro de conexão.', type: 'error' })
+        } finally {
             setSyncLoading(false)
+            setTimeout(() => setNotification(null), 10000)
         }
-
-        setTimeout(() => setNotification(null), 5000)
     }
 
     const handleEnrichment = async (singleLead = null) => {

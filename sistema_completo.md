@@ -1,5 +1,5 @@
 # Exportação do Sistema
-Data: 2026-02-21 15:16:04
+Data: 2026-02-25 13:30:23
 
 ## File: account_sync_status_migration.sql
 ```sql
@@ -17596,7 +17596,7 @@ function App() {
                 <Route path="/ideas" element={<IdeasPage />} />
                 <Route path="/sales" element={<SalesHubPage />} />
                 <Route path="/campaigns" element={<CampaignsPage />} />
-                <Route path="/campaigns" element={<CampaignsPage />} />
+                <Route path="/network" element={<CampaignLeadsView />} />
                 <Route path="/campaigns/:id" element={<CampaignLeadsView />} />
                 <Route path="/campaigns/:campaignId/leads" element={<CampaignLeadsPage />} />
                 <Route path="/sales/inbox" element={<SalesInboxPage />} />
@@ -17800,18 +17800,18 @@ input::placeholder {
   color: var(--color-text-muted);
 }
 
-/* Scrollbar - Dark & Slim */
+/* Scrollbar - Light & Slim */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #000;
+  background: #f1f5f9;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #333;
+  background: #cbd5e1;
   border-radius: 3px;
 }
 
@@ -18148,7 +18148,7 @@ const AdminLayout = () => {
                 <button onClick={toggleSidebar} className="menu-btn">
                     <Menu size={24} />
                 </button>
-                <img src="/logo-linklead.png" alt="Link&Lead" style={{ height: '32px' }} />
+                <img src="/logo-linklead-light.png" alt="Link&Lead" style={{ height: '32px' }} />
             </div>
 
             {/* OVERLAY FOR MOBILE */}
@@ -18159,7 +18159,7 @@ const AdminLayout = () => {
             {/* SIDEBAR */}
             <aside className={`sidebar ${isSidebarOpen ? 'open' : ''}`}>
                 <div className="logo-area">
-                    <img src="/logo-linklead.png" alt="Link&Lead" style={{ maxWidth: '160px', height: 'auto' }} />
+                    <img src="/logo-linklead-light.png" alt="Link&Lead" style={{ maxWidth: '160px', height: 'auto' }} />
                 </div>
 
                 <nav className="nav-menu" style={{ gap: '0.25rem' }}>
@@ -18173,8 +18173,8 @@ const AdminLayout = () => {
                         <Link to="/" className={isActive('/')}>
                             <LayoutDashboard size={18} /> Visão Geral
                         </Link>
-                        <Link to="/campaigns" className={isActive('/campaigns')}>
-                            <Target size={18} /> Campanhas
+                        <Link to="/network" className={isActive('/network')}>
+                            <Users size={18} /> Minha Rede
                         </Link>
                         <Link to="/missions" className={isActive('/missions')}>
                             <Flame size={18} /> Cockpit de Vendas
@@ -18187,6 +18187,9 @@ const AdminLayout = () => {
                         </Link>
                         <Link to="/engagement" className={isActive('/engagement')}>
                             <ThumbsUp size={18} /> Engajamento
+                        </Link>
+                        <Link to="/content-library" className={isActive('/content-library')}>
+                            <Library size={18} /> Biblioteca de Conteúdos
                         </Link>
                     </div>
 
@@ -18222,9 +18225,6 @@ const AdminLayout = () => {
                                 <Link to="/ideas" className={isActive('/ideas')}>
                                     <Lightbulb size={18} /> {t('ideas')}
                                 </Link>
-                                <Link to="/content-library" className={isActive('/content-library')}>
-                                    <Library size={18} /> Biblioteca
-                                </Link>
                             </div>
                         )}
                     </div>
@@ -18258,7 +18258,7 @@ const AdminLayout = () => {
             {/* MAIN CONTENT */}
             <main className="main-content">
                 {/* Client Context Header for sales-related pages */}
-                {(location.pathname === '/' || location.pathname.startsWith('/sales') || location.pathname.startsWith('/leads') || location.pathname.startsWith('/campaigns') || location.pathname.startsWith('/engagement') || location.pathname.startsWith('/missions')) && (
+                {(location.pathname === '/' || location.pathname.startsWith('/sales') || location.pathname.startsWith('/leads') || location.pathname.startsWith('/campaigns') || location.pathname.startsWith('/network') || location.pathname.startsWith('/engagement') || location.pathname.startsWith('/missions') || location.pathname.startsWith('/content-library')) && (
                     <div className="px-6 py-3 bg-white/5 border-b border-white/10 flex items-center justify-between backdrop-blur-md">
                         <div className="flex items-center gap-4">
                             <span className="text-sm text-text-muted font-medium">Contexto:</span>
@@ -20665,7 +20665,8 @@ import {
     HandMetal,
     MessageCircle,
     Users,
-    DollarSign
+    DollarSign,
+    Snowflake
 } from 'lucide-react'
 
 // ═══════════════════════════════════════════════
@@ -20683,39 +20684,52 @@ const CADENCE_LABELS = {
 }
 
 const CADENCE_STYLES = {
-    G1: 'bg-slate-800 text-slate-300 border-slate-600',
-    G2: 'bg-blue-900/50 text-blue-300 border-blue-700',
-    G3: 'bg-cyan-900/50 text-cyan-300 border-cyan-700',
-    G4: 'bg-orange-900/50 text-orange-300 border-orange-700',
-    G5: 'bg-red-900/50 text-red-300 border-red-700',
+    G1: 'bg-gray-100 text-gray-600 border-gray-300',
+    G2: 'bg-blue-50 text-blue-600 border-blue-200',
+    G3: 'bg-cyan-50 text-cyan-700 border-cyan-200',
+    G4: 'bg-orange-50 text-orange-600 border-orange-200',
+    G5: 'bg-red-50 text-red-600 border-red-200',
 }
 
 const COLUMN_THEMES = {
     hot: {
         borderTop: 'linear-gradient(90deg, #ef4444, #f97316)',
-        headerBg: 'bg-red-500/[0.06]',
+        headerBg: 'bg-red-500/[0.08]',
         headerBorder: 'border-red-500/15',
-        countBg: 'bg-red-900/40',
+        countBg: 'bg-red-500/10',
         countText: 'text-red-400',
-        countBorder: 'border-red-700/50',
+        countBorder: 'border-red-500/20',
         iconColor: 'text-red-400',
         cardBorder: 'border-l-orange-500/60',
-        columnBg: 'rgba(239, 68, 68, 0.015)',
+        columnBg: 'rgba(239, 68, 68, 0.02)',
         emptyBg: 'bg-red-500/5',
         emptyBorder: 'border-red-500/10',
     },
     cold: {
-        borderTop: 'linear-gradient(90deg, #3b82f6, #64748b)',
-        headerBg: 'bg-blue-500/[0.06]',
+        borderTop: 'linear-gradient(90deg, #3b82f6, #94a3b8)',
+        headerBg: 'bg-blue-500/[0.08]',
         headerBorder: 'border-blue-500/15',
-        countBg: 'bg-blue-900/40',
+        countBg: 'bg-blue-500/10',
         countText: 'text-blue-400',
-        countBorder: 'border-blue-700/50',
+        countBorder: 'border-blue-500/20',
         iconColor: 'text-blue-400',
         cardBorder: 'border-l-blue-500/30',
-        columnBg: 'rgba(59, 130, 246, 0.015)',
+        columnBg: 'rgba(59, 130, 246, 0.02)',
         emptyBg: 'bg-blue-500/5',
         emptyBorder: 'border-blue-500/10',
+    },
+    warm: {
+        borderTop: 'linear-gradient(90deg, #eab308, #f59e0b)',
+        headerBg: 'bg-yellow-500/[0.08]',
+        headerBorder: 'border-yellow-500/15',
+        countBg: 'bg-yellow-500/10',
+        countText: 'text-yellow-400',
+        countBorder: 'border-yellow-500/20',
+        iconColor: 'text-yellow-400',
+        cardBorder: 'border-l-yellow-500/50',
+        columnBg: 'rgba(234, 179, 8, 0.02)',
+        emptyBg: 'bg-yellow-500/5',
+        emptyBorder: 'border-yellow-500/10',
     }
 }
 
@@ -20752,7 +20766,7 @@ const SalesCockpit = () => {
             const [pendingResult, doneResult] = await Promise.all([
                 supabase
                     .from('tasks')
-                    .select('*, leads!inner(id, client_id, nome, empresa, headline, linkedin_profile_url, cadence_stage, total_interactions_count, avatar_url)')
+                    .select('*, lead:leads!inner(id, client_id, nome, empresa, headline, linkedin_profile_url, cadence_stage, total_interactions_count, avatar_url)')
                     .eq('leads.client_id', selectedClientId)
                     .eq('status', 'PENDING')
                     .order('created_at', { ascending: true }),
@@ -20767,7 +20781,9 @@ const SalesCockpit = () => {
 
             if (pendingResult.error) throw pendingResult.error
 
-            setTasks(pendingResult.data || [])
+            const activeTasks = pendingResult.data || []
+            console.log('Tarefas carregadas:', activeTasks)
+            setTasks(activeTasks)
             setDoneCount(doneResult.count || 0)
         } catch (err) {
             console.error('Error fetching cockpit tasks:', err)
@@ -20814,23 +20830,21 @@ const SalesCockpit = () => {
         }
     }
 
-    // Split by priority: HIGH → hot, rest → cold
-    const { hotTasks, coldTasks } = useMemo(() => {
-        const hot = []
-        const cold = []
+    // Split by cadence_stage (HOT: G4/G5, WARM: G2/G3, COLD: G1)
+    const { hotTasks, warmTasks, coldTasks } = useMemo(() => {
+        const hot = tasks.filter(t =>
+            t.lead?.cadence_stage === 'G4' || t.lead?.cadence_stage === 'G5'
+        );
 
-        tasks.forEach(task => {
-            const isHighPriority = task.priority === 'HIGH'
-            const isIcpHot = task.leads?.icp_score === 'A' && HOT_STAGES.includes(task.leads?.cadence_stage)
+        const warm = tasks.filter(t =>
+            t.lead?.cadence_stage === 'G2' || t.lead?.cadence_stage === 'G3'
+        );
 
-            if (isHighPriority || isIcpHot) {
-                hot.push(task)
-            } else {
-                cold.push(task)
-            }
-        })
+        const cold = tasks.filter(t =>
+            t.lead?.cadence_stage === 'G1'
+        );
 
-        return { hotTasks: hot, coldTasks: cold }
+        return { hotTasks: hot, warmTasks: warm, coldTasks: cold }
     }, [tasks])
 
     const totalMissions = tasks.length + doneCount
@@ -20892,19 +20906,19 @@ const SalesCockpit = () => {
             {/* ═══════════════════════════════════════ */}
             {/* HEADER + PROGRESS                      */}
             {/* ═══════════════════════════════════════ */}
-            <div className="glass-panel rounded-2xl p-5 sm:p-6 mb-5">
+            <div className="bg-white rounded-2xl border border-gray-200 p-5 sm:p-6 mb-5 shadow-sm">
                 <div className="flex items-start justify-between gap-4 mb-5">
                     <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center">
-                            <Rocket size={20} className="text-primary" />
+                        <div className="w-10 h-10 rounded-xl bg-orange-50 border border-orange-200 flex items-center justify-center">
+                            <Rocket size={20} className="text-orange-500" />
                         </div>
                         <div>
-                            <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-white mb-0.5">
+                            <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-gray-900 mb-0.5">
                                 Sales Cockpit 🚀
                             </h2>
-                            <p className="text-sm text-gray-400">
+                            <p className="text-sm text-gray-500">
                                 {hotTasks.length > 0
-                                    ? <><span className="text-orange-400 font-semibold">{hotTasks.length} quente(s)</span> · {coldTasks.length} em prospecção</>
+                                    ? <><span className="text-red-400 font-semibold">{hotTasks.length} quente(s)</span> · {warmTasks.length} em nutrição · {coldTasks.length} novos contatos</>
                                     : tasks.length > 0
                                         ? <>{tasks.length} tarefa(s) pendente(s)</>
                                         : 'Nenhuma tarefa pendente!'
@@ -20915,7 +20929,7 @@ const SalesCockpit = () => {
                     <button
                         onClick={() => fetchTasks(true)}
                         disabled={refreshing}
-                        className="p-2 rounded-lg hover:bg-white/10 transition-colors text-gray-500 hover:text-white"
+                        className="p-2 rounded-lg hover:bg-gray-100 transition-colors text-gray-400 hover:text-gray-700"
                         title="Atualizar"
                     >
                         <RefreshCw size={16} className={refreshing ? 'animate-spin' : ''} />
@@ -20925,20 +20939,17 @@ const SalesCockpit = () => {
                 {/* Progress */}
                 <div className="space-y-2">
                     <div className="flex items-center justify-between">
-                        <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">Progresso do dia</span>
-                        <span className="text-sm font-bold text-gray-300">{doneCount}/{totalMissions} concluídas</span>
+                        <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Progresso do dia</span>
+                        <span className="text-sm font-bold text-gray-700">{doneCount}/{totalMissions} concluídas</span>
                     </div>
-                    <div className="h-3 bg-white/[0.05] rounded-full overflow-hidden border border-white/[0.08]">
+                    <div className="h-3 bg-gray-100 rounded-full overflow-hidden border border-gray-200">
                         <div
                             className="h-full rounded-full transition-all duration-700 ease-out"
                             style={{
                                 width: `${progressPercent}%`,
                                 background: progressPercent === 100
-                                    ? 'linear-gradient(90deg, #10b981, #34d399)'
-                                    : 'linear-gradient(90deg, #ff4d00, #ff8800)',
-                                boxShadow: progressPercent === 100
-                                    ? '0 0 16px rgba(16, 185, 129, 0.6)'
-                                    : '0 0 16px rgba(255, 77, 0, 0.5)',
+                                    ? 'linear-gradient(90deg, #22c55e, #16a34a)'
+                                    : 'linear-gradient(90deg, #f97316, #ea580c)',
                             }}
                         />
                     </div>
@@ -20949,19 +20960,19 @@ const SalesCockpit = () => {
             {/* ZERO INBOX                             */}
             {/* ═══════════════════════════════════════ */}
             {allDone && (
-                <div className="glass-panel rounded-2xl p-10 sm:p-16 text-center">
+                <div className="bg-white rounded-2xl border border-gray-200 p-10 sm:p-16 text-center shadow-sm">
                     <div className="flex justify-center mb-4">
-                        <div className="w-16 h-16 rounded-2xl bg-emerald-900/30 border border-emerald-500/20 flex items-center justify-center">
+                        <div className="w-16 h-16 rounded-2xl bg-green-50 border border-green-200 flex items-center justify-center">
                             {doneCount > 0
-                                ? <Trophy size={32} className="text-emerald-400" />
-                                : <PartyPopper size={32} className="text-emerald-400" />
+                                ? <Trophy size={32} className="text-green-500" />
+                                : <PartyPopper size={32} className="text-green-500" />
                             }
                         </div>
                     </div>
-                    <h2 className="text-xl font-bold text-white mb-2">
+                    <h2 className="text-xl font-bold text-gray-900 mb-2">
                         {doneCount > 0 ? 'Todas concluídas! 🏆' : 'Zero Inbox! 🎉'}
                     </h2>
-                    <p className="text-sm text-gray-400 max-w-sm mx-auto">
+                    <p className="text-sm text-gray-500 max-w-sm mx-auto">
                         {doneCount > 0
                             ? `Você completou ${doneCount} tarefas hoje. Excelente trabalho!`
                             : 'Nenhuma tarefa gerada. Quando a IA identificar oportunidades, elas aparecerão aqui.'
@@ -20971,21 +20982,18 @@ const SalesCockpit = () => {
             )}
 
             {/* ═══════════════════════════════════════ */}
-            {/* KANBAN BOARD                            */}
+            {/* 3-COLUMN GRID TASK BOARD                */}
             {/* ═══════════════════════════════════════ */}
             {!allDone && (
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
-                    {/* LEFT: 🔥 FECHAMENTO / QUENTE (G4, G5) */}
-                    <KanbanColumn
-                        title="Fechamento / Quente"
-                        emoji="🔥"
-                        icon={<DollarSign size={15} />}
+                    {/* COL 1: HOT (G4/G5) */}
+                    <FeedSection
+                        title="HOT (G4/G5)"
+                        icon={<Flame size={15} />}
                         count={hotTasks.length}
                         themeKey="hot"
-                        emptyIcon={<Sparkles size={28} className="text-orange-400/40" />}
-                        emptyTitle="Pipeline limpo"
-                        emptyText="Nenhum lead em G4/G5. Foque na prospecção →"
+                        emptyText="Nenhum lead quente para hoje."
                     >
                         {hotTasks.map(task => (
                             <TaskCard
@@ -20997,30 +21005,47 @@ const SalesCockpit = () => {
                                 onExecute={handleExecute}
                             />
                         ))}
-                    </KanbanColumn>
+                    </FeedSection>
 
-                    {/* RIGHT: 🔨 PROSPECÇÃO & NUTRIÇÃO (Rest) */}
-                    <KanbanColumn
-                        title="Prospecção & Nutrição"
-                        emoji="🔨"
-                        icon={<Users size={15} />}
+                    {/* COL 2: MORNOS (G2/G3) */}
+                    <FeedSection
+                        title="MORNOS (G2/G3)"
+                        icon={<TrendingUp size={15} />}
+                        count={warmTasks.length}
+                        themeKey="warm"
+                        emptyText="Nenhuma tarefa de nutrição."
+                    >
+                        {warmTasks.map(task => (
+                            <TaskCard
+                                key={task.id}
+                                task={task}
+                                themeKey="warm"
+                                completing={completingIds.has(task.id)}
+                                onComplete={handleComplete}
+                                onExecute={handleExecute}
+                            />
+                        ))}
+                    </FeedSection>
+
+                    {/* COL 3: FRIOS (G1) */}
+                    <FeedSection
+                        title="FRIOS (G1)"
+                        icon={<Snowflake size={15} />}
                         count={coldTasks.length}
                         themeKey="cold"
-                        emptyIcon={<TrendingUp size={28} className="text-blue-400/40" />}
-                        emptyTitle="Tudo em dia"
-                        emptyText="Nenhuma prospecção pendente no momento."
+                        emptyText="Nenhuma prospecção pendente."
                         footer={
                             hiddenColdCount > 0 && !showAllCold ? (
                                 <button
                                     onClick={() => setShowAllCold(true)}
-                                    className="w-full py-3 text-center text-xs font-semibold text-blue-400 hover:text-blue-300 bg-blue-500/[0.04] hover:bg-blue-500/[0.08] border-t border-blue-500/10 transition-colors"
+                                    className="w-full py-3 text-center text-xs font-semibold text-blue-500 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 border-t border-blue-200 transition-colors rounded-b-2xl"
                                 >
                                     Mostrar mais {hiddenColdCount} tarefas
                                 </button>
                             ) : showAllCold && coldTasks.length > VISIBLE_COLD_CARDS ? (
                                 <button
                                     onClick={() => setShowAllCold(false)}
-                                    className="w-full py-3 text-center text-xs font-semibold text-gray-500 hover:text-gray-300 bg-white/[0.02] hover:bg-white/[0.04] border-t border-white/[0.06] transition-colors"
+                                    className="w-full py-3 text-center text-xs font-semibold text-gray-500 hover:text-gray-700 bg-gray-50 hover:bg-gray-100 border-t border-gray-200 transition-colors rounded-b-2xl"
                                 >
                                     Mostrar menos
                                 </button>
@@ -21037,7 +21062,7 @@ const SalesCockpit = () => {
                                 onExecute={handleExecute}
                             />
                         ))}
-                    </KanbanColumn>
+                    </FeedSection>
                 </div>
             )}
         </div>
@@ -21045,28 +21070,17 @@ const SalesCockpit = () => {
 }
 
 // ═══════════════════════════════════════════════
-// KANBAN COLUMN
+// COLUMN SECTION (3-Column Grid)
 // ═══════════════════════════════════════════════
 
-const KanbanColumn = ({
-    title,
-    emoji,
-    icon,
-    count,
-    themeKey,
-    children,
-    emptyIcon,
-    emptyTitle,
-    emptyText,
-    footer
-}) => {
+const FeedSection = ({ title, icon, count, themeKey, children, footer, emptyText }) => {
     const theme = COLUMN_THEMES[themeKey]
     const isEmpty = React.Children.count(children) === 0
 
     return (
         <div
-            className="rounded-2xl overflow-hidden border border-white/[0.06] flex flex-col"
-            style={{ background: theme.columnBg, backdropFilter: 'blur(12px)' }}
+            className="rounded-2xl overflow-hidden border border-gray-200 flex flex-col shadow-sm"
+            style={{ background: '#ffffff' }}
         >
             {/* Gradient accent bar */}
             <div className="h-[3px] w-full shrink-0" style={{ background: theme.borderTop }} />
@@ -21075,8 +21089,8 @@ const KanbanColumn = ({
             <div className={`flex items-center justify-between px-4 py-3 ${theme.headerBg} border-b ${theme.headerBorder}`}>
                 <div className="flex items-center gap-2">
                     <span className={theme.iconColor}>{icon}</span>
-                    <h3 className="text-xs font-bold text-gray-300 tracking-wider uppercase">
-                        {emoji} {title}
+                    <h3 className="text-xs font-bold text-gray-700 tracking-wider uppercase">
+                        {title}
                     </h3>
                 </div>
                 <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full ${theme.countBg} ${theme.countText} border ${theme.countBorder}`}>
@@ -21084,23 +21098,19 @@ const KanbanColumn = ({
                 </span>
             </div>
 
-            {/* Cards area */}
+            {/* Cards area with internal scroll */}
             <div
-                className="flex-1 p-3 space-y-2.5 overflow-y-auto"
-                style={{ maxHeight: '560px', minHeight: '140px' }}
+                className="flex-1 p-3 space-y-3 overflow-y-auto"
+                style={{ maxHeight: '70vh', minHeight: '120px' }}
             >
                 {isEmpty ? (
-                    <div className={`flex flex-col items-center justify-center py-10 gap-2 rounded-xl ${theme.emptyBg} border ${theme.emptyBorder}`}>
-                        {emptyIcon}
-                        <p className="text-sm font-semibold text-gray-400">{emptyTitle}</p>
-                        <p className="text-[11px] text-gray-500 text-center px-6">{emptyText}</p>
+                    <div className={`flex items-center justify-center py-10 px-4 rounded-xl ${theme.emptyBg} border ${theme.emptyBorder}`}>
+                        <p className="text-xs text-gray-500 text-center">{emptyText}</p>
                     </div>
-                ) : (
-                    children
-                )}
+                ) : children}
             </div>
 
-            {/* Optional footer (e.g. "Show more") */}
+            {/* Optional footer */}
             {footer}
         </div>
     )
@@ -21111,7 +21121,7 @@ const KanbanColumn = ({
 // ═══════════════════════════════════════════════
 
 const TaskCard = ({ task, themeKey, completing, onComplete, onExecute }) => {
-    const lead = task.leads || {}
+    const lead = task.lead || {}
     const theme = COLUMN_THEMES[themeKey]
     const initial = lead.nome?.charAt(0)?.toUpperCase() || '?'
 
@@ -21127,16 +21137,14 @@ const TaskCard = ({ task, themeKey, completing, onComplete, onExecute }) => {
             className={`
                 rounded-xl p-3.5 group
                 transition-all duration-300 ease-out
-                bg-white/[0.025] border border-white/[0.06]
-                hover:bg-white/[0.055] hover:border-white/[0.13]
-                hover:shadow-lg hover:shadow-black/20
+                bg-white border border-gray-200
+                hover:shadow-md hover:border-gray-300
                 border-l-[3px] ${theme.cardBorder}
                 ${completing
                     ? 'opacity-0 scale-95 translate-x-4 pointer-events-none'
                     : 'opacity-100 scale-100 translate-x-0'
                 }
             `}
-            style={{ backdropFilter: 'blur(8px)' }}
         >
             {/* Row 1: Avatar + Lead Info + Stage Badge */}
             <div className="flex items-start gap-3 mb-2">
@@ -21147,13 +21155,13 @@ const TaskCard = ({ task, themeKey, completing, onComplete, onExecute }) => {
                         className="w-9 h-9 rounded-lg shrink-0 object-cover border border-white/[0.1]"
                     />
                 ) : (
-                    <div className="w-9 h-9 rounded-lg shrink-0 bg-gradient-to-br from-gray-800 to-gray-900 border border-white/[0.08] flex items-center justify-center">
-                        <span className="text-xs font-bold text-gray-300">{initial}</span>
+                    <div className="w-9 h-9 rounded-lg shrink-0 bg-gray-100 border border-gray-200 flex items-center justify-center">
+                        <span className="text-xs font-bold text-gray-600">{initial}</span>
                     </div>
                 )}
                 <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-0.5">
-                        <h4 className="text-sm font-semibold text-white truncate">{lead.nome || 'Lead'}</h4>
+                        <h4 className="text-sm font-semibold text-gray-900 truncate">{lead.nome || 'Lead'}</h4>
                         {stage && (
                             <span className={`shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded border ${stageStyle}`}>
                                 {stage}
@@ -21170,7 +21178,7 @@ const TaskCard = ({ task, themeKey, completing, onComplete, onExecute }) => {
             {/* Row 2: AI Instruction */}
             {task.instruction && (
                 <div className="mb-3">
-                    <p className="text-[11px] text-gray-400 leading-relaxed bg-white/[0.02] rounded-lg px-3 py-2 border border-white/[0.04]">
+                    <p className="text-[11px] text-gray-600 leading-relaxed bg-gray-50 rounded-lg px-3 py-2 border border-gray-100">
                         <span className="mr-1">💡</span>{task.instruction}
                     </p>
                 </div>
@@ -21184,10 +21192,10 @@ const TaskCard = ({ task, themeKey, completing, onComplete, onExecute }) => {
                         onClick={() => onExecute(lead?.id)}
                         className={`
                             flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-[11px] font-semibold
-                            transition-all duration-200
+                            transition-all duration-200 shadow-sm
                             ${isFirstContact
-                                ? 'bg-indigo-500/15 text-indigo-300 border border-indigo-500/25 hover:bg-indigo-500/25 hover:border-indigo-500/40'
-                                : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20 hover:border-emerald-500/35'
+                                ? 'bg-orange-50 text-orange-600 border border-orange-200 hover:bg-orange-100 hover:shadow-md'
+                                : 'bg-orange-500 text-white border border-orange-500 hover:bg-orange-600 hover:shadow-md'
                             }
                         `}
                         title={isFirstContact ? 'Enviar primeiro contato' : 'Continuar conversa'}
@@ -21212,8 +21220,8 @@ const TaskCard = ({ task, themeKey, completing, onComplete, onExecute }) => {
                     disabled={completing}
                     className="
                         shrink-0 flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-[12px] font-semibold
-                        bg-white/[0.08] text-gray-300 border border-white/[0.12]
-                        hover:bg-emerald-500/20 hover:text-emerald-400 hover:border-emerald-500/30 hover:shadow-md
+                        bg-green-50 text-green-700 border border-green-200
+                        hover:bg-green-500 hover:text-white hover:border-green-500 hover:shadow-md
                         transition-all duration-200 shadow-sm
                         disabled:opacity-50 disabled:cursor-not-allowed
                     "
@@ -22408,12 +22416,16 @@ const AdminPanel = () => {
                 return isHighPriority || isIcpHot
             })
 
-            // Sort: HIGH priority first, then ICP A, then oldest first
+            // Sort: HOT (G4/G5) > MORNOS (G2/G3) > FRIOS (G1), then HIGH priority, then oldest first
+            const STAGE_PRIORITY = { G5: 0, G4: 1, G3: 2, G2: 3, G1: 4 }
             const sortedPriority = focusCandidates.sort((a, b) => {
+                const sa = STAGE_PRIORITY[a.leads?.cadence_stage] ?? 5
+                const sb = STAGE_PRIORITY[b.leads?.cadence_stage] ?? 5
+                if (sa !== sb) return sa - sb
+
                 if (a.priority === 'HIGH' && b.priority !== 'HIGH') return -1;
                 if (b.priority === 'HIGH' && a.priority !== 'HIGH') return 1;
 
-                // Tie breaker: oldest task first
                 return new Date(a.created_at) - new Date(b.created_at)
             })
 
@@ -22957,6 +22969,7 @@ const CampaignLeadsPage = () => {
                 .from('campaigns')
                 .select('*')
                 .eq('id', campaignId)
+                .eq('client_id', selectedClientId) // Multi-tenant guard
                 .single()
 
             if (error) throw error
@@ -22977,6 +22990,7 @@ const CampaignLeadsPage = () => {
                     leads:lead_id (*)
                 `)
                 .eq('campaign_id', campaignId)
+                .eq('client_id', selectedClientId) // Multi-tenant guard
                 .order('created_at', { ascending: false })
 
             if (error) throw error
@@ -23459,6 +23473,7 @@ const CampaignLeadsView = () => {
     const { selectedClientId } = useClientSelection()
 
     const [campaign, setCampaign] = useState(null)
+    const [clientName, setClientName] = useState('')
     const [leads, setLeads] = useState([]) // Stores the JOINED object: { ...campaign_lead, leads: { ...lead_data } }
     const [loading, setLoading] = useState(false)
     const [selectedLead, setSelectedLead] = useState(null) // This will store the full enriched object for the drawer
@@ -23594,13 +23609,14 @@ const CampaignLeadsView = () => {
     }, [campaignId])
 
 
-    const fetchCampaignDetails = async () => {
+    const fetchClientDetails = async () => {
+        if (!selectedClientId) return
         const { data } = await supabase
-            .from('campaigns')
-            .select('*')
-            .eq('id', campaignId)
+            .from('clients')
+            .select('nome')
+            .eq('id', selectedClientId)
             .single()
-        setCampaign(data)
+        if (data) setClientName(data.nome)
     }
 
     const fetchClientSyncTimestamp = async () => {
@@ -23621,13 +23637,13 @@ const CampaignLeadsView = () => {
     }
 
     const fetchStats = async () => {
-        if (!selectedClientId || !campaignId) return
+        if (!selectedClientId) return
 
         try {
             const { count: totalCount } = await supabase
                 .from('campaign_leads')
                 .select('*', { count: 'exact', head: true })
-                .eq('campaign_id', campaignId)
+                .eq('client_id', selectedClientId) // Multi-tenant guard
 
             setStats(prev => ({ ...prev, total: totalCount || 0 }))
 
@@ -23636,12 +23652,33 @@ const CampaignLeadsView = () => {
         }
     }
 
-    // Fetch Total Messages (Global Counter)
+    // Fetch Total Messages (Filtered by Client only)
     const fetchTotalMessages = async () => {
+        if (!selectedClientId) return
         try {
+            // 1. Get lead IDs that belong to this client
+            const { data: campaignLeadIds, error: clError } = await supabase
+                .from('campaign_leads')
+                .select('lead_id')
+                .eq('client_id', selectedClientId) // Multi-tenant guard
+
+            if (clError) throw clError
+            if (!campaignLeadIds || campaignLeadIds.length === 0) {
+                setTotalMessages(0)
+                return
+            }
+
+            const leadIds = campaignLeadIds.map(cl => cl.lead_id).filter(Boolean)
+            if (leadIds.length === 0) {
+                setTotalMessages(0)
+                return
+            }
+
+            // 2. Count interactions only for these leads
             const { count, error } = await supabase
                 .from('interactions')
                 .select('*', { count: 'exact', head: true })
+                .in('lead_id', leadIds)
 
             if (error) throw error
             setTotalMessages(count || 0)
@@ -23650,14 +23687,36 @@ const CampaignLeadsView = () => {
         }
     }
 
-    // Fetch Top Leads (Engagement Ranking)
+    // Fetch Top Leads (Engagement Ranking — Filtered by Client)
     const fetchTopLeads = async () => {
+        if (!selectedClientId) return
         try {
+            // 1. Get lead IDs that belong to this client
+            const { data: campaignLeadIds, error: clError } = await supabase
+                .from('campaign_leads')
+                .select('lead_id')
+                .eq('client_id', selectedClientId) // Multi-tenant guard
+
+            if (clError) throw clError
+            if (!campaignLeadIds || campaignLeadIds.length === 0) {
+                setTopLeads([])
+                return
+            }
+
+            const leadIds = campaignLeadIds.map(cl => cl.lead_id).filter(Boolean)
+            if (leadIds.length === 0) {
+                setTopLeads([])
+                return
+            }
+
+            // 2. Fetch top leads only from this client
             const { data, error } = await supabase
-                .from('leads_with_stats')
-                .select('id, nome, avatar_url, total_interactions, empresa')
-                .gt('total_interactions', 0)
-                .order('total_interactions', { ascending: false })
+                .from('leads')
+                .select('id, nome, avatar_url, total_interactions_count, empresa')
+                .in('id', leadIds)
+                .eq('client_id', selectedClientId) // Double check
+                .gt('total_interactions_count', 0)
+                .order('total_interactions_count', { ascending: false })
                 .limit(5)
 
             if (error) throw error
@@ -23669,7 +23728,7 @@ const CampaignLeadsView = () => {
 
     // SIMPLIFIED FETCH: Query campaign_leads view directly (flat structure)
     const fetchLeads = async (pageIndex = 0, isRefresh = false) => {
-        if (!selectedClientId || !campaignId) return
+        if (!selectedClientId) return
 
         try {
             if (pageIndex === 0) setLoading(true)
@@ -23678,11 +23737,11 @@ const CampaignLeadsView = () => {
             const from = pageIndex * ITEMS_per_PAGE
             const to = from + ITEMS_per_PAGE - 1
 
-            // FIXED: Reverted to simple select to fix PGRST200 error (view relationship missing)
+            // Multi-tenant isolation: client_id only (no campaign_id)
             let query = supabase
                 .from('campaign_leads')
                 .select('*', { count: 'exact' })
-                .eq('campaign_id', campaignId)
+                .eq('client_id', selectedClientId) // Multi-tenant guard
                 .range(from, to)
 
             // FIXED: Direct sorting (no foreignTable needed)
@@ -23738,30 +23797,35 @@ const CampaignLeadsView = () => {
     }
 
     useEffect(() => {
-        if (campaignId && selectedClientId) {
-            // Only fetch details once or if campaignId changes
+        if (selectedClientId) {
+            // Only fetch details once
             if (page === 0) {
-                fetchCampaignDetails()
+                fetchClientDetails()
                 fetchClientSyncTimestamp()
             }
         }
-    }, [campaignId, selectedClientId])
+    }, [selectedClientId])
 
     useEffect(() => {
-        if (campaignId && selectedClientId) {
+        if (selectedClientId) {
             setLeads([])
             setPage(0)
             setHasMore(true)
             fetchLeads(0, true)
             fetchStats()
         }
-    }, [campaignId, selectedClientId, debouncedSearch, sortConfig, filters])
+    }, [selectedClientId, debouncedSearch, sortConfig, filters])
 
-    // Fetch total messages and top leads once on mount
+    // Fetch total messages and top leads when client changes
     useEffect(() => {
-        fetchTotalMessages()
-        fetchTopLeads()
-    }, [])
+        if (selectedClientId) {
+            fetchTotalMessages()
+            fetchTopLeads()
+        } else {
+            setTotalMessages(0)
+            setTopLeads([])
+        }
+    }, [selectedClientId])
 
     // Reset cancel flag on unmount
     useEffect(() => {
@@ -23837,8 +23901,7 @@ const CampaignLeadsView = () => {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    client_id: selectedClientId,
-                    campaign_id: campaignId
+                    client_id: selectedClientId
                 })
             })
 
@@ -23860,6 +23923,8 @@ const CampaignLeadsView = () => {
     const handleSyncConnections = async () => {
         if (!selectedClientId || !campaignId) return
 
+        setSyncLoading(true)
+
         try {
             // 1. Fetch Client Unipile ID
             const { data: client, error } = await supabase
@@ -23870,30 +23935,43 @@ const CampaignLeadsView = () => {
 
             if (error || !client?.unipile_account_id) {
                 setNotification({ message: 'Erro: Cliente sem conta Unipile conectada.', type: 'error' })
+                setSyncLoading(false)
+                setTimeout(() => setNotification(null), 5000)
                 return
             }
 
-            // 2. Call Webhook
+            // 2. Call Webhook (Early Return pattern)
             const response = await fetch('https://n8n-n8n-start.kfocge.easypanel.host/webhook/sync-connections', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     client_id: selectedClientId,
-                    unipile_account_id: client.unipile_account_id,
-                    campaign_id: campaignId
+                    unipile_account_id: client.unipile_account_id
                 })
             })
 
             if (response.ok) {
-                setNotification({ message: 'Iniciando captura e qualificação de leads...', type: 'info' })
+                const result = await response.json()
+
+                // Build rich notification message
+                let msg
+                if (result.total_leads && result.total_leads > 0) {
+                    msg = `Iniciamos a leitura de ${result.total_leads.toLocaleString()} conexões. O processo levará cerca de ${result.estimated_time_human || 'alguns minutos'}. Você pode continuar usando o sistema normalmente.`
+                } else {
+                    msg = result.message || 'Sincronização iniciada. A atualização aparecerá em breve.'
+                }
+
+                setNotification({ message: msg, type: 'success' })
             } else {
-                throw new Error('Falha na API')
+                throw new Error(`Falha na API (${response.status})`)
             }
         } catch (e) {
             console.error(e)
             setNotification({ message: 'Erro ao iniciar sincronização.', type: 'error' })
+        } finally {
+            setSyncLoading(false)
+            setTimeout(() => setNotification(null), 10000)
         }
-        setTimeout(() => setNotification(null), 5000)
     }
 
     // NEW: Sync Messages Manual Trigger
@@ -23921,7 +23999,7 @@ const CampaignLeadsView = () => {
             }
 
             // 2. Call Webhook with Enriched Payload
-            const response = await fetch('https://n8n-n8n-start.kfocge.easypanel.host/webhook-test/sync-messages', {
+            const response = await fetch('https://n8n-n8n-start.kfocge.easypanel.host/webhook/sync-messages', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -24006,13 +24084,14 @@ const CampaignLeadsView = () => {
 
     const handleDeleteLead = async (id, e) => {
         e.stopPropagation()
-        if (!confirm('Tem certeza que deseja remover este lead da campanha?')) return
+        if (!confirm('Tem certeza que deseja remover este lead da base?')) return
 
         try {
             const { error } = await supabase
                 .from('campaign_leads')
                 .delete()
                 .eq('id', id)
+                .eq('client_id', selectedClientId) // Multi-tenant guard
 
             if (error) throw error
 
@@ -24155,19 +24234,24 @@ const CampaignLeadsView = () => {
         cancelRef.current = false
 
         try {
-            // 1. Fetch ALL lead IDs for this client
-            const { data: allLeads, error: leadsError } = await supabase
-                .from('leads')
-                .select('id')
+            // 1. Fetch lead IDs that belong to THIS client (not campaign)
+            const { data: campaignLeadRows, error: clError } = await supabase
+                .from('campaign_leads')
+                .select('lead_id')
                 .eq('client_id', selectedClientId)
-                .order('id', { ascending: true })
 
-            if (leadsError) throw leadsError
-            if (!allLeads || allLeads.length === 0) {
-                setNotification({ message: 'Nenhum lead encontrado para este cliente.', type: 'error' })
+            if (clError) throw clError
+
+            const leadIds = (campaignLeadRows || []).map(cl => cl.lead_id).filter(Boolean)
+
+            if (leadIds.length === 0) {
+                setNotification({ message: 'Nenhum lead encontrado.', type: 'error' })
                 setTimeout(() => setNotification(null), 5000)
                 return
             }
+
+            // Map to the format expected by the rest of the function
+            const allLeads = leadIds.map(id => ({ id }))
 
             // 2. Fetch Unipile account ID
             const { data: client, error: clientError } = await supabase
@@ -24474,7 +24558,7 @@ const CampaignLeadsView = () => {
                         <p className="text-slate-600 text-center mb-6 text-sm">
                             {selectedLeads.size > 0
                                 ? `Você selecionou ${selectedLeads.size} leads para atualização.`
-                                : `Você não selecionou nenhum lead. Isso iniciará a importação para TODOS os ${stats.total} leads desta campanha.`}
+                                : `Você não selecionou nenhum lead. Isso iniciará a importação para TODOS os ${stats.total} leads da base.`}
                             <br /><br />
                             <span className="font-bold text-slate-800">Atenção:</span> O processo será feito sequencialmente (um por um) para evitar bloqueios, levando cerca de <span className="text-orange-600 font-bold">3 segundos por lead</span>.
                         </p>
@@ -24497,19 +24581,12 @@ const CampaignLeadsView = () => {
             )}
 
             <div className="px-4 mb-6">
-                <button
-                    onClick={() => navigate('/campaigns')}
-                    className="flex items-center gap-2 text-slate-500 hover:text-orange-600 transition-colors text-sm font-semibold mb-4"
-                >
-                    <ArrowLeft size={16} /> Voltar para Campanhas
-                </button>
-
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-2 mb-5">
                     <div>
                         <h1 className="text-2xl font-bold text-slate-900 tracking-tight mb-1">
-                            {campaign ? campaign.name : 'Carregando campanha...'}
+                            {clientName ? `Conexões de ${clientName}` : 'Minha Rede'}
                         </h1>
-                        <p className="text-slate-600 text-base font-medium">Gerencie os leads e cadência desta campanha.</p>
+                        <p className="text-slate-600 text-base font-medium">Gerencie todos os leads e conexões da sua conta.</p>
                     </div>
                 </div>
 
@@ -24517,17 +24594,17 @@ const CampaignLeadsView = () => {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-5">
                     <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
                         <div className="flex items-center gap-3 mb-2 text-slate-600 text-sm font-bold uppercase tracking-wider">
-                            <Users size={16} /> Leads na Campanha
+                            <Users size={16} /> Total de Leads
                         </div>
                         <div className="text-3xl font-extrabold text-slate-900">{stats.total}</div>
                     </div>
 
                     <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
                         <div className="flex items-center gap-3 mb-2 text-slate-600 text-sm font-bold uppercase tracking-wider">
-                            <MessageCircle size={16} /> Total de Mensagens na Base
+                            <MessageCircle size={16} /> Mensagens
                         </div>
                         <div className="text-3xl font-extrabold text-blue-600">{totalMessages.toLocaleString()}</div>
-                        <div className="text-xs text-slate-500 mt-1">Interações registradas no sistema</div>
+                        <div className="text-xs text-slate-500 mt-1">Interações da sua rede</div>
                     </div>
 
                     {/* TOP LEADS RANKING */}
@@ -24557,7 +24634,7 @@ const CampaignLeadsView = () => {
                                             <div className="text-sm font-medium text-slate-800 truncate">{lead.nome}</div>
                                         </div>
                                         <div className="text-xs font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">
-                                            {lead.total_interactions} msg
+                                            {lead.total_interactions_count} msg
                                         </div>
                                     </div>
                                 ))}
@@ -24652,8 +24729,8 @@ const CampaignLeadsView = () => {
                                     onClick={handleBulkHistorySync}
                                     disabled={syncProgress.status === 'running'}
                                     className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-semibold text-sm transition-all ${syncProgress.status === 'running'
-                                            ? 'bg-amber-50 text-amber-400 cursor-not-allowed'
-                                            : 'bg-amber-50 text-amber-600 hover:bg-amber-100 hover:text-amber-700 border border-amber-200'
+                                        ? 'bg-amber-50 text-amber-400 cursor-not-allowed'
+                                        : 'bg-amber-50 text-amber-600 hover:bg-amber-100 hover:text-amber-700 border border-amber-200'
                                         }`}
                                 >
                                     <History size={16} className={syncProgress.status === 'running' ? 'animate-spin' : ''} />
@@ -27229,9 +27306,9 @@ export default ClientPortal
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../services/supabaseClient';
 import { useAuth } from '../contexts/AuthContext'; // Import Auth
-import { Pencil, Upload, FileText, X, Check, Link as LinkIcon, Info, AlertTriangle, Linkedin } from 'lucide-react';
+import { Pencil, Upload, FileText, X, Check, Link as LinkIcon, Info, AlertTriangle, Linkedin, Download } from 'lucide-react';
 
-const N8N_UPLOAD_DOC_URL = 'https://n8n-n8n-start.kfocge.easypanel.host/webhook/upload-client-doc'
+
 
 export default function ClientsPage() {
     const { user } = useAuth(); // Hook Auth
@@ -27240,31 +27317,7 @@ export default function ClientsPage() {
     const [showModal, setShowModal] = useState(false);
     const [saving, setSaving] = useState(false);
     const [editingClient, setEditingClient] = useState(null);
-    const [toast, setToast] = useState(null); // { message, type }
-
-    // ... (rest of local state) ...
-    // Note: I am NOT changing the lines between 14-27, just re-stating them if needed for context but 'replace_file_content' replaces the block.
-    // To minimize context, I will target specific blocks if possible, but multiple edits are needed.
-    // Better to use a single large block or multiple chunks?
-    // I will use multiple chunks with multi_replace_file_content logic simulated via single call if continuous, or just use replace_file_content for the whole file? No, too large.
-    // I will use replace_file_content for the imports and state first.
-    // Wait, I can't do multiple disparate chunks with replace_file_content.
-    // I should use `multi_replace_file_content` if available? 
-    // Checking tools... `multi_replace_file_content` IS available. 
-    // I will use `default_api:multi_replace_file_content`.
-    // Wait, the user prompt showed `default_api:replace_file_content` and `default_api:multi_replace_file_content` descriptors.
-    // Yes, I have `multi_replace_file_content`.
-
-    // Proceeding with `multi_replace_file_content`.
-
-    // Chunk 1: Imports
-    // Chunk 2: Toast State
-    // Chunk 3: handleCopyLink function
-    // Chunk 4: Button in Table
-    // Chunk 5: Toast UI render
-
-
-    // ... (rest of local state) ...
+    const [toast, setToast] = useState(null);
 
     // File Upload State
     const [filesToUpload, setFilesToUpload] = useState([]);
@@ -27272,6 +27325,7 @@ export default function ClientsPage() {
 
     const [formData, setFormData] = useState({
         name: '',
+        email_contato: '',
         description: '',
         tone_of_voice: 'Profissional',
         target_audience_default: '',
@@ -27299,16 +27353,34 @@ export default function ClientsPage() {
     async function fetchClientFiles(clientId) {
         try {
             const { data, error } = await supabase
-                .from('client_knowledge')
-                .select('*')
-                .eq('client_id', clientId);
+                .storage
+                .from('client-docs')
+                .list(`core-docs/${clientId}`, { limit: 50 });
 
             if (error) throw error;
-            setExistingFiles(data || []);
+            const files = (data || []).filter(f => f.name !== '.emptyFolderPlaceholder');
+            setExistingFiles(files);
         } catch (error) {
             console.error('Erro ao buscar arquivos do cliente:', error);
+            setExistingFiles([]);
         }
     }
+
+    const handleDownloadFile = async (fileName) => {
+        if (!editingClient) return;
+        const filePath = `core-docs/${editingClient.id}/${fileName}`;
+        const { data, error } = await supabase
+            .storage
+            .from('client-docs')
+            .createSignedUrl(filePath, 60);
+
+        if (error) {
+            console.error('Erro ao gerar link de download:', error);
+            alert('Erro ao baixar arquivo.');
+            return;
+        }
+        window.open(data.signedUrl, '_blank');
+    };
 
     const handleInputChange = (e) => {
         const { name, value } = e.target;
@@ -27333,6 +27405,7 @@ export default function ClientsPage() {
         setEditingClient(client);
         setFormData({
             name: client.name || '',
+            email_contato: client.email_contato || '',
             description: client.description || '',
             tone_of_voice: client.tone_of_voice || 'Profissional',
             target_audience_default: client.target_audience_default || '',
@@ -27349,6 +27422,7 @@ export default function ClientsPage() {
         setEditingClient(null);
         setFormData({
             name: '',
+            email_contato: '',
             description: '',
             tone_of_voice: 'Profissional',
             target_audience_default: '',
@@ -27400,42 +27474,28 @@ export default function ClientsPage() {
     };
 
     const uploadFiles = async (clientId) => {
-        if (!filesToUpload || filesToUpload.length === 0) return;
+        if (!filesToUpload || filesToUpload.length === 0) return null;
 
-        console.log(`[DEBUG] uploadFiles chamado com clientID: ${clientId} (Tipo: ${typeof clientId})`);
+        const file = filesToUpload[0];
+        if (!file) return null;
 
-        for (const file of filesToUpload) {
-            if (!file) continue;
+        const safeName = sanitizeFileName(file.name);
+        const filePath = `core-docs/${clientId}/${safeName}`;
 
-            console.log(`[DEBUG] Preparando envio de ${file.name} para webhook`);
+        console.log(`[DEBUG] Uploading ${file.name} to Supabase Storage: ${filePath}`);
 
-            // Create FormData with file and clientId
-            const formData = new FormData();
-            formData.append('file', file);
-            formData.append('clientId', clientId);
+        const { data: uploadData, error: uploadError } = await supabase
+            .storage
+            .from('client-docs')
+            .upload(filePath, file, { upsert: true });
 
-            console.log(`[DEBUG] Enviando para webhook: ${N8N_UPLOAD_DOC_URL}`);
-
-            try {
-                const response = await fetch(N8N_UPLOAD_DOC_URL, {
-                    method: 'POST',
-                    body: formData
-                    // Note: Do NOT set Content-Type header - browser will set it automatically with boundary
-                });
-
-                if (!response.ok) {
-                    const errorText = await response.text();
-                    throw new Error(`Webhook retornou erro ${response.status}: ${errorText}`);
-                }
-
-                const result = await response.json();
-                console.log(`[DEBUG] Upload de ${file.name} concluído:`, result);
-
-            } catch (error) {
-                console.error(`[DEBUG] Erro ao enviar ${file.name} para webhook:`, error);
-                throw new Error(`Falha no upload de "${file.name}": ${error.message}`);
-            }
+        if (uploadError) {
+            console.error('[DEBUG] Upload error:', uploadError);
+            throw new Error(`Upload falhou: ${uploadError.message}`);
         }
+
+        console.log('[DEBUG] Upload concluído:', uploadData);
+        return uploadData.path;
     };
 
     const handleSubmit = async (e) => {
@@ -27447,21 +27507,16 @@ export default function ClientsPage() {
             console.log("2. User ID:", user?.id);
 
             // PAYLOAD CONSTRUCTION & LOGGING
-            let payload = {};
-            try {
-                payload = {
-                    name: formData.name,
-                    description: formData.description,
-                    tone_of_voice: formData.tone_of_voice,
-                    target_audience_default: formData.target_audience_default,
-                    pain_points: formData.pain_points,
-                    unipile_account_id: formData.unipile_account_id
-                    // Add other fields here if needed
-                };
-                console.log("3. Payload montado:", payload);
-            } catch (payloadError) {
-                throw new Error("Erro ao montar o payload: " + payloadError.message);
-            }
+            const payload = {
+                name: formData.name,
+                email_contato: formData.email_contato,
+                description: formData.description,
+                tone_of_voice: formData.tone_of_voice,
+                target_audience_default: formData.target_audience_default,
+                pain_points: formData.pain_points,
+                unipile_account_id: formData.unipile_account_id
+            };
+            console.log("3. Payload montado:", payload);
 
             // --- EXECUTE SUPABASE CALLS AFTER PAYLOAD IS READY ---
             let clientData = null;
@@ -27496,10 +27551,21 @@ export default function ClientsPage() {
             console.log("[DEBUG] ID Numérico capturado:", realClientId);
             if (!realClientId) throw new Error("Erro crítico: ID do cliente é inválido.");
 
-            // UPLOAD
+            // UPLOAD + UPDATE core_doc_id
             if (filesToUpload.length > 0) {
-                console.log(`[DEBUG] Iniciando uploads para ID: ${realClientId}`);
-                await uploadFiles(realClientId);
+                console.log(`[DEBUG] Iniciando upload para ID: ${realClientId}`);
+                const docPath = await uploadFiles(realClientId);
+                if (docPath) {
+                    const { error: updateError } = await supabase
+                        .from('clients')
+                        .update({ core_doc_id: docPath })
+                        .eq('id', realClientId);
+                    if (updateError) {
+                        console.error('[DEBUG] Erro ao atualizar core_doc_id:', updateError);
+                    } else {
+                        console.log('[DEBUG] core_doc_id atualizado:', docPath);
+                    }
+                }
             }
 
             // SUCCESS
@@ -27705,6 +27771,18 @@ export default function ClientsPage() {
                             </div>
 
                             <div>
+                                <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem' }}>Email de Contato</label>
+                                <input
+                                    type="email"
+                                    name="email_contato"
+                                    value={formData.email_contato}
+                                    onChange={handleInputChange}
+                                    placeholder="email@empresa.com"
+                                    style={{ width: '100%', padding: '0.5rem', border: '1px solid #d1d5db', borderRadius: '0.25rem', color: '#1f2937' }}
+                                />
+                            </div>
+
+                            <div>
                                 <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem' }}>Descrição do Negócio</label>
                                 <textarea
                                     required
@@ -27811,16 +27889,28 @@ export default function ClientsPage() {
                                     </div>
                                 )}
 
-                                {/* LISTA DE ARQUIVOS JÁ EXISTENTES */}
+                                {/* LISTA DE ARQUIVOS JÁ EXISTENTES (Storage) */}
                                 {existingFiles.length > 0 && (
                                     <div>
                                         <p style={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#4b5563', marginBottom: '0.25rem' }}>Arquivos Anteriores:</p>
                                         <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
                                             {existingFiles.map((file) => (
-                                                <li key={file.id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.875rem', color: '#059669', marginBottom: '0.25rem' }}>
-                                                    <Check size={14} />
-                                                    <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{file.file_name}</span>
-                                                    <span style={{ fontSize: '0.75rem', color: '#6b7280' }}>- Enviado</span>
+                                                <li
+                                                    key={file.id || file.name}
+                                                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.875rem', color: '#059669', marginBottom: '0.25rem', background: '#f0fdf4', padding: '0.25rem 0.5rem', borderRadius: '0.25rem' }}
+                                                >
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', overflow: 'hidden' }}>
+                                                        <Check size={14} />
+                                                        <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{file.name}</span>
+                                                    </div>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleDownloadFile(file.name)}
+                                                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#2563eb', padding: '2px', display: 'flex', alignItems: 'center' }}
+                                                        title="Baixar arquivo"
+                                                    >
+                                                        <Download size={14} />
+                                                    </button>
                                                 </li>
                                             ))}
                                         </ul>
@@ -27870,6 +27960,7 @@ export default function ClientsPage() {
 import React, { useState, useEffect } from 'react'
 import { supabase } from '../services/supabaseClient'
 import { useAuth } from '../contexts/AuthContext'
+import { useClientSelection } from '../contexts/ClientSelectionContext'
 import {
     Library,
     Plus,
@@ -27894,6 +27985,7 @@ const TYPE_CONFIG = {
 
 const ContentLibraryPage = () => {
     const { user } = useAuth()
+    const { selectedClientId } = useClientSelection()
     const [contents, setContents] = useState([])
     const [loading, setLoading] = useState(true)
     const [searchQuery, setSearchQuery] = useState('')
@@ -27910,17 +28002,22 @@ const ContentLibraryPage = () => {
     const [saving, setSaving] = useState(false)
 
     useEffect(() => {
-        if (user) {
+        if (user && selectedClientId) {
             fetchContents()
+        } else {
+            setContents([])
+            setLoading(false)
         }
-    }, [user])
+    }, [user, selectedClientId])
 
     const fetchContents = async () => {
+        if (!selectedClientId) return
         try {
             setLoading(true)
             const { data, error } = await supabase
                 .from('content_library')
                 .select('*')
+                .eq('client_id', selectedClientId)
                 .order('created_at', { ascending: false })
 
             if (error) throw error
@@ -27968,7 +28065,8 @@ const ContentLibraryPage = () => {
 
             const payload = {
                 ...formData,
-                user_id: user.id
+                user_id: user.id,
+                client_id: selectedClientId
             }
 
             if (editingContent) {
@@ -28039,98 +28137,114 @@ const ContentLibraryPage = () => {
                     </button>
                 </div>
 
-                {/* Toolbar */}
-                <div className="bg-white p-4 rounded-2xl border border-gray-200">
-                    <div className="relative max-w-md">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-                        <input
-                            type="text"
-                            placeholder="Buscar conteúdo por nome ou contexto..."
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            className="w-full pl-10 pr-4 py-2 border border-gray-200 font-medium rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
-                        />
-                    </div>
-                </div>
-
-                {/* Content Grid */}
-                {loading ? (
-                    <div className="flex items-center justify-center py-20">
-                        <Loader2 className="animate-spin text-orange-500" size={32} />
-                    </div>
-                ) : filteredContents.length === 0 ? (
-                    <div className="bg-white border text-center border-gray-200 rounded-3xl p-12 dashed-border">
+                {/* No client selected guard */}
+                {!selectedClientId ? (
+                    <div className="bg-white border text-center border-gray-200 rounded-3xl p-12">
                         <div className="w-16 h-16 bg-gray-50 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-gray-100">
                             <Library className="text-gray-400" size={28} />
                         </div>
-                        <h3 className="text-gray-900 font-bold text-lg mb-2">Acervo vazio</h3>
-                        <p className="text-sm text-gray-500 mb-6 max-w-sm mx-auto">
-                            {searchQuery ? 'Sua busca não encontrou resultados.' : 'Ainda não há materiais na sua biblioteca de vendas. Adicione links, PDFs, posts ou vídeos.'}
+                        <h3 className="text-gray-900 font-bold text-lg mb-2">Selecione um cliente</h3>
+                        <p className="text-sm text-gray-500 max-w-sm mx-auto">
+                            Selecione um cliente no seletor acima para ver e gerenciar a biblioteca de conteúdos.
                         </p>
-                        {!searchQuery && (
-                            <button
-                                onClick={() => handleOpenModal()}
-                                className="px-6 py-2 bg-orange-50 text-orange-600 font-semibold rounded-full hover:bg-orange-100 transition-colors inline-flex items-center gap-2"
-                            >
-                                <Plus size={18} />
-                                Criar primeiro conteúdo
-                            </button>
-                        )}
                     </div>
                 ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {filteredContents.map(item => {
-                            const typeConf = TYPE_CONFIG[item.content_type] || TYPE_CONFIG['Outro']
-                            const TypeIcon = typeConf.icon
+                    <>
 
-                            return (
-                                <div key={item.id} className="bg-white rounded-2xl border border-gray-200 p-5 hover:shadow-lg hover:border-gray-300 transition-all group flex flex-col h-full">
-                                    <div className="flex items-start justify-between mb-4">
-                                        <div className={`p-2.5 rounded-xl border ${typeConf.bg} ${typeConf.border} ${typeConf.color}`}>
-                                            <TypeIcon size={20} />
-                                        </div>
-                                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                            <button
-                                                onClick={() => handleOpenModal(item)}
-                                                className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
-                                            >
-                                                <Edit2 size={15} />
-                                            </button>
-                                            <button
-                                                onClick={() => handleDelete(item.id)}
-                                                className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                                            >
-                                                <Trash2 size={15} />
-                                            </button>
-                                        </div>
-                                    </div>
+                        {/* Toolbar */}
+                        <div className="bg-white p-4 rounded-2xl border border-gray-200">
+                            <div className="relative max-w-md">
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                                <input
+                                    type="text"
+                                    placeholder="Buscar conteúdo por nome ou contexto..."
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    className="w-full pl-10 pr-4 py-2 border border-gray-200 font-medium rounded-xl text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
+                                />
+                            </div>
+                        </div>
 
-                                    <div className="flex-1 mb-4">
-                                        <h3 className="font-bold text-gray-900 mb-1 line-clamp-2">{item.content_name}</h3>
-                                        {item.content_description && (
-                                            <p className="text-xs text-gray-500 line-clamp-3 leading-relaxed">
-                                                {item.content_description}
-                                            </p>
-                                        )}
-                                    </div>
-
-                                    <div className="pt-4 border-t border-gray-100 flex items-center justify-between mt-auto">
-                                        <span className="text-[10px] font-bold tracking-wider text-gray-400 uppercase bg-gray-50 px-2 py-1 rounded-md">
-                                            {item.content_type}
-                                        </span>
-                                        <a
-                                            href={item.content_url}
-                                            target="_blank"
-                                            rel="noreferrer"
-                                            className="text-xs font-semibold text-orange-500 hover:text-orange-600 flex items-center gap-1 hover:underline"
-                                        >
-                                            Abrir link <LinkIcon size={12} />
-                                        </a>
-                                    </div>
+                        {/* Content Grid */}
+                        {loading ? (
+                            <div className="flex items-center justify-center py-20">
+                                <Loader2 className="animate-spin text-orange-500" size={32} />
+                            </div>
+                        ) : filteredContents.length === 0 ? (
+                            <div className="bg-white border text-center border-gray-200 rounded-3xl p-12 dashed-border">
+                                <div className="w-16 h-16 bg-gray-50 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-gray-100">
+                                    <Library className="text-gray-400" size={28} />
                                 </div>
-                            )
-                        })}
-                    </div>
+                                <h3 className="text-gray-900 font-bold text-lg mb-2">Acervo vazio</h3>
+                                <p className="text-sm text-gray-500 mb-6 max-w-sm mx-auto">
+                                    {searchQuery ? 'Sua busca não encontrou resultados.' : 'Ainda não há materiais na sua biblioteca de vendas. Adicione links, PDFs, posts ou vídeos.'}
+                                </p>
+                                {!searchQuery && (
+                                    <button
+                                        onClick={() => handleOpenModal()}
+                                        className="px-6 py-2 bg-orange-50 text-orange-600 font-semibold rounded-full hover:bg-orange-100 transition-colors inline-flex items-center gap-2"
+                                    >
+                                        <Plus size={18} />
+                                        Criar primeiro conteúdo
+                                    </button>
+                                )}
+                            </div>
+                        ) : (
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                {filteredContents.map(item => {
+                                    const typeConf = TYPE_CONFIG[item.content_type] || TYPE_CONFIG['Outro']
+                                    const TypeIcon = typeConf.icon
+
+                                    return (
+                                        <div key={item.id} className="bg-white rounded-2xl border border-gray-200 p-5 hover:shadow-lg hover:border-gray-300 transition-all group flex flex-col h-full">
+                                            <div className="flex items-start justify-between mb-4">
+                                                <div className={`p-2.5 rounded-xl border ${typeConf.bg} ${typeConf.border} ${typeConf.color}`}>
+                                                    <TypeIcon size={20} />
+                                                </div>
+                                                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                    <button
+                                                        onClick={() => handleOpenModal(item)}
+                                                        className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                                                    >
+                                                        <Edit2 size={15} />
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleDelete(item.id)}
+                                                        className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                                                    >
+                                                        <Trash2 size={15} />
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            <div className="flex-1 mb-4">
+                                                <h3 className="font-bold text-gray-900 mb-1 line-clamp-2">{item.content_name}</h3>
+                                                {item.content_description && (
+                                                    <p className="text-xs text-gray-500 line-clamp-3 leading-relaxed">
+                                                        {item.content_description}
+                                                    </p>
+                                                )}
+                                            </div>
+
+                                            <div className="pt-4 border-t border-gray-100 flex items-center justify-between mt-auto">
+                                                <span className="text-[10px] font-bold tracking-wider text-gray-400 uppercase bg-gray-50 px-2 py-1 rounded-md">
+                                                    {item.content_type}
+                                                </span>
+                                                <a
+                                                    href={item.content_url}
+                                                    target="_blank"
+                                                    rel="noreferrer"
+                                                    className="text-xs font-semibold text-orange-500 hover:text-orange-600 flex items-center gap-1 hover:underline"
+                                                >
+                                                    Abrir link <LinkIcon size={12} />
+                                                </a>
+                                            </div>
+                                        </div>
+                                    )
+                                })}
+                            </div>
+                        )}
+                    </>
                 )}
             </div>
 
@@ -28156,7 +28270,7 @@ const ContentLibraryPage = () => {
                                     value={formData.content_name}
                                     onChange={e => setFormData({ ...formData, content_name: e.target.value })}
                                     placeholder="Ex: Vídeo de Demonstração V2"
-                                    className="w-full px-4 py-2.5 font-medium border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all"
+                                    className="w-full px-4 py-2.5 font-medium border border-gray-200 rounded-xl text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all"
                                 />
                             </div>
 
@@ -28167,7 +28281,7 @@ const ContentLibraryPage = () => {
                                     onChange={e => setFormData({ ...formData, content_description: e.target.value })}
                                     placeholder="Ex: Use este vídeo caso o lead questione sobre concorrência..."
                                     rows={3}
-                                    className="w-full px-4 py-2.5 font-medium border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all resize-none"
+                                    className="w-full px-4 py-2.5 font-medium border border-gray-200 rounded-xl text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all resize-none"
                                 />
                             </div>
 
@@ -28177,7 +28291,7 @@ const ContentLibraryPage = () => {
                                     <select
                                         value={formData.content_type}
                                         onChange={e => setFormData({ ...formData, content_type: e.target.value })}
-                                        className="w-full px-4 py-2.5 font-bold border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all appearance-none bg-gray-50"
+                                        className="w-full px-4 py-2.5 font-bold border border-gray-200 rounded-xl text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all appearance-none bg-gray-50"
                                     >
                                         <option value="Video">Vídeo</option>
                                         <option value="Post">Post (Social)</option>
@@ -28193,7 +28307,7 @@ const ContentLibraryPage = () => {
                                         value={formData.content_url}
                                         onChange={e => setFormData({ ...formData, content_url: e.target.value })}
                                         placeholder="https://..."
-                                        className="w-full px-4 py-2.5 font-medium border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all"
+                                        className="w-full px-4 py-2.5 font-medium border border-gray-200 rounded-xl text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all"
                                     />
                                 </div>
                             </div>
@@ -30735,81 +30849,179 @@ const Login = () => {
     };
 
     return (
-        <div className="min-h-screen bg-obsidian flex items-center justify-center p-4 relative overflow-hidden">
+        <div className="min-h-screen flex" style={{ background: '#FAFAFA' }}>
 
-            {/* AMBIENT BACKGROUND */}
-            <div className="fixed top-[-20%] left-[-10%] w-[600px] h-[600px] bg-primary/20 blur-[120px] rounded-full pointer-events-none z-0" />
-            <div className="fixed bottom-[-20%] right-[-10%] w-[600px] h-[600px] bg-blue-600/10 blur-[120px] rounded-full pointer-events-none z-0" />
+            {/* ═══════════════════════════════════════════ */}
+            {/* LEFT PANEL — Brand Statement               */}
+            {/* ═══════════════════════════════════════════ */}
+            <div
+                className="hidden lg:flex lg:w-[55%] relative overflow-hidden items-end p-12"
+                style={{ background: 'linear-gradient(160deg, #0A0A0A 0%, #1A1A1A 100%)' }}
+            >
+                {/* Geometric accent shapes */}
+                <div
+                    className="absolute top-0 right-0 w-[500px] h-[500px] opacity-[0.07]"
+                    style={{
+                        background: 'radial-gradient(circle at 70% 30%, #F97316 0%, transparent 60%)',
+                    }}
+                />
+                <div
+                    className="absolute bottom-[-80px] left-[-80px] w-[300px] h-[300px] border border-orange-500/10 rounded-full"
+                    style={{ animation: 'pulse 8s ease-in-out infinite' }}
+                />
+                <div
+                    className="absolute top-[15%] right-[10%] w-[200px] h-[200px] border border-white/5 rotate-45"
+                />
+                <div
+                    className="absolute top-[40%] left-[5%] w-2 h-2 bg-orange-500 rounded-full"
+                    style={{ animation: 'pulse 3s ease-in-out infinite' }}
+                />
+                <div
+                    className="absolute top-[25%] left-[35%] w-1.5 h-1.5 bg-orange-400/60 rounded-full"
+                    style={{ animation: 'pulse 5s ease-in-out infinite 1s' }}
+                />
 
-            <div className="bg-charcoal/80 backdrop-blur-xl border border-glass-border p-8 w-full max-w-md rounded-2xl relative z-10 shadow-2xl animate-fade-in-up">
-
-                {/* HEADER */}
-                <div className="flex flex-col items-center mb-8">
-                    <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-gray-800 to-black border border-glass-border flex items-center justify-center mb-6 shadow-inner">
-                        <img src="/logo-linklead.png" alt="Link&Lead" className="w-10 h-auto opacity-90" />
-                    </div>
-                    <h1 className="text-2xl font-bold text-white mb-2">Bem-vindo de volta</h1>
-                    <p className="text-gray-400 text-sm text-center">Acesse o painel de aprovações Link&Lead</p>
-                </div>
-
-                <form onSubmit={handleLogin} className="space-y-6">
-                    <div className="space-y-2">
-                        <label className="text-sm font-medium text-gray-400 ml-1">Email Corporativo</label>
-                        <div className="relative group">
-                            <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 group-focus-within:text-primary transition-colors">
-                                <Mail size={18} />
-                            </div>
-                            <input
-                                type="email"
-                                value={email}
-                                onChange={(e) => setEmail(e.target.value)}
-                                placeholder="seu@email.com"
-                                className="w-full bg-white/5 border border-glass-border rounded-xl pl-10 pr-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition-all font-medium"
-                                required
-                            />
-                        </div>
-                    </div>
-
-                    <div className="space-y-2">
-                        <label className="text-sm font-medium text-gray-400 ml-1">Senha</label>
-                        <div className="relative group">
-                            <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 group-focus-within:text-primary transition-colors">
-                                <Lock size={18} />
-                            </div>
-                            <input
-                                type="password"
-                                value={password}
-                                onChange={(e) => setPassword(e.target.value)}
-                                placeholder="••••••••"
-                                className="w-full bg-white/5 border border-glass-border rounded-xl pl-10 pr-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition-all font-medium"
-                                required
-                            />
-                        </div>
+                {/* Brand content at bottom-left */}
+                <div className="relative z-10 max-w-lg">
+                    <div className="flex items-center gap-4 mb-10">
+                        <img
+                            src="/logo-linklead.png"
+                            alt="Link&Lead Marketing"
+                            className="w-44 h-auto"
+                            style={{ mixBlendMode: 'screen' }}
+                        />
                     </div>
 
-                    {error && (
-                        <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm text-center">
-                            {error}
-                        </div>
-                    )}
-
-                    <button
-                        type="submit"
-                        disabled={loading}
-                        className="w-full btn-primary py-3.5 text-base shadow-lg shadow-primary/20 hover:shadow-primary/40"
+                    <h2
+                        className="text-5xl font-black text-white leading-[1.1] mb-6 tracking-tight"
+                        style={{ fontFamily: "'Inter', sans-serif" }}
                     >
-                        {loading ? (
-                            <Loader2 className="animate-spin" size={20} />
-                        ) : (
-                            <>Entrar na Plataforma <ArrowRight size={20} /></>
-                        )}
-                    </button>
-                </form>
+                        Outbound com
+                        <br />
+                        <span className="text-orange-500">Inteligência.</span>
+                    </h2>
 
-                <div className="mt-8 pt-6 border-t border-glass-border text-center">
-                    <div className="flex items-center justify-center gap-2 text-xs text-gray-500 font-medium">
-                        <ShieldCheck size={14} className="text-primary/60" />
-                        Protegido por Link&Lead Security
+                    <p className="text-white/40 text-base leading-relaxed max-w-sm mb-10">
+                        Automatize sua prospecção, gerencie leads e feche mais negócios com IA integrada ao seu fluxo de vendas.
+                    </p>
+
+                    {/* Trust indicators */}
+                    <div className="flex items-center gap-6">
+                        <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 rounded-full bg-emerald-500" style={{ animation: 'pulse 2s ease-in-out infinite' }} />
+                            <span className="text-white/30 text-xs font-medium">Sistema online</span>
+                        </div>
+                        <div className="w-px h-3 bg-white/10" />
+                        <span className="text-white/30 text-xs font-medium">256-bit SSL</span>
+                        <div className="w-px h-3 bg-white/10" />
+                        <span className="text-white/30 text-xs font-medium">LGPD Compliance</span>
+                    </div>
+                </div>
+            </div>
+
+            {/* ═══════════════════════════════════════════ */}
+            {/* RIGHT PANEL — Login Form                    */}
+            {/* ═══════════════════════════════════════════ */}
+            <div className="w-full lg:w-[45%] flex items-center justify-center p-6 sm:p-10 relative">
+
+                {/* Subtle top-right accent */}
+                <div
+                    className="absolute top-0 right-0 w-[250px] h-[250px] opacity-[0.04] pointer-events-none"
+                    style={{
+                        background: 'radial-gradient(circle at 80% 20%, #F97316 0%, transparent 60%)',
+                    }}
+                />
+
+                <div className="w-full max-w-[420px] relative z-10">
+
+                    {/* Mobile logo (hidden on desktop) */}
+                    <div className="flex lg:hidden items-center gap-3 mb-10 justify-center">
+                        <img src="/logo-linklead.png" alt="Link&Lead" className="w-9 h-auto" />
+                        <span className="text-gray-400 text-sm font-bold tracking-[0.2em] uppercase">Link&Lead</span>
+                    </div>
+
+                    {/* Heading */}
+                    <div className="mb-10">
+                        <h1
+                            className="text-3xl font-black text-gray-900 tracking-tight mb-2"
+                            style={{ fontFamily: "'Inter', sans-serif" }}
+                        >
+                            Acesse sua conta
+                        </h1>
+                        <p className="text-gray-400 text-sm">
+                            Entre para gerenciar seus leads e tarefas diárias.
+                        </p>
+                    </div>
+
+                    {/* Form */}
+                    <form onSubmit={handleLogin} className="space-y-5">
+                        <div className="space-y-1.5">
+                            <label className="text-[11px] font-bold text-gray-500 uppercase tracking-[0.1em] ml-0.5">Email</label>
+                            <div className="relative group">
+                                <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300 group-focus-within:text-orange-500 transition-colors duration-200">
+                                    <Mail size={17} />
+                                </div>
+                                <input
+                                    type="email"
+                                    value={email}
+                                    onChange={(e) => setEmail(e.target.value)}
+                                    placeholder="seu@email.com"
+                                    className="w-full bg-white border-2 border-gray-100 rounded-xl pl-11 pr-4 py-3.5 text-gray-900 placeholder-gray-300 text-sm font-medium focus:outline-none focus:border-orange-500 focus:ring-0 transition-all duration-200 shadow-sm hover:border-gray-200"
+                                    required
+                                    autoComplete="email"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="space-y-1.5">
+                            <label className="text-[11px] font-bold text-gray-500 uppercase tracking-[0.1em] ml-0.5">Senha</label>
+                            <div className="relative group">
+                                <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300 group-focus-within:text-orange-500 transition-colors duration-200">
+                                    <Lock size={17} />
+                                </div>
+                                <input
+                                    type="password"
+                                    value={password}
+                                    onChange={(e) => setPassword(e.target.value)}
+                                    placeholder="••••••••"
+                                    className="w-full bg-white border-2 border-gray-100 rounded-xl pl-11 pr-4 py-3.5 text-gray-900 placeholder-gray-300 text-sm font-medium focus:outline-none focus:border-orange-500 focus:ring-0 transition-all duration-200 shadow-sm hover:border-gray-200"
+                                    required
+                                    autoComplete="current-password"
+                                />
+                            </div>
+                        </div>
+
+                        {error && (
+                            <div className="p-3.5 bg-red-50 border border-red-100 rounded-xl text-red-600 text-sm text-center font-medium">
+                                {error}
+                            </div>
+                        )}
+
+                        <button
+                            type="submit"
+                            disabled={loading}
+                            className="w-full flex items-center justify-center gap-2 py-4 rounded-xl text-white text-sm font-bold tracking-wide transition-all duration-300 shadow-lg disabled:opacity-60 disabled:cursor-not-allowed"
+                            style={{
+                                background: loading ? '#9CA3AF' : 'linear-gradient(135deg, #F97316 0%, #EA580C 100%)',
+                                boxShadow: loading ? 'none' : '0 8px 30px -4px rgba(249, 115, 22, 0.35)',
+                            }}
+                            onMouseEnter={(e) => { if (!loading) e.currentTarget.style.transform = 'translateY(-1px)'; }}
+                            onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; }}
+                        >
+                            {loading ? (
+                                <Loader2 className="animate-spin" size={19} />
+                            ) : (
+                                <>Entrar na Plataforma <ArrowRight size={17} /></>
+                            )}
+                        </button>
+                    </form>
+
+                    {/* Footer */}
+                    <div className="mt-10 pt-6 border-t border-gray-100 text-center">
+                        <div className="flex items-center justify-center gap-2 text-xs text-gray-300 font-medium">
+                            <ShieldCheck size={13} className="text-orange-400/60" />
+                            Protegido por Link&Lead Security
+                        </div>
                     </div>
                 </div>
             </div>
@@ -30843,7 +31055,8 @@ import {
     HandMetal,
     MessageCircle,
     CheckCircle2,
-    Hammer
+    Hammer,
+    Snowflake
 } from 'lucide-react'
 
 // ═══════════════════════════════════════════════
@@ -30903,6 +31116,19 @@ const COLUMN_THEMES = {
         columnBg: '#ffffff',
         emptyBg: 'bg-blue-50',
         emptyBorder: 'border-blue-200',
+    },
+    warm: {
+        borderTop: 'linear-gradient(90deg, #eab308, #f59e0b)',
+        headerBg: 'bg-yellow-50',
+        headerBorder: 'border-yellow-200',
+        countBg: 'bg-yellow-100',
+        countText: 'text-yellow-600',
+        countBorder: 'border-yellow-200',
+        iconColor: 'text-yellow-500',
+        cardBorder: 'border-l-yellow-400',
+        columnBg: '#ffffff',
+        emptyBg: 'bg-yellow-50',
+        emptyBorder: 'border-yellow-200',
     }
 }
 
@@ -31026,18 +31252,21 @@ const SalesCockpitPage = () => {
     // DERIVED STATE
     // ───────────────────────────────────────────
 
-    const { hotTasks, coldTasks } = useMemo(() => {
-        const hot = []
-        const cold = []
-        pendingTasks.forEach(task => {
-            const stage = task.leads?.cadence_stage
-            if (HOT_STAGES.includes(stage)) {
-                hot.push(task)
-            } else {
-                cold.push(task)
-            }
-        })
-        return { hotTasks: hot, coldTasks: cold }
+    // Split by cadence_stage (HOT: G4/G5, WARM: G2/G3, COLD: G1)
+    const { hotTasks, warmTasks, coldTasks } = useMemo(() => {
+        const hot = pendingTasks.filter(t =>
+            t.leads?.cadence_stage === 'G4' || t.leads?.cadence_stage === 'G5'
+        );
+
+        const warm = pendingTasks.filter(t =>
+            t.leads?.cadence_stage === 'G2' || t.leads?.cadence_stage === 'G3'
+        );
+
+        const cold = pendingTasks.filter(t =>
+            t.leads?.cadence_stage === 'G1'
+        );
+
+        return { hotTasks: hot, warmTasks: warm, coldTasks: cold }
     }, [pendingTasks])
 
     const totalMissions = Math.min(pendingTasks.length + doneCount, MAX_DAILY_TASKS)
@@ -31086,12 +31315,12 @@ const SalesCockpitPage = () => {
                                 <Crosshair size={20} className="text-orange-500" />
                             </div>
                             <div>
-                                <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-gray-900 mb-1">
-                                    {getGreeting()}! 🎯
+                                <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-gray-900 mb-1 leading-tight">
+                                    {getGreeting()}! Faça suas tarefas diárias e cumpra suas metas! 🎯
                                 </h1>
                                 <p className="text-sm text-gray-500">
                                     {hotTasks.length > 0
-                                        ? <><span className="text-orange-500 font-semibold">{hotTasks.length} lead(s) quente(s)</span> · {coldTasks.length} em prospecção</>
+                                        ? <><span className="text-orange-500 font-semibold">{hotTasks.length} quente(s)</span> · {warmTasks.length} em nutrição · {coldTasks.length} novos contatos</>
                                         : pendingTasks.length > 0
                                             ? <>{pendingTasks.length} tarefas aguardando execução.</>
                                             : 'Nenhuma tarefa pendente!'
@@ -31176,21 +31405,18 @@ const SalesCockpitPage = () => {
                 )}
 
                 {/* ═══════════════════════════════════ */}
-                {/* KANBAN BOARD — 2 COLUMNS           */}
+                {/* 3-COLUMN GRID TASK BOARD            */}
                 {/* ═══════════════════════════════════ */}
                 {!allDone && !error && (
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
-                        {/* LEFT: 🔥 PRIORIDADES (G4, G5) */}
-                        <KanbanColumn
-                            title="Prioridades"
-                            emoji=""
-                            icon={<DollarSign size={15} />}
+                        {/* COL 1: HOT (G4/G5) */}
+                        <FeedSection
+                            title="HOT (G4/G5)"
+                            icon={<Flame size={15} />}
                             count={hotTasks.length}
                             themeKey="hot"
-                            emptyIcon={<Sparkles size={28} className="text-orange-300" />}
-                            emptyTitle="Pipeline limpo"
-                            emptyText="Nenhum lead em estágio avançado (G4/G5). Foque na prospecção →"
+                            emptyText="Nenhum lead quente para hoje."
                         >
                             {hotTasks.map(task => (
                                 <TaskCard
@@ -31202,18 +31428,35 @@ const SalesCockpitPage = () => {
                                     onExecute={handleExecute}
                                 />
                             ))}
-                        </KanbanColumn>
+                        </FeedSection>
 
-                        {/* RIGHT: 🔨 MODERADAS */}
-                        <KanbanColumn
-                            title="Tarefas de Prospecção"
-                            emoji=""
-                            icon={<Users size={15} />}
+                        {/* COL 2: MORNOS (G2/G3) */}
+                        <FeedSection
+                            title="MORNOS (G2/G3)"
+                            icon={<TrendingUp size={15} />}
+                            count={warmTasks.length}
+                            themeKey="warm"
+                            emptyText="Nenhuma tarefa de nutrição."
+                        >
+                            {warmTasks.map(task => (
+                                <TaskCard
+                                    key={task.id}
+                                    task={task}
+                                    themeKey="warm"
+                                    completing={completingIds.has(task.id)}
+                                    onComplete={handleComplete}
+                                    onExecute={handleExecute}
+                                />
+                            ))}
+                        </FeedSection>
+
+                        {/* COL 3: FRIOS (G1) */}
+                        <FeedSection
+                            title="FRIOS (G1)"
+                            icon={<Snowflake size={15} />}
                             count={coldTasks.length}
                             themeKey="cold"
-                            emptyIcon={<TrendingUp size={28} className="text-blue-300" />}
-                            emptyTitle="Tudo em dia"
-                            emptyText="Nenhuma tarefa de prospecção pendente."
+                            emptyText="Nenhuma prospecção pendente."
                             footer={
                                 hiddenColdCount > 0 && !showAllCold ? (
                                     <button
@@ -31242,7 +31485,7 @@ const SalesCockpitPage = () => {
                                     onExecute={handleExecute}
                                 />
                             ))}
-                        </KanbanColumn>
+                        </FeedSection>
                     </div>
                 )}
             </div>
@@ -31251,10 +31494,10 @@ const SalesCockpitPage = () => {
 }
 
 // ═══════════════════════════════════════════════
-// KANBAN COLUMN
+// COLUMN SECTION (3-Column Grid)
 // ═══════════════════════════════════════════════
 
-const KanbanColumn = ({ title, emoji, icon, count, themeKey, children, emptyIcon, emptyTitle, emptyText, footer }) => {
+const FeedSection = ({ title, icon, count, themeKey, children, footer, emptyText }) => {
     const theme = COLUMN_THEMES[themeKey]
     const isEmpty = React.Children.count(children) === 0
 
@@ -31271,7 +31514,7 @@ const KanbanColumn = ({ title, emoji, icon, count, themeKey, children, emptyIcon
                 <div className="flex items-center gap-2">
                     <span className={theme.iconColor}>{icon}</span>
                     <h3 className="text-xs font-bold text-gray-700 tracking-wider uppercase">
-                        {emoji} {title}
+                        {title}
                     </h3>
                 </div>
                 <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full ${theme.countBg} ${theme.countText} border ${theme.countBorder}`}>
@@ -31279,16 +31522,14 @@ const KanbanColumn = ({ title, emoji, icon, count, themeKey, children, emptyIcon
                 </span>
             </div>
 
-            {/* Cards area */}
+            {/* Cards area with internal scroll */}
             <div
-                className="flex-1 p-3 space-y-2.5 overflow-y-auto"
-                style={{ maxHeight: '600px', minHeight: '140px' }}
+                className="flex-1 p-3 space-y-3 overflow-y-auto"
+                style={{ maxHeight: '70vh', minHeight: '120px' }}
             >
                 {isEmpty ? (
-                    <div className={`flex flex-col items-center justify-center py-10 gap-2 rounded-xl ${theme.emptyBg} border ${theme.emptyBorder}`}>
-                        {emptyIcon}
-                        <p className="text-sm font-semibold text-gray-500">{emptyTitle}</p>
-                        <p className="text-[11px] text-gray-400 text-center px-6">{emptyText}</p>
+                    <div className={`flex items-center justify-center py-10 px-4 rounded-xl ${theme.emptyBg} border ${theme.emptyBorder}`}>
+                        <p className="text-xs text-gray-400 text-center">{emptyText}</p>
                     </div>
                 ) : children}
             </div>
@@ -33064,18 +33305,26 @@ const SalesHubPage = () => {
             })
 
             if (response.ok) {
-                setNotification({ message: 'A mineração começou! Os leads aparecerão na tela automaticamente.', type: 'info' })
+                const result = await response.json()
+
+                let msg
+                if (result.total_leads && result.total_leads > 0) {
+                    msg = `Iniciamos a leitura de ${result.total_leads.toLocaleString()} conexões. O processo levará cerca de ${result.estimated_time_human || 'alguns minutos'}. Você pode continuar usando o sistema normalmente.`
+                } else {
+                    msg = result.message || 'Sincronização iniciada. A atualização aparecerá em breve.'
+                }
+
+                setNotification({ message: msg, type: 'success' })
             } else {
-                setNotification({ message: 'Erro ao iniciar sincronização (Webhook).', type: 'error' })
-                setSyncLoading(false)
+                setNotification({ message: `Erro ao iniciar sincronização (${response.status}).`, type: 'error' })
             }
         } catch (error) {
             console.error(error)
             setNotification({ message: 'Erro de conexão.', type: 'error' })
+        } finally {
             setSyncLoading(false)
+            setTimeout(() => setNotification(null), 10000)
         }
-
-        setTimeout(() => setNotification(null), 5000)
     }
 
     const handleEnrichment = async (singleLead = null) => {
@@ -33655,13 +33904,13 @@ export default SalesHubPage
 
 ## File: src\pages\SalesInboxPage.jsx
 ```javascript
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { supabase } from '../services/supabaseClient'
 import { useClientSelection } from '../contexts/ClientSelectionContext'
-import { Search, Send, MoreVertical, Phone, Mail, MapPin, Briefcase, Zap, Star, Sparkles, MessageSquare, Copy, Check, LayoutGrid, List, Loader2, X } from 'lucide-react'
+import { Search, Send, MoreVertical, Phone, Mail, MapPin, Briefcase, Zap, Star, Sparkles, MessageSquare, Copy, Check, LayoutGrid, List, Loader2, X, ClipboardList } from 'lucide-react'
 
-const N8N_GENERATE_REPLY_URL = 'https://n8n-n8n-start.kfocge.easypanel.host/webhook-test/generate-reply'
+const N8N_GENERATE_REPLY_URL = 'https://n8n-n8n-start.kfocge.easypanel.host/webhook/generate-reply'
 const N8N_SEND_MESSAGE_URL = 'https://n8n-n8n-start.kfocge.easypanel.host/webhook/send-linkedin-message'
 import KanbanColumn from '../components/kanban/KanbanColumn'
 import KanbanLeadCard from '../components/kanban/KanbanLeadCard'
@@ -33695,6 +33944,26 @@ const SalesInboxPage = () => {
 
     // Cockpit task auto-complete
     const [pendingTaskId, setPendingTaskId] = useState(null)
+
+    // Sidebar Tabs: Conversas | Tarefas do Dia
+    const [sidebarTab, setSidebarTab] = useState('conversas')
+    const [sidebarTasks, setSidebarTasks] = useState([])
+    const [loadingTasks, setLoadingTasks] = useState(false)
+    const [pendingTaskCount, setPendingTaskCount] = useState(0)
+
+    // Eager fetch: task count badge (always visible, regardless of active tab)
+    useEffect(() => {
+        if (!selectedClientId) return
+        const fetchCount = async () => {
+            const { data } = await supabase
+                .from('tasks')
+                .select('id, leads!inner(client_id)')
+                .eq('leads.client_id', selectedClientId)
+                .eq('status', 'PENDING')
+            setPendingTaskCount(data?.length || 0)
+        }
+        fetchCount()
+    }, [selectedClientId])
 
     // 1. Fetch Inbox Leads (Score > 0, Sorted Desc)
     useEffect(() => {
@@ -33895,6 +34164,60 @@ const SalesInboxPage = () => {
         : leads
 
     const kanbanData = categorizeLeads(filteredLeads)
+
+    // Fetch tasks when sidebar tab is active
+    const fetchSidebarTasks = useCallback(async () => {
+        if (!selectedClientId) return
+        setLoadingTasks(true)
+        try {
+            const { data } = await supabase
+                .from('tasks')
+                .select('*, leads!inner(id, client_id, nome, empresa, headline, cadence_stage, avatar_url, linkedin_profile_url, total_interactions_count)')
+                .eq('leads.client_id', selectedClientId)
+                .eq('status', 'PENDING')
+                .order('created_at', { ascending: true })
+
+            // Sort by temperature: HOT (G4/G5) > WARM (G2/G3) > COLD (G1)
+            const stagePriority = { G5: 0, G4: 1, G3: 2, G2: 3, G1: 4 }
+            const sorted = (data || []).sort((a, b) => {
+                const pa = stagePriority[a.leads?.cadence_stage] ?? 5
+                const pb = stagePriority[b.leads?.cadence_stage] ?? 5
+                return pa - pb
+            })
+            setSidebarTasks(sorted)
+        } catch (err) {
+            console.error('Error fetching sidebar tasks:', err)
+        } finally {
+            setLoadingTasks(false)
+        }
+    }, [selectedClientId])
+
+    useEffect(() => {
+        if (sidebarTab === 'tarefas') fetchSidebarTasks()
+    }, [sidebarTab, fetchSidebarTasks])
+
+    const handleTaskClick = async (task) => {
+        const taskLead = task.leads
+        if (!taskLead?.id) return
+
+        // Try to find the lead in the already-loaded list
+        let lead = leads.find(l => l.id === taskLead.id)
+
+        if (!lead) {
+            // Fetch individual lead
+            const { data } = await supabase.from('leads').select('*').eq('id', taskLead.id).single()
+            if (data) {
+                lead = { ...data, total_interactions_count: data.total_interactions_count || 0, _lastMsgIsSender: null }
+                setLeads(prev => [lead, ...prev])
+            }
+        }
+
+        if (lead) {
+            setActiveLead(lead)
+            setPendingTaskId(task.id)
+            setViewMode('list')
+        }
+    }
 
     const showToast = (message, type = 'success') => {
         setToast({ message, type })
@@ -34208,65 +34531,166 @@ const SalesInboxPage = () => {
                 <div className="flex-1 flex gap-4 lg:gap-6 overflow-hidden">
                     {/* LEFT: Lead List */}
                     <div className="hidden md:flex w-72 lg:w-80 flex-col bg-charcoal rounded-2xl border border-glass-border overflow-hidden shrink-0">
-                        <div className="p-4 border-b border-glass-border bg-black/20 flex justify-between items-center">
-                            <span className="font-semibold text-text-heading">Inbox Prioritário</span>
-                            <span className="text-xs bg-primary/20 text-primary px-2 py-1 rounded-full font-bold">
-                                {filteredLeads.length}
-                            </span>
-                        </div>
-
-                        <div className="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-2">
-                            {loadingLeads ? (
-                                <div className="p-8 text-center text-text-muted text-sm">Carregando...</div>
-                            ) : filteredLeads.map(lead => (
-                                <div
-                                    key={lead.id}
-                                    onClick={() => setActiveLead(lead)}
-                                    className={`p-3 rounded-xl border cursor-pointer transition-all ${activeLead?.id === lead.id
-                                        ? 'bg-primary/10 border-primary/40 shadow-lg shadow-primary/5'
-                                        : 'border-transparent hover:bg-glass hover:border-glass-border'
+                        {/* Sidebar Tabs */}
+                        <div className="p-2 border-b border-glass-border bg-black/20">
+                            <div className="flex bg-black/30 rounded-lg p-0.5 gap-0.5">
+                                <button
+                                    onClick={() => setSidebarTab('conversas')}
+                                    className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-md text-xs font-bold uppercase tracking-wider transition-all ${sidebarTab === 'conversas'
+                                        ? 'bg-primary text-white shadow-lg shadow-primary/20'
+                                        : 'text-gray-400 hover:text-white hover:bg-white/5'
                                         }`}
                                 >
-                                    <div className="flex justify-between items-start mb-1">
-                                        <span className={`font-semibold text-sm truncate max-w-[140px] lg:max-w-[160px] text-text-heading`}>
-                                            {lead.nome || 'Sem Nome'}
-                                        </span>
-                                        <span className="text-[10px] text-text-muted">
-                                            {lead.last_interaction ? new Date(lead.last_interaction).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : ''}
-                                        </span>
-                                    </div>
-                                    <div className="text-xs text-text-body mb-2 truncate">
-                                        {lead.headline || 'Lead qualificado'}
-                                    </div>
-                                    <div className="flex items-center gap-2 text-[10px]">
-                                        {/* ICP Score */}
-                                        <span className={`font-bold px-1.5 py-0.5 rounded ${lead.icp_score === 'A' ? 'bg-emerald-500/20 text-emerald-400' :
-                                            lead.icp_score === 'B' ? 'bg-amber-500/20 text-amber-400' :
-                                                'bg-slate-500/20 text-slate-400'
-                                            }`}>
-                                            ICP {lead.icp_score || 'C'}
-                                        </span>
-                                        {/* Relative time */}
-                                        <span className="text-text-muted">
-                                            {(() => {
-                                                const d = lead.last_interaction_date
-                                                if (!d) return 'Sem interação'
-                                                const diff = Date.now() - new Date(d).getTime()
-                                                const mins = Math.floor(diff / 60000)
-                                                if (mins < 60) return `💬 há ${mins}m`
-                                                const hrs = Math.floor(mins / 60)
-                                                if (hrs < 24) return `💬 há ${hrs}h`
-                                                const days = Math.floor(hrs / 24)
-                                                return `💬 há ${days}d`
-                                            })()}
-                                        </span>
-                                    </div>
-                                </div>
-                            ))}
-                            {!loadingLeads && filteredLeads.length === 0 && (
-                                <div className="p-8 text-center text-text-muted text-sm">
-                                    {searchTerm ? 'Nenhum lead encontrado.' : 'Nenhum lead com engajamento.'}
-                                </div>
+                                    <MessageSquare size={13} />
+                                    Conversas
+                                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${sidebarTab === 'conversas' ? 'bg-white/20' : 'bg-white/10'
+                                        }`}>
+                                        {filteredLeads.length}
+                                    </span>
+                                </button>
+                                <button
+                                    onClick={() => setSidebarTab('tarefas')}
+                                    className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-md text-xs font-bold uppercase tracking-wider transition-all ${sidebarTab === 'tarefas'
+                                        ? 'bg-primary text-white shadow-lg shadow-primary/20'
+                                        : 'text-gray-400 hover:text-white hover:bg-white/5'
+                                        }`}
+                                >
+                                    <ClipboardList size={13} />
+                                    Tarefas
+                                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${sidebarTab === 'tarefas' ? 'bg-white/20' : 'bg-white/10'
+                                        }`}>
+                                        {pendingTaskCount}
+                                    </span>
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* TAB CONTENT */}
+                        <div className="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-2">
+
+                            {/* ── CONVERSAS TAB ── */}
+                            {sidebarTab === 'conversas' && (
+                                <>
+                                    {loadingLeads ? (
+                                        <div className="p-8 text-center text-text-muted text-sm">Carregando...</div>
+                                    ) : filteredLeads.map(lead => (
+                                        <div
+                                            key={lead.id}
+                                            onClick={() => setActiveLead(lead)}
+                                            className={`p-3 rounded-xl border cursor-pointer transition-all ${activeLead?.id === lead.id
+                                                ? 'bg-primary/10 border-primary/40 shadow-lg shadow-primary/5'
+                                                : 'border-transparent hover:bg-glass hover:border-glass-border'
+                                                }`}
+                                        >
+                                            <div className="flex justify-between items-start mb-1">
+                                                <span className={`font-semibold text-sm truncate max-w-[140px] lg:max-w-[160px] text-text-heading`}>
+                                                    {lead.nome || 'Sem Nome'}
+                                                </span>
+                                                <span className="text-[10px] text-text-muted">
+                                                    {lead.last_interaction ? new Date(lead.last_interaction).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : ''}
+                                                </span>
+                                            </div>
+                                            <div className="text-xs text-text-body mb-2 truncate">
+                                                {lead.headline || 'Lead qualificado'}
+                                            </div>
+                                            <div className="flex items-center gap-2 text-[10px]">
+                                                <span className={`font-bold px-1.5 py-0.5 rounded ${lead.icp_score === 'A' ? 'bg-emerald-500/20 text-emerald-400' :
+                                                    lead.icp_score === 'B' ? 'bg-amber-500/20 text-amber-400' :
+                                                        'bg-slate-500/20 text-slate-400'
+                                                    }`}>
+                                                    ICP {lead.icp_score || 'C'}
+                                                </span>
+                                                <span className="text-text-muted">
+                                                    {(() => {
+                                                        const d = lead.last_interaction_date
+                                                        if (!d) return 'Sem interação'
+                                                        const diff = Date.now() - new Date(d).getTime()
+                                                        const mins = Math.floor(diff / 60000)
+                                                        if (mins < 60) return `💬 há ${mins}m`
+                                                        const hrs = Math.floor(mins / 60)
+                                                        if (hrs < 24) return `💬 há ${hrs}h`
+                                                        const days = Math.floor(hrs / 24)
+                                                        return `💬 há ${days}d`
+                                                    })()}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    ))}
+                                    {!loadingLeads && filteredLeads.length === 0 && (
+                                        <div className="p-8 text-center text-text-muted text-sm">
+                                            {searchTerm ? 'Nenhum lead encontrado.' : 'Nenhum lead com engajamento.'}
+                                        </div>
+                                    )}
+                                </>
+                            )}
+
+                            {/* ── TAREFAS DO DIA TAB ── */}
+                            {sidebarTab === 'tarefas' && (
+                                <>
+                                    {loadingTasks ? (
+                                        <div className="p-8 text-center text-text-muted text-sm flex flex-col items-center gap-2">
+                                            <Loader2 size={18} className="animate-spin text-primary" />
+                                            Carregando tarefas...
+                                        </div>
+                                    ) : sidebarTasks.length === 0 ? (
+                                        <div className="p-8 text-center text-text-muted text-sm flex flex-col items-center gap-3">
+                                            <div className="w-12 h-12 rounded-full bg-emerald-500/10 flex items-center justify-center">
+                                                <Check size={20} className="text-emerald-400" />
+                                            </div>
+                                            <span>Nenhuma tarefa pendente! 🎉</span>
+                                        </div>
+                                    ) : sidebarTasks.map(task => {
+                                        const tLead = task.leads || {}
+                                        const stage = tLead.cadence_stage || ''
+                                        const stageColor = stage === 'G4' || stage === 'G5' ? 'bg-red-500/20 text-red-400 border-red-500/30'
+                                            : stage === 'G2' || stage === 'G3' ? 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30'
+                                                : 'bg-blue-500/20 text-blue-400 border-blue-500/30'
+
+                                        const interactionCount = tLead.total_interactions_count || 0
+                                        const isFirstContact = interactionCount === 0
+                                        const actionLabel = isFirstContact ? '✉️ Enviar Icebreaker' : '💬 Continuar Conversa'
+                                        const actionColor = isFirstContact
+                                            ? 'bg-orange-500/15 text-orange-400 border-orange-500/30'
+                                            : 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+
+                                        return (
+                                            <div
+                                                key={task.id}
+                                                onClick={() => handleTaskClick(task)}
+                                                className="p-3 rounded-xl border border-transparent hover:bg-glass hover:border-glass-border cursor-pointer transition-all group"
+                                            >
+                                                <div className="flex items-center gap-2 mb-1.5">
+                                                    {tLead.avatar_url ? (
+                                                        <img src={tLead.avatar_url} alt="" className="w-7 h-7 rounded-full object-cover border border-glass-border" />
+                                                    ) : (
+                                                        <div className="w-7 h-7 rounded-full bg-glass border border-glass-border flex items-center justify-center text-[10px] font-bold text-text-heading">
+                                                            {tLead.nome?.charAt(0) || '?'}
+                                                        </div>
+                                                    )}
+                                                    <div className="flex-1 min-w-0">
+                                                        <span className="text-sm font-semibold text-text-heading truncate block">{tLead.nome || 'Lead'}</span>
+                                                    </div>
+                                                    {stage && (
+                                                        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${stageColor}`}>
+                                                            {stage}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                {/* Action label */}
+                                                <div className="pl-9 mb-1">
+                                                    <span className={`inline-flex items-center text-[10px] font-bold px-2 py-0.5 rounded-full border ${actionColor}`}>
+                                                        {actionLabel}
+                                                    </span>
+                                                </div>
+                                                {task.instruction && (
+                                                    <p className="text-[11px] text-text-muted leading-relaxed line-clamp-2 pl-9">
+                                                        💡 {task.instruction}
+                                                    </p>
+                                                )}
+                                            </div>
+                                        )
+                                    })}
+                                </>
                             )}
                         </div>
                     </div>
