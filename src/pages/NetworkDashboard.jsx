@@ -76,7 +76,7 @@ const NetworkDashboard = () => {
     const [page, setPage] = useState(0)
     const [hasMore, setHasMore] = useState(true)
     const [loadingMore, setLoadingMore] = useState(false)
-    const ITEMS_per_PAGE = 100
+    const ITEMS_per_PAGE = 50
 
     // Logic State
     const [enrichmentLoading, setEnrichmentLoading] = useState(false)
@@ -859,8 +859,23 @@ const NetworkDashboard = () => {
                     updated_at: new Date().toISOString()
                 }], { onConflict: 'client_id' })
 
-            // 5. Sequential loop — fire-and-forget per lead, 2s delay
-            let failures = 0
+            // 5. Sequential loop — await each request and update progress
+            let currentFailures = 0
+            let currentProcessed = 0
+
+            // Ensure status starts as 'in_progress' and total_leads is accurate
+            await supabase
+                .from('history_sync_progress')
+                .upsert([{
+                    client_id: selectedClientId,
+                    status: 'in_progress',
+                    total_leads: totalLeads,
+                    processed: 0,
+                    failures: 0,
+                    started_at: new Date().toISOString(),
+                    completed_at: null,
+                    updated_at: new Date().toISOString()
+                }], { onConflict: 'client_id' })
 
             for (let i = 0; i < totalLeads; i++) {
                 // Check for cancellation
@@ -868,7 +883,7 @@ const NetworkDashboard = () => {
                     setSyncProgress(prev => ({ ...prev, status: 'cancelled' }))
                     await supabase
                         .from('history_sync_progress')
-                        .update({ status: 'cancelled', processed: i, failures, updated_at: new Date().toISOString() })
+                        .update({ status: 'cancelled', processed: currentProcessed, failures: currentFailures, updated_at: new Date().toISOString() })
                         .eq('client_id', selectedClientId)
                     return
                 }
@@ -876,24 +891,42 @@ const NetworkDashboard = () => {
                 const lead = allLeads[i]
                 setSyncProgress(prev => ({ ...prev, current: i + 1 }))
 
-                // Fire-and-forget with 5s timeout
                 try {
                     const controller = new AbortController()
-                    const timeout = setTimeout(() => controller.abort(), 5000)
+                    // 15 seconds timeout to allow n8n to process
+                    const timeout = setTimeout(() => controller.abort(), 15000)
 
-                    await fetch('https://n8n-n8n-start.kfocge.easypanel.host/webhook/import-history', {
+                    const response = await fetch('https://n8n-n8n-start.kfocge.easypanel.host/webhook/import-history', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ lead_id: lead.id, account_id: accountId }),
                         signal: controller.signal
-                    }).catch(() => { }) // Ignore response errors — fire and forget
+                    })
 
                     clearTimeout(timeout)
+
+                    if (response.ok) {
+                        currentProcessed++
+                        // Update progress: processed + 1
+                        await supabase
+                            .from('history_sync_progress')
+                            .update({ processed: currentProcessed, updated_at: new Date().toISOString() })
+                            .eq('client_id', selectedClientId)
+                    } else {
+                        throw new Error(`HTTP Error: ${response.status}`)
+                    }
+
                 } catch (err) {
-                    // Network error or abort — log and continue
+                    // Network error, timeout, or HTTP error — log and increment failures
                     console.warn(`[Arqueólogo] Lead ${lead.id} falhou:`, err.message)
-                    failures++
-                    setSyncProgress(prev => ({ ...prev, failures: prev.failures + 1 }))
+                    currentFailures++
+                    setSyncProgress(prev => ({ ...prev, failures: currentFailures }))
+
+                    // Update progress: failures + 1
+                    await supabase
+                        .from('history_sync_progress')
+                        .update({ failures: currentFailures, updated_at: new Date().toISOString() })
+                        .eq('client_id', selectedClientId)
                 }
 
                 // 2-second delay between calls (skip on last iteration)
@@ -908,8 +941,8 @@ const NetworkDashboard = () => {
                 .from('history_sync_progress')
                 .update({
                     status: 'completed',
-                    processed: totalLeads,
-                    failures,
+                    processed: currentProcessed,
+                    failures: currentFailures,
                     completed_at: new Date().toISOString(),
                     updated_at: new Date().toISOString()
                 })
