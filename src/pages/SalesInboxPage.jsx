@@ -20,6 +20,8 @@ const SalesInboxPage = () => {
     // View Mode
     const [viewMode, setViewMode] = useState('list') // 'list' | 'kanban'
     const [searchTerm, setSearchTerm] = useState('')
+    const [isSearchingGlobal, setIsSearchingGlobal] = useState(false)
+    const [globalSearchResults, setGlobalSearchResults] = useState(null)
 
     // Chat State
     const [interactions, setInteractions] = useState([])
@@ -246,8 +248,74 @@ const SalesInboxPage = () => {
         return { highPriority, toRespond, waiting, standby }
     }
 
-    const filteredLeads = searchTerm.trim()
-        ? leads.filter(lead => {
+    // Global Search Effect
+    useEffect(() => {
+        if (!selectedClientId) return
+
+        const debounceTimer = setTimeout(async () => {
+            const term = searchTerm.trim()
+            if (term.length >= 3) {
+                setIsSearchingGlobal(true)
+                try {
+                    const { data, error } = await supabase
+                        .from('leads')
+                        .select('*')
+                        .eq('client_id', selectedClientId)
+                        .or(`nome.ilike.%${term}%,headline.ilike.%${term}%,empresa.ilike.%${term}%`)
+                        .order('total_interactions_count', { ascending: false })
+                        .limit(100)
+
+                    if (error) throw error
+
+                    const leadIds = (data || []).map(l => l.id)
+                    let lastSenderMap = {}
+                    let lastDateMap = {}
+
+                    if (leadIds.length > 0) {
+                        const { data: intData } = await supabase
+                            .from('interactions')
+                            .select('lead_id, is_sender, interaction_date')
+                            .in('lead_id', leadIds)
+                            .order('interaction_date', { ascending: false })
+
+                        if (intData) {
+                            intData.forEach(row => {
+                                if (!(row.lead_id in lastSenderMap)) {
+                                    lastSenderMap[row.lead_id] = row.is_sender
+                                    lastDateMap[row.lead_id] = row.interaction_date
+                                }
+                            })
+                        }
+                    }
+
+                    const processedLeads = (data || []).map(lead => ({
+                        ...lead,
+                        total_interactions_count: lead.total_interactions_count || 0,
+                        last_interaction_date: lastDateMap[lead.id] || lead.last_interaction_date || null,
+                        _lastMsgIsSender: lead.id in lastSenderMap ? lastSenderMap[lead.id] : null
+                    })).sort((a, b) => {
+                        const dateA = a.last_interaction_date ? new Date(a.last_interaction_date).getTime() : 0
+                        const dateB = b.last_interaction_date ? new Date(b.last_interaction_date).getTime() : 0
+                        return dateB - dateA
+                    })
+
+                    setGlobalSearchResults(processedLeads)
+                } catch (err) {
+                    console.error('Erro na busca global:', err)
+                } finally {
+                    setIsSearchingGlobal(false)
+                }
+            } else {
+                setGlobalSearchResults(null)
+            }
+        }, 500)
+
+        return () => clearTimeout(debounceTimer)
+    }, [searchTerm, selectedClientId])
+
+    const baseLeads = globalSearchResults !== null ? globalSearchResults : leads
+    const filteredLeads = searchTerm.trim() && globalSearchResults === null
+        ? baseLeads.filter(lead => {
             const term = searchTerm.toLowerCase()
             return (
                 (lead.nome || '').toLowerCase().includes(term) ||
@@ -255,7 +323,7 @@ const SalesInboxPage = () => {
                 (lead.company || '').toLowerCase().includes(term)
             )
         })
-        : leads
+        : baseLeads
 
     const kanbanData = categorizeLeads(filteredLeads)
 
@@ -523,14 +591,18 @@ const SalesInboxPage = () => {
                         onChange={e => setSearchTerm(e.target.value)}
                         className="w-full bg-black/40 border border-white/10 rounded-xl pl-9 pr-8 py-2 text-sm text-gray-800 placeholder-gray-500 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30 transition-all"
                     />
-                    {searchTerm && (
+                    {isSearchingGlobal ? (
+                        <div className="absolute right-2.5 top-1/2 -translate-y-1/2 text-primary">
+                            <Loader2 size={14} className="animate-spin" />
+                        </div>
+                    ) : searchTerm ? (
                         <button
                             onClick={() => setSearchTerm('')}
                             className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white transition-colors"
                         >
                             <X size={14} />
                         </button>
-                    )}
+                    ) : null}
                 </div>
 
                 <div className="bg-black/40 p-1 rounded-xl border border-white/10 flex gap-1 backdrop-blur-md">

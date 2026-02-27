@@ -62,7 +62,7 @@ const NetworkDashboard = () => {
 
     // Data Table State
     const [selectedLeads, setSelectedLeads] = useState(new Set())
-    const [sortConfig, setSortConfig] = useState({ key: 'added_at', direction: 'desc' })
+    const [sortConfig, setSortConfig] = useState({ key: 'created_at', direction: 'desc' })
     const [filters, setFilters] = useState({
         status: [],
         qualification: [],
@@ -228,29 +228,10 @@ const NetworkDashboard = () => {
     const fetchTotalMessages = async () => {
         if (!selectedClientId) return
         try {
-            // 1. Get lead IDs that belong to this client
-            const { data: campaignLeadIds, error: clError } = await supabase
-                .from('campaign_leads')
-                .select('id')
-                .eq('client_id', selectedClientId) // Multi-tenant guard
-
-            if (clError) throw clError
-            if (!campaignLeadIds || campaignLeadIds.length === 0) {
-                setTotalMessages(0)
-                return
-            }
-
-            const leadIds = campaignLeadIds.map(cl => cl.id).filter(Boolean)
-            if (leadIds.length === 0) {
-                setTotalMessages(0)
-                return
-            }
-
-            // 2. Count interactions only for these leads
             const { count, error } = await supabase
                 .from('interactions')
                 .select('*', { count: 'exact', head: true })
-                .in('lead_id', leadIds)
+                .eq('client_id', selectedClientId)
 
             if (error) throw error
             setTotalMessages(count || 0)
@@ -263,30 +244,10 @@ const NetworkDashboard = () => {
     const fetchTopLeads = async () => {
         if (!selectedClientId) return
         try {
-            // 1. Get lead IDs that belong to this client
-            const { data: campaignLeadIds, error: clError } = await supabase
-                .from('campaign_leads')
-                .select('id')
-                .eq('client_id', selectedClientId) // Multi-tenant guard
-
-            if (clError) throw clError
-            if (!campaignLeadIds || campaignLeadIds.length === 0) {
-                setTopLeads([])
-                return
-            }
-
-            const leadIds = campaignLeadIds.map(cl => cl.id).filter(Boolean)
-            if (leadIds.length === 0) {
-                setTopLeads([])
-                return
-            }
-
-            // 2. Fetch top leads only from this client
             const { data, error } = await supabase
                 .from('leads')
                 .select('id, nome, avatar_url, total_interactions_count, empresa')
-                .in('id', leadIds)
-                .eq('client_id', selectedClientId) // Double check
+                .eq('client_id', selectedClientId)
                 .gt('total_interactions_count', 0)
                 .order('total_interactions_count', { ascending: false })
                 .limit(5)
@@ -298,7 +259,7 @@ const NetworkDashboard = () => {
         }
     }
 
-    // SIMPLIFIED FETCH: Query campaign_leads view directly (flat structure)
+    // SIMPLIFIED FETCH: Query leads directly
     const fetchLeads = async (pageIndex = 0, isRefresh = false) => {
         if (!selectedClientId) return
 
@@ -309,42 +270,38 @@ const NetworkDashboard = () => {
             const from = pageIndex * ITEMS_per_PAGE
             const to = from + ITEMS_per_PAGE - 1
 
-            // Multi-tenant isolation: client_id only (no campaign_id)
+            // Multi-tenant isolation: client_id directly on leads
             let query = supabase
-                .from('campaign_leads')
+                .from('leads')
                 .select('*', { count: 'exact' })
-                .eq('client_id', selectedClientId) // Multi-tenant guard
+                .eq('client_id', selectedClientId)
                 .range(from, to)
 
-            // FIXED: Direct sorting (no foreignTable needed)
+            // Direct sorting
             if (sortConfig.key) {
                 query = query.order(sortConfig.key, { ascending: sortConfig.direction === 'asc' })
             } else {
-                query = query.order('added_at', { ascending: false })
+                query = query.order('created_at', { ascending: false })
             }
 
-            // FIXED: Direct search on view columns
+            // Direct search
             if (debouncedSearch) {
                 query = query.or(`nome.ilike.%${debouncedSearch}%,empresa.ilike.%${debouncedSearch}%,headline.ilike.%${debouncedSearch}%`)
             }
 
-            // FIXED: Direct filters on view columns
-            if (filters.status.length > 0) {
-                console.log('[Filter] Applying status filter:', filters.status)
-                query = query.in('status_pipeline', filters.status)
-            }
+            // Direct filters
+            // if (filters.status.length > 0) {
+            //     query = query.in('status_pipeline', filters.status)
+            // }
 
             if (filters.qualification.length > 0) {
-                console.log('[Filter] Applying qualification filter:', filters.qualification)
                 query = query.in('icp_score', filters.qualification)
             }
 
             if (filters.hasMessages === 'yes') {
-                console.log('[Filter] Applying hasMessages filter: with messages')
-                query = query.gt('total_interactions', 0)
+                query = query.gt('total_interactions_count', 0)
             } else if (filters.hasMessages === 'no') {
-                console.log('[Filter] Applying hasMessages filter: no messages')
-                query = query.eq('total_interactions', 0)
+                query = query.eq('total_interactions_count', 0)
             }
 
             const { data, error, count } = await query
@@ -806,26 +763,44 @@ const NetworkDashboard = () => {
         cancelRef.current = false
 
         try {
-            // 1. Fetch lead IDs that belong to THIS client (not campaign)
-            const { data: campaignLeadRows, error: clError } = await supabase
-                .from('campaign_leads')
-                .select('id')
+            // 1. Fetch exact total pendings bypass 1000 limit
+            const { count: totalPendingCount, error: countError } = await supabase
+                .from('leads')
+                .select('*', { count: 'exact', head: true })
                 .eq('client_id', selectedClientId)
+                .is('last_history_sync_at', null)
 
-            if (clError) throw clError
+            if (countError) throw countError
 
-            const leadIds = (campaignLeadRows || []).map(cl => cl.id).filter(Boolean)
-
-            if (leadIds.length === 0) {
-                setNotification({ message: 'Nenhum lead encontrado.', type: 'error' })
+            if (totalPendingCount === 0 || totalPendingCount === null) {
+                setNotification({ message: 'Nenhum lead pendente de sincronização encontrado.', type: 'info' })
                 setTimeout(() => setNotification(null), 5000)
                 return
             }
 
-            // Map to the format expected by the rest of the function
-            const allLeads = leadIds.map(id => ({ id }))
+            // 2. Paginated Fetching to collect all pending leads
+            let allLeads = []
+            let fromLimit = 0
+            const step = 900
 
-            // 2. Fetch Unipile account ID
+            while (true) {
+                const { data: pageData, error: pageError } = await supabase
+                    .from('leads')
+                    .select('id, nome')
+                    .eq('client_id', selectedClientId)
+                    .is('last_history_sync_at', null)
+                    .range(fromLimit, fromLimit + step - 1)
+
+                if (pageError) throw pageError
+                if (!pageData || pageData.length === 0) break
+
+                allLeads.push(...pageData)
+                if (pageData.length < step) break
+
+                fromLimit += step
+            }
+
+            // 3. Fetch Unipile account ID
             const { data: client, error: clientError } = await supabase
                 .from('clients')
                 .select('unipile_account_id')
@@ -838,37 +813,22 @@ const NetworkDashboard = () => {
                 return
             }
 
-            const totalLeads = allLeads.length
+            const totalLeads = totalPendingCount
             const accountId = client.unipile_account_id
 
-            // 3. Open modal + set initial progress
+            // 4. Open modal + set initial progress
             setSyncProgress({ status: 'running', current: 0, total: totalLeads, failures: 0 })
             setShowHistorySyncModal(true)
 
-            // 4. Upsert status in Supabase
+            let currentFailures = 0
+            let currentProcessed = 0
+
+            // 5. Ensure status starts as 'running' and total_leads is accurate in DB
             await supabase
                 .from('history_sync_progress')
                 .upsert([{
                     client_id: selectedClientId,
                     status: 'running',
-                    total_leads: totalLeads,
-                    processed: 0,
-                    failures: 0,
-                    started_at: new Date().toISOString(),
-                    completed_at: null,
-                    updated_at: new Date().toISOString()
-                }], { onConflict: 'client_id' })
-
-            // 5. Sequential loop — await each request and update progress
-            let currentFailures = 0
-            let currentProcessed = 0
-
-            // Ensure status starts as 'in_progress' and total_leads is accurate
-            await supabase
-                .from('history_sync_progress')
-                .upsert([{
-                    client_id: selectedClientId,
-                    status: 'in_progress',
                     total_leads: totalLeads,
                     processed: 0,
                     failures: 0,
@@ -910,7 +870,11 @@ const NetworkDashboard = () => {
                         // Update progress: processed + 1
                         await supabase
                             .from('history_sync_progress')
-                            .update({ processed: currentProcessed, updated_at: new Date().toISOString() })
+                            .update({
+                                processed: currentProcessed,
+                                last_lead_name: lead.nome || 'Desconhecido',
+                                updated_at: new Date().toISOString()
+                            })
                             .eq('client_id', selectedClientId)
                     } else {
                         throw new Error(`HTTP Error: ${response.status}`)
@@ -925,7 +889,11 @@ const NetworkDashboard = () => {
                     // Update progress: failures + 1
                     await supabase
                         .from('history_sync_progress')
-                        .update({ failures: currentFailures, updated_at: new Date().toISOString() })
+                        .update({
+                            failures: currentFailures,
+                            last_lead_name: lead.nome || 'Desconhecido',
+                            updated_at: new Date().toISOString()
+                        })
                         .eq('client_id', selectedClientId)
                 }
 
@@ -1493,11 +1461,11 @@ const NetworkDashboard = () => {
 
                                         <th
                                             className="py-4 px-4 w-[30%] cursor-pointer hover:bg-slate-100 transition-colors group"
-                                            onClick={() => handleSort('nome')}
+                                            onClick={() => handleSort('created_at')}
                                         >
                                             <div className="flex items-center gap-1">
-                                                Lead
-                                                <ArrowUpDown size={12} className={`text-slate-400 ${sortConfig.key === 'nome' ? 'opacity-100 text-orange-500' : 'opacity-0 group-hover:opacity-100'}`} />
+                                                Adicionado Em
+                                                <ArrowUpDown size={12} className={`text-slate-400 ${sortConfig.key === 'created_at' ? 'opacity-100 text-orange-500' : 'opacity-0 group-hover:opacity-100'}`} />
                                             </div>
                                         </th>
 
@@ -1535,11 +1503,11 @@ const NetworkDashboard = () => {
 
                                         <th
                                             className="py-4 px-4 w-[10%] text-center cursor-pointer hover:bg-slate-100 transition-colors group"
-                                            onClick={() => handleSort('total_interactions')}
+                                            onClick={() => handleSort('total_interactions_count')}
                                         >
                                             <div className="flex items-center justify-center gap-1">
                                                 Engagement
-                                                <ArrowUpDown size={12} className={`text-slate-400 ${sortConfig.key === 'total_interactions' ? 'opacity-100 text-orange-500' : 'opacity-0 group-hover:opacity-100'}`} />
+                                                <ArrowUpDown size={12} className={`text-slate-400 ${sortConfig.key === 'total_interactions_count' ? 'opacity-100 text-orange-500' : 'opacity-0 group-hover:opacity-100'}`} />
                                             </div>
                                         </th>
 
@@ -1568,7 +1536,7 @@ const NetworkDashboard = () => {
                                         console.log(`[Render ${index + 1}] Using lead data:`, lead)
 
                                         const campaignStatus = item.status_pipeline
-                                        const totalInteractions = lead.total_interactions || 0
+                                        const totalInteractions = lead.total_interactions_count || 0
 
                                         // Dynamic Status based on interactions
                                         let statusLabel = 'A Contatar'
@@ -1636,7 +1604,7 @@ const NetworkDashboard = () => {
                                                 {/* ENGAGEMENT HEAT INDICATOR */}
                                                 <td className="py-3 px-4">
                                                     {(() => {
-                                                        const count = lead.total_interactions || 0
+                                                        const count = lead.total_interactions_count || 0
                                                         const sentiment = lead.last_sentiment
 
                                                         // Determine heat level based on sentiment
