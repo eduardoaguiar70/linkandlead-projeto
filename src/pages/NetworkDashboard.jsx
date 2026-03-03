@@ -1252,32 +1252,7 @@ const NetworkDashboard = () => {
                             )}
 
 
-                            <div className="flex flex-col items-end gap-1">
-                                {clientSyncTimestamp && !syncLoading && (
-                                    <div className="text-[10px] text-slate-500 flex items-center gap-1 mb-1">
-                                        <Clock size={10} />
-                                        <span>
-                                            Última sync: {new Date(clientSyncTimestamp).toLocaleString('pt-BR', {
-                                                day: '2-digit',
-                                                month: '2-digit',
-                                                hour: '2-digit',
-                                                minute: '2-digit'
-                                            })}
-                                        </span>
-                                    </div>
-                                )}
-                                <button
-                                    onClick={handleSyncMessages}
-                                    disabled={syncLoading}
-                                    className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-semibold text-sm transition-all ${syncLoading
-                                        ? 'bg-blue-50 text-blue-400 cursor-not-allowed'
-                                        : 'bg-blue-50 text-blue-600 hover:bg-blue-100 hover:text-blue-700 border border-blue-200'
-                                        }`}
-                                >
-                                    <RefreshCw size={16} className={syncLoading ? "animate-spin" : ""} />
-                                    {syncLoading ? 'Sincronizando...' : 'Sync Mensagens'}
-                                </button>
-                            </div>
+
 
 
                             <div className="flex flex-col items-end gap-1">
