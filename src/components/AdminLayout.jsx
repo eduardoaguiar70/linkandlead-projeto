@@ -16,7 +16,8 @@ import {
     Target,
     Flame,
     ThumbsUp,
-    Library
+    Library,
+    Kanban
 } from 'lucide-react'
 import CreatePostModal from './CreatePostModal'
 import ClientSelector from './ClientSelector'
@@ -76,6 +77,9 @@ const AdminLayout = () => {
                         </Link>
                         <Link to="/sales/inbox" className={isActive('/sales/inbox')}>
                             <MessageCircle size={18} /> Inbox Inteligente
+                        </Link>
+                        <Link to="/pipeline" className={isActive('/pipeline')}>
+                            <Kanban size={18} /> Pipeline
                         </Link>
                         <Link to="/clients" className={isActive('/clients')}>
                             <Users size={18} /> Clientes
@@ -153,7 +157,7 @@ const AdminLayout = () => {
             {/* MAIN CONTENT */}
             <main className="main-content">
                 {/* Client Context Header for sales-related pages */}
-                {(location.pathname === '/' || location.pathname.startsWith('/sales') || location.pathname.startsWith('/leads') || location.pathname.startsWith('/campaigns') || location.pathname.startsWith('/network') || location.pathname.startsWith('/engagement') || location.pathname.startsWith('/missions') || location.pathname.startsWith('/content-library')) && (
+                {(location.pathname === '/' || location.pathname.startsWith('/sales') || location.pathname.startsWith('/leads') || location.pathname.startsWith('/campaigns') || location.pathname.startsWith('/network') || location.pathname.startsWith('/engagement') || location.pathname.startsWith('/missions') || location.pathname.startsWith('/content-library') || location.pathname.startsWith('/pipeline')) && (
                     <div className="px-6 py-3 bg-white/5 border-b border-white/10 flex items-center justify-between backdrop-blur-md">
                         <div className="flex items-center gap-4">
                             <span className="text-sm text-text-muted font-medium">Contexto:</span>

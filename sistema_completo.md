@@ -1,5 +1,5 @@
 # Exportação do Sistema
-Data: 2026-02-26 18:26:40
+Data: 2026-03-03 20:30:33
 
 ## File: account_sync_status_migration.sql
 ```sql
@@ -780,6 +780,63 @@ export default defineConfig([
 
 ```
 
+## File: gerar_codigo.py
+```py
+import os
+
+root_dir = r"c:\Users\mcdud\OneDrive\Ambiente de Trabalho\01_Sistema_linklead_DEFINITIVO"
+output_file = os.path.join(root_dir, "codigo_completo.txt")
+
+exclude_dirs = {'node_modules', 'dist', '.git', '.agent', 'public', 'build', '.vite'}
+include_extensions = {'.js', '.jsx', '.ts', '.tsx', '.css', '.html', '.sql', '.md'}
+exclude_files = {'codigo_completo.txt', 'gerar_codigo.py'}
+
+print("Iniciando a concatenação dos arquivos...")
+
+with open(output_file, 'w', encoding='utf-8') as outfile:
+    for dirpath, dirnames, filenames in os.walk(root_dir):
+        # Prevent searching in excluded directories
+        dirnames[:] = [d for d in dirnames if d not in exclude_dirs]
+        
+        for filename in filenames:
+            # We skip package.json and similar unless requested, but let's just include source files.
+            if any(filename.endswith(ext) for ext in include_extensions):
+                if filename in exclude_files:
+                    continue
+                filepath = os.path.join(dirpath, filename)
+                rel_path = os.path.relpath(filepath, root_dir)
+                try:
+                    with open(filepath, 'r', encoding='utf-8') as infile:
+                        content = infile.read()
+                        
+                        outfile.write(f"\n\n{'='*80}\n")
+                        outfile.write(f"--- File: {rel_path} ---\n")
+                        outfile.write(f"{'='*80}\n\n")
+                        outfile.write(content)
+                except Exception as e:
+                    print(f"Erro ao ler {rel_path}: {e}")
+
+print(f"Concluído! O arquivo foi salvo em: {output_file}")
+
+```
+
+## File: get_leads_cols.js
+```javascript
+import { createClient } from '@supabase/supabase-js'
+import dotenv from 'dotenv'
+
+dotenv.config()
+
+const supabase = createClient(process.env.VITE_SUPABASE_URL, process.env.VITE_SUPABASE_ANON_KEY)
+
+async function getCols() {
+    const { data, error } = await supabase.from('leads').select('*').limit(1)
+    console.log(data ? Object.keys(data[0]) : error)
+}
+getCols()
+
+```
+
 ## File: history_sync_progress_migration.sql
 ```sql
 -- ============================================================
@@ -859,6 +916,9 @@ CREATE POLICY "Clients see own sync progress"
     "preview": "vite preview"
   },
   "dependencies": {
+    "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/sortable": "^10.0.0",
+    "@dnd-kit/utilities": "^3.2.2",
     "@supabase/supabase-js": "^2.87.1",
     "date-fns": "^4.1.0",
     "lucide-react": "^0.561.0",
@@ -17433,6 +17493,7 @@ import ClientsPage from './pages/ClientsPage'
 import IdeasPage from './pages/IdeasPage'
 import SalesHubPage from './pages/SalesHubPage'
 import SalesInboxPage from './pages/SalesInboxPage'
+import PipelinePage from './pages/PipelinePage'
 import NetworkDashboard from './pages/NetworkDashboard'
 import SystemInfoPage from './pages/SystemInfoPage'
 import LinkedInEngagementPage from './pages/LinkedInEngagementPage'
@@ -17595,6 +17656,7 @@ function App() {
                 <Route path="/sales" element={<SalesHubPage />} />
                 <Route path="/network" element={<NetworkDashboard />} />
                 <Route path="/sales/inbox" element={<SalesInboxPage />} />
+                <Route path="/pipeline" element={<PipelinePage />} />
                 <Route path="/system-info" element={<SystemInfoPage />} />
                 <Route path="/engagement" element={<LinkedInEngagementPage />} />
                 <Route path="/missions" element={<MissionsPage />} />
@@ -18116,7 +18178,8 @@ import {
     Target,
     Flame,
     ThumbsUp,
-    Library
+    Library,
+    Kanban
 } from 'lucide-react'
 import CreatePostModal from './CreatePostModal'
 import ClientSelector from './ClientSelector'
@@ -18176,6 +18239,9 @@ const AdminLayout = () => {
                         </Link>
                         <Link to="/sales/inbox" className={isActive('/sales/inbox')}>
                             <MessageCircle size={18} /> Inbox Inteligente
+                        </Link>
+                        <Link to="/pipeline" className={isActive('/pipeline')}>
+                            <Kanban size={18} /> Pipeline
                         </Link>
                         <Link to="/clients" className={isActive('/clients')}>
                             <Users size={18} /> Clientes
@@ -18253,7 +18319,7 @@ const AdminLayout = () => {
             {/* MAIN CONTENT */}
             <main className="main-content">
                 {/* Client Context Header for sales-related pages */}
-                {(location.pathname === '/' || location.pathname.startsWith('/sales') || location.pathname.startsWith('/leads') || location.pathname.startsWith('/campaigns') || location.pathname.startsWith('/network') || location.pathname.startsWith('/engagement') || location.pathname.startsWith('/missions') || location.pathname.startsWith('/content-library')) && (
+                {(location.pathname === '/' || location.pathname.startsWith('/sales') || location.pathname.startsWith('/leads') || location.pathname.startsWith('/campaigns') || location.pathname.startsWith('/network') || location.pathname.startsWith('/engagement') || location.pathname.startsWith('/missions') || location.pathname.startsWith('/content-library') || location.pathname.startsWith('/pipeline')) && (
                     <div className="px-6 py-3 bg-white/5 border-b border-white/10 flex items-center justify-between backdrop-blur-md">
                         <div className="flex items-center gap-4">
                             <span className="text-sm text-text-muted font-medium">Contexto:</span>
@@ -21825,6 +21891,856 @@ const KanbanLeadCard = ({ lead, onClick }) => {
 }
 
 export default KanbanLeadCard
+
+```
+
+## File: src\components\pipeline\LeadDetailModal.jsx
+```javascript
+import React, { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { supabase } from '../../services/supabaseClient'
+import { X, Star, MessageCircle, Briefcase, MapPin, Target } from 'lucide-react'
+
+const STAGES = ['Frio', 'Engajado', 'Qualificado', 'Agendado', 'Proposta', 'Ganho', 'Perdido']
+
+// ICP color map
+const ICP_COLOR = { A: '#10b981', B: '#f59e0b', C: '#ef4444' }
+
+
+// Cadence color map
+const CAD_COLOR = { G1: '#3b82f6', G2: '#3b82f6', G3: '#f59e0b', G4: '#ef4444', G5: '#ef4444' }
+const CAD_LABEL = { G1: 'Primeiro Contato', G2: 'Segundo Toque', G3: 'Follow-up', G4: 'Urgência', G5: 'Último Contato' }
+
+// SVG arc gauge — renders a partial arc from bottom-left to bottom-right (220° sweep)
+const ArcGauge = ({ color }) => {
+    const r = 36
+    const cx = 52
+    const cy = 52
+    const startAngle = 145
+    const endAngle = 35
+    // Full track arc
+    const toRad = (d) => (d * Math.PI) / 180
+    const polar = (angle, radius) => ({
+        x: cx + radius * Math.cos(toRad(angle)),
+        y: cy + radius * Math.sin(toRad(angle)),
+    })
+    const trackStart = polar(startAngle, r)
+    const trackEnd = polar(endAngle, r)
+    const trackD = `M ${trackStart.x} ${trackStart.y} A ${r} ${r} 0 1 1 ${trackEnd.x} ${trackEnd.y}`
+
+    return (
+        <svg width={cx * 2} height={cy * 2 - 18} viewBox={`0 0 ${cx * 2} ${cy * 2 - 10}`} style={{ display: 'block' }}>
+            {/* Track */}
+            <path d={trackD} fill="none" stroke="#e5e7eb" strokeWidth={5} strokeLinecap="round" />
+            {/* Value arc (always same end point, just styled) */}
+            <path d={trackD} fill="none" stroke={color} strokeWidth={5} strokeLinecap="round"
+                strokeDasharray="80 200" />
+        </svg>
+    )
+}
+
+const MetricColumn = ({ label, value, color, sub }) => (
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '20px 0 8px' }}>
+        <div style={{ position: 'relative', width: 104, height: 56 }}>
+            <ArcGauge color={color} />
+            <span style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -30%)', fontSize: '22px', fontWeight: 800, color }}>
+                {value}
+            </span>
+        </div>
+        <span style={{ marginTop: '6px', fontSize: '10px', fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.07em' }}>{label}</span>
+        {sub && <span style={{ fontSize: '11px', fontWeight: 600, color, marginTop: '2px' }}>{sub}</span>}
+    </div>
+)
+
+const ReasoningRow = ({ question, text }) => {
+    if (!text) return null
+    return (
+        <div style={{ padding: '12px 14px', borderRadius: '8px', border: '1px solid #e5e7eb', background: '#fff', fontSize: '13px', color: '#374151', lineHeight: 1.5 }}>
+            <strong style={{ color: '#111827' }}>{question}</strong>{' '}{text}
+        </div>
+    )
+}
+
+const LeadDetailModal = ({ lead, onClose, onLeadUpdated }) => {
+    const navigate = useNavigate()
+    const [tier, setTier] = useState(lead?.tier || 0)
+    const [proposalValue, setProposalValue] = useState(lead?.proposal_value || '')
+    const [crmStage, setCrmStage] = useState(lead?.crm_stage || '')
+    const [saving, setSaving] = useState(false)
+
+    useEffect(() => {
+        if (lead) {
+            setTier(lead.tier || 0)
+            setProposalValue(lead.proposal_value || '')
+            setCrmStage(lead.crm_stage || '')
+        }
+    }, [lead])
+
+    if (!lead) return null
+
+    const save = async (field, value) => {
+        setSaving(true)
+        try {
+            await supabase.from('leads').update({ [field]: value }).eq('id', lead.id)
+            if (onLeadUpdated) onLeadUpdated({ ...lead, [field]: value })
+        } catch (err) {
+            console.error('[LeadDetail] Error updating:', err)
+        } finally {
+            setSaving(false)
+        }
+    }
+
+    const handleTier = (val) => { setTier(val); save('tier', val) }
+    const handleProposal = () => { save('proposal_value', parseFloat(proposalValue) || 0) }
+    const handleStage = (val) => { setCrmStage(val); save('crm_stage', val || null) }
+    const goToInbox = () => navigate(`/sales/inbox?leadId=${lead.id}`)
+
+    const icpScore = lead.icp_score || '—'
+    const cadStage = lead.cadence_stage || '—'
+    const icpColor = ICP_COLOR[lead.icp_score] || '#6b7280'
+    const cadColor = CAD_COLOR[lead.cadence_stage] || '#6b7280'
+    const cadSub = CAD_LABEL[lead.cadence_stage] || null
+
+    return (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={onClose}>
+            <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(3px)' }} />
+            <div
+                onClick={e => e.stopPropagation()}
+                style={{ position: 'relative', width: '520px', maxHeight: '92vh', overflowY: 'auto', borderRadius: '14px', overflow: 'hidden', boxShadow: '0 24px 64px rgba(0,0,0,0.2)', border: '1px solid #e5e7eb' }}
+            >
+                {/* ── DARK HEADER ── */}
+                <div style={{ background: '#1e2433', padding: '24px 24px 20px', position: 'relative' }}>
+                    <button onClick={onClose} style={{ position: 'absolute', top: 14, right: 14, background: 'none', border: 'none', cursor: 'pointer', color: '#9ca3af' }}>
+                        <X size={20} />
+                    </button>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                        <div style={{ width: 56, height: 56, borderRadius: '50%', border: '2px solid rgba(255,255,255,0.2)', overflow: 'hidden', flexShrink: 0, background: '#374151', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px', fontWeight: 700, color: '#fff' }}>
+                            {lead.avatar_url ? <img src={lead.avatar_url} alt={lead.nome} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : lead.nome?.charAt(0)?.toUpperCase() || '?'}
+                        </div>
+                        <div style={{ minWidth: 0 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <h2 style={{ fontSize: '18px', fontWeight: 700, color: '#fff', margin: 0 }}>{lead.nome || 'Sem Nome'}</h2>
+                                {lead.linkedin_profile_url && (
+                                    <a href={lead.linkedin_profile_url} target="_blank" rel="noopener noreferrer" style={{ color: '#60a5fa', flexShrink: 0 }}>
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /><polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" /></svg>
+                                    </a>
+                                )}
+                            </div>
+                            {lead.headline && (
+                                <p style={{ fontSize: '12px', color: '#9ca3af', margin: '4px 0 0', display: 'flex', alignItems: 'center', gap: '5px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                    <Briefcase size={11} /> {lead.headline}
+                                </p>
+                            )}
+                            {lead.empresa && (
+                                <p style={{ fontSize: '12px', color: '#6b7280', margin: '3px 0 0', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                    <MapPin size={11} /> {lead.empresa}
+                                </p>
+                            )}
+                        </div>
+                    </div>
+                </div>
+
+                {/* ── WHITE BODY ── */}
+                <div style={{ background: '#fff' }}>
+                    {/* 3-column metrics */}
+                    <div style={{ display: 'flex', borderBottom: '1px solid #f3f4f6' }}>
+                        <MetricColumn label="Qualificação ICP" value={icpScore} color={icpColor} />
+                        <div style={{ width: '1px', background: '#f3f4f6', margin: '16px 0' }} />
+                        <MetricColumn label="Interações" value={lead.total_interactions_count ?? 0} color={lead.total_interactions_count > 0 ? '#ff4d00' : '#ef4444'} />
+                        <div style={{ width: '1px', background: '#f3f4f6', margin: '16px 0' }} />
+                        <MetricColumn label="Cadência" value={cadStage} color={cadColor} sub={cadSub} />
+                    </div>
+
+                    {/* Reasoning rows */}
+                    <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '10px', borderBottom: '1px solid #f3f4f6' }}>
+                        <ReasoningRow question={`Por que ICP ${icpScore}?`} text={lead.icp_reason} />
+                        <ReasoningRow question={`Nível de Cadência (${cadStage}):`} text={lead.stage_reasoning} />
+                    </div>
+
+                    {/* CRM Actions */}
+                    <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '18px' }}>
+                        {/* Tier */}
+                        <div>
+                            <label style={{ fontSize: '12px', fontWeight: 600, color: '#374151', display: 'block', marginBottom: '6px' }}>Prioridade (Tier)</label>
+                            <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                                {[1, 2, 3, 4, 5].map(i => (
+                                    <button key={i} onClick={() => handleTier(i)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px' }}>
+                                        <Star size={22} style={i <= tier ? { color: '#f59e0b', fill: '#f59e0b' } : { color: '#e5e7eb', fill: '#e5e7eb' }} />
+                                    </button>
+                                ))}
+                                {tier > 0 && <button onClick={() => handleTier(0)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '11px', color: '#9ca3af', marginLeft: '6px' }}>Limpar</button>}
+                            </div>
+                        </div>
+
+                        {/* Proposal */}
+                        <div>
+                            <label style={{ fontSize: '12px', fontWeight: 600, color: '#374151', display: 'block', marginBottom: '6px' }}>Valor da Proposta (R$)</label>
+                            <input
+                                type="number"
+                                step="0.01"
+                                placeholder="0,00"
+                                value={proposalValue}
+                                onChange={e => setProposalValue(e.target.value)}
+                                onBlur={handleProposal}
+                                style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #d1d5db', fontSize: '14px', color: '#111827', outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit' }}
+                            />
+                        </div>
+
+                        {/* Stage */}
+                        <div>
+                            <label style={{ fontSize: '12px', fontWeight: 600, color: '#374151', display: 'block', marginBottom: '6px' }}>
+                                <Target size={12} style={{ display: 'inline', verticalAlign: 'middle', marginRight: '4px' }} />
+                                Estágio no Funil
+                            </label>
+                            <select
+                                value={crmStage}
+                                onChange={e => handleStage(e.target.value)}
+                                style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #d1d5db', fontSize: '14px', color: '#111827', background: '#fff', outline: 'none', fontFamily: 'inherit', cursor: 'pointer' }}
+                            >
+                                <option value="">— Sem estágio —</option>
+                                {STAGES.map(s => <option key={s} value={s}>{s}</option>)}
+                            </select>
+                        </div>
+                    </div>
+
+                    {/* Footer */}
+                    <div style={{ padding: '0 20px 20px', display: 'flex', gap: '10px' }}>
+                        <button
+                            onClick={goToInbox}
+                            style={{ flex: 1, padding: '11px', borderRadius: '8px', fontSize: '14px', fontWeight: 700, background: '#ff4d00', color: '#fff', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+                        >
+                            <MessageCircle size={16} /> Ir para o Inbox
+                        </button>
+                        <button onClick={onClose} style={{ padding: '11px 20px', borderRadius: '8px', fontSize: '14px', fontWeight: 600, background: '#f9fafb', color: '#374151', border: '1px solid #e5e7eb', cursor: 'pointer' }}>
+                            Fechar
+                        </button>
+                    </div>
+                </div>
+
+                {saving && (
+                    <div style={{ position: 'absolute', top: 14, left: '50%', transform: 'translateX(-50%)', fontSize: '11px', fontWeight: 600, color: '#ff4d00', background: '#fff3ee', padding: '4px 12px', borderRadius: '6px', border: '1px solid #ffd4c2', zIndex: 3 }}>
+                        Salvando...
+                    </div>
+                )}
+            </div>
+        </div>
+    )
+}
+
+export default LeadDetailModal
+
+```
+
+## File: src\components\pipeline\PipelineColumn.jsx
+```javascript
+import React from 'react'
+import { useDroppable } from '@dnd-kit/core'
+import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
+import PipelineLeadCard from './PipelineLeadCard'
+import { DollarSign } from 'lucide-react'
+
+const ACCENTS = {
+    Frio: { dot: '#94a3b8', iconBg: '#f1f5f9', iconColor: '#64748b' },
+    Engajado: { dot: '#3b82f6', iconBg: '#eff6ff', iconColor: '#3b82f6' },
+    Qualificado: { dot: '#f59e0b', iconBg: '#fffbeb', iconColor: '#f59e0b' },
+    Agendado: { dot: '#8b5cf6', iconBg: '#f5f3ff', iconColor: '#8b5cf6' },
+    Proposta: { dot: '#ff4d00', iconBg: '#fff3ee', iconColor: '#ff4d00' },
+    Ganho: { dot: '#10b981', iconBg: '#ecfdf5', iconColor: '#10b981' },
+    Perdido: { dot: '#ef4444', iconBg: '#fff1f2', iconColor: '#ef4444' },
+}
+
+const PipelineColumn = ({ id, title, icon: Icon, leads, onCardClick }) => { // eslint-disable-line no-unused-vars
+    const { setNodeRef, isOver } = useDroppable({ id })
+    const accent = ACCENTS[id] || ACCENTS.Frio
+    const totalProposal = leads.reduce((sum, l) => sum + (parseFloat(l.proposal_value) || 0), 0)
+
+    return (
+        <div style={{ display: 'flex', flexDirection: 'column', width: '280px', minWidth: '280px', flexShrink: 0 }}>
+            {/* Header */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', background: '#fff', borderRadius: '8px 8px 0 0', border: '1px solid #e5e7eb', borderBottom: 'none', borderLeft: `3px solid ${accent.dot}` }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <div style={{ width: 26, height: 26, borderRadius: '6px', background: accent.iconBg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <Icon size={13} style={{ color: accent.iconColor }} />
+                    </div>
+                    <span style={{ fontSize: '13px', fontWeight: 700, color: '#111827' }}>{title}</span>
+                    <span style={{ fontSize: '11px', fontWeight: 600, padding: '1px 8px', borderRadius: '999px', background: '#f3f4f6', color: '#6b7280' }}>{leads.length}</span>
+                </div>
+                {totalProposal > 0 && (
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '2px', fontSize: '11px', fontWeight: 700, color: '#10b981' }}>
+                        <DollarSign size={10} /> {totalProposal.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}
+                    </span>
+                )}
+            </div>
+
+            {/* Drop zone */}
+            <div
+                ref={setNodeRef}
+                style={{
+                    flex: 1, overflowY: 'auto', padding: '6px', display: 'flex', flexDirection: 'column', gap: '6px',
+                    borderRadius: '0 0 8px 8px', border: '1px solid #e5e7eb', borderTop: 'none',
+                    borderLeft: isOver ? `3px solid ${accent.dot}` : '1px solid #e5e7eb',
+                    background: isOver ? accent.iconBg : '#f9fafb',
+                    minHeight: '120px', maxHeight: 'calc(100vh - 320px)',
+                    transition: 'all 0.15s', scrollbarWidth: 'thin', scrollbarColor: '#d1d5db transparent',
+                }}
+            >
+                <SortableContext items={leads.map(l => l.id)} strategy={verticalListSortingStrategy}>
+                    {leads.map(lead => <PipelineLeadCard key={lead.id} lead={lead} onClick={onCardClick} />)}
+                </SortableContext>
+                {leads.length === 0 && (
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '60px', fontSize: '12px', color: '#d1d5db' }}>Arraste leads aqui</div>
+                )}
+            </div>
+        </div>
+    )
+}
+
+export default PipelineColumn
+
+```
+
+## File: src\components\pipeline\PipelineKanbanBoard.jsx
+```javascript
+import React, { useState, useCallback } from 'react'
+import {
+    DndContext,
+    DragOverlay,
+    PointerSensor,
+    useSensor,
+    useSensors,
+    closestCorners,
+} from '@dnd-kit/core'
+import { Snowflake, Zap, Target, Calendar, FileText, Trophy, XCircle } from 'lucide-react'
+import PipelineColumn from './PipelineColumn'
+import PipelineLeadCard from './PipelineLeadCard'
+import { supabase } from '../../services/supabaseClient'
+
+const STAGES = [
+    { id: 'Frio', title: 'Frio', icon: Snowflake },
+    { id: 'Engajado', title: 'Engajado', icon: Zap },
+    { id: 'Qualificado', title: 'Qualificado', icon: Target },
+    { id: 'Agendado', title: 'Agendado', icon: Calendar },
+    { id: 'Proposta', title: 'Proposta', icon: FileText },
+    { id: 'Ganho', title: 'Ganho', icon: Trophy },
+    { id: 'Perdido', title: 'Perdido', icon: XCircle },
+]
+
+const PipelineKanbanBoard = ({ leads, setLeads, onCardClick }) => {
+    const [activeId, setActiveId] = useState(null)
+
+    const sensors = useSensors(
+        useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
+    )
+
+    const leadsById = Object.fromEntries(leads.map(l => [l.id, l]))
+    const activeLead = activeId ? leadsById[activeId] : null
+
+    const groupedLeads = {}
+    STAGES.forEach(s => { groupedLeads[s.id] = [] })
+    leads.forEach(lead => {
+        const stage = lead.crm_stage || 'Frio'
+        if (groupedLeads[stage]) groupedLeads[stage].push(lead)
+        else groupedLeads['Frio'].push(lead)
+    })
+
+    const findStageByLeadId = useCallback((leadId) => {
+        for (const lead of leads) {
+            if (lead.id === leadId) return lead.crm_stage || 'Frio'
+        }
+        return null
+    }, [leads])
+
+    const handleDragStart = useCallback((event) => {
+        setActiveId(event.active.id)
+    }, [])
+
+    const handleDragOver = useCallback((event) => {
+        const { active, over } = event
+        if (!over) return
+        const activeLeadId = active.id
+        const overId = over.id
+        const sourceStage = findStageByLeadId(activeLeadId)
+        const targetStage = STAGES.find(s => s.id === overId) ? overId : findStageByLeadId(overId)
+        if (!sourceStage || !targetStage || sourceStage === targetStage) return
+        setLeads(prev => prev.map(l => l.id === activeLeadId ? { ...l, crm_stage: targetStage } : l))
+    }, [setLeads, findStageByLeadId])
+
+    const handleDragEnd = useCallback(async (event) => {
+        const { active } = event
+        const leadId = active.id
+        const lead = leads.find(l => l.id === leadId)
+        setActiveId(null)
+        if (!lead) return
+        try {
+            await supabase.from('leads').update({ crm_stage: lead.crm_stage }).eq('id', leadId)
+        } catch (err) {
+            console.error('[Pipeline] Error updating crm_stage:', err)
+        }
+    }, [leads])
+
+    return (
+        <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={handleDragStart} onDragOver={handleDragOver} onDragEnd={handleDragEnd}>
+            <div style={{ display: 'flex', gap: '10px', overflowX: 'auto', paddingBottom: '10px', height: '100%', scrollbarWidth: 'thin', scrollbarColor: '#e5e7eb transparent' }}>
+                {STAGES.map(stage => (
+                    <PipelineColumn
+                        key={stage.id}
+                        id={stage.id}
+                        title={stage.title}
+                        icon={stage.icon}
+                        leads={groupedLeads[stage.id]}
+                        onCardClick={onCardClick}
+                    />
+                ))}
+            </div>
+            <DragOverlay>
+                {activeLead ? (
+                    <div style={{ transform: 'rotate(2deg) scale(1.03)', boxShadow: '0 8px 24px rgba(0,0,0,0.15)', borderRadius: '8px' }}>
+                        <PipelineLeadCard lead={activeLead} />
+                    </div>
+                ) : null}
+            </DragOverlay>
+        </DndContext>
+    )
+}
+
+export default PipelineKanbanBoard
+
+```
+
+## File: src\components\pipeline\PipelineKanbanFilters.jsx
+```javascript
+import React from 'react'
+import { Search, Star, DollarSign } from 'lucide-react'
+
+const btn = (active) => ({
+    padding: '5px 11px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, lineHeight: 1,
+    border: active ? '1.5px solid #ff4d00' : '1px solid #d1d5db',
+    background: active ? '#fff3ee' : '#fff', color: active ? '#ff4d00' : '#6b7280', cursor: 'pointer',
+})
+
+const PipelineKanbanFilters = ({ filters, setFilters }) => {
+    return (
+        <div className="flex flex-wrap items-center gap-3" style={{ padding: '10px 16px', background: '#fff', border: '1px solid #e5e7eb', borderRadius: '10px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+            {/* Search */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: '6px', padding: '4px 10px', minWidth: '200px' }}>
+                <Search size={14} style={{ color: '#9ca3af' }} />
+                <input
+                    type="text"
+                    placeholder="Buscar por nome..."
+                    value={filters.search || ''}
+                    onChange={e => setFilters(p => ({ ...p, search: e.target.value }))}
+                    style={{ border: 'none', background: 'transparent', outline: 'none', fontSize: '13px', color: '#111827', width: '100%', padding: '2px 0', fontFamily: 'inherit' }}
+                />
+            </div>
+
+            <div style={{ width: '1px', height: '22px', background: '#e5e7eb', flexShrink: 0 }} />
+
+            {/* Tier filter */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <Star size={13} style={{ color: '#f59e0b' }} />
+                <span style={{ fontSize: '11px', color: '#9ca3af', fontWeight: 600, textTransform: 'uppercase' }}>Tier:</span>
+                {[1, 2, 3, 4, 5].map(t => (
+                    <button
+                        key={t}
+                        onClick={() => setFilters(p => ({ ...p, tier: p.tier === t ? null : t }))}
+                        style={btn(filters.tier === t)}
+                    >
+                        {t}★
+                    </button>
+                ))}
+            </div>
+
+            <div style={{ width: '1px', height: '22px', background: '#e5e7eb', flexShrink: 0 }} />
+
+            {/* Proposal toggle */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <DollarSign size={13} style={{ color: '#10b981' }} />
+                <button
+                    onClick={() => setFilters(p => ({ ...p, hasProposal: !p.hasProposal }))}
+                    style={btn(filters.hasProposal)}
+                >
+                    Com proposta
+                </button>
+            </div>
+        </div>
+    )
+}
+
+export default PipelineKanbanFilters
+
+```
+
+## File: src\components\pipeline\PipelineLeadCard.jsx
+```javascript
+import React from 'react'
+import { useSortable } from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
+import { Star, DollarSign, MessageSquare } from 'lucide-react'
+
+const ICP_STYLES = {
+    A: { background: '#ecfdf5', color: '#059669', border: '1px solid #a7f3d0' },
+    B: { background: '#fffbeb', color: '#d97706', border: '1px solid #fde68a' },
+    C: { background: '#f9fafb', color: '#6b7280', border: '1px solid #e5e7eb' },
+}
+
+const PipelineLeadCard = ({ lead, onClick }) => {
+    const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: lead.id })
+
+    const style = {
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.5 : 1,
+        zIndex: isDragging ? 50 : 'auto',
+    }
+
+    const proposalValue = parseFloat(lead.proposal_value) || 0
+    const interactionCount = lead.total_interactions_count || 0
+    const icpScore = lead.icp_score || 'C'
+    const cadenceStage = lead.cadence_stage || ''
+    const icp = ICP_STYLES[icpScore] || ICP_STYLES.C
+    const tier = lead.tier || 0
+
+    const handleClick = () => {
+        if (isDragging) return
+        if (onClick) onClick(lead)
+    }
+
+    return (
+        <div
+            ref={setNodeRef}
+            style={{
+                ...style,
+                background: '#fff',
+                border: isDragging ? '1.5px solid #ff4d00' : '1px solid #e5e7eb',
+                borderRadius: '8px',
+                padding: '10px 12px',
+                cursor: 'grab',
+                boxShadow: isDragging ? '0 4px 16px rgba(0,0,0,0.12)' : '0 1px 3px rgba(0,0,0,0.05)',
+            }}
+            onMouseEnter={e => { if (!isDragging) e.currentTarget.style.borderColor = '#d1d5db' }}
+            onMouseLeave={e => { if (!isDragging) e.currentTarget.style.borderColor = '#e5e7eb' }}
+            {...attributes}
+            {...listeners}
+            onClick={handleClick}
+        >
+            {/* Name + Empresa */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                <div style={{ width: 30, height: 30, borderRadius: '50%', background: '#f3f4f6', border: '1px solid #e5e7eb', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', flexShrink: 0, fontSize: '11px', fontWeight: 700, color: '#6b7280' }}>
+                    {lead.avatar_url ? <img src={lead.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : lead.nome?.charAt(0)?.toUpperCase() || '?'}
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ fontSize: '13px', fontWeight: 600, color: '#111827', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{lead.nome || 'Sem Nome'}</p>
+                    {lead.empresa && <p style={{ fontSize: '11px', color: '#9ca3af', margin: '1px 0 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{lead.empresa}</p>}
+                </div>
+            </div>
+
+            {/* Tags row */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '5px', flexWrap: 'wrap' }}>
+                <span title={lead.icp_reason || ''} style={{ fontSize: '10px', fontWeight: 700, padding: '2px 6px', borderRadius: '4px', cursor: lead.icp_reason ? 'help' : 'default', ...icp }}>ICP {icpScore}</span>
+
+                {cadenceStage && (
+                    <span title={lead.stage_reasoning || ''} style={{ fontSize: '10px', fontWeight: 700, padding: '2px 6px', borderRadius: '4px', cursor: lead.stage_reasoning ? 'help' : 'default', background: '#eff6ff', color: '#2563eb', border: '1px solid #bfdbfe' }}>{cadenceStage}</span>
+                )}
+
+                {tier > 0 && (
+                    <span style={{ display: 'flex', gap: '1px' }}>
+                        {[1, 2, 3, 4, 5].map(i => <Star key={i} size={10} style={i <= tier ? { color: '#f59e0b', fill: '#f59e0b' } : { color: '#e5e7eb', fill: '#e5e7eb' }} />)}
+                    </span>
+                )}
+
+                {proposalValue > 0 && (
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '2px', fontSize: '10px', fontWeight: 700, color: '#059669' }}>
+                        <DollarSign size={10} /> {proposalValue.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}
+                    </span>
+                )}
+
+                {interactionCount > 0 && (
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '2px', fontSize: '10px', color: '#9ca3af' }}>
+                        <MessageSquare size={9} /> {interactionCount}
+                    </span>
+                )}
+
+                {lead.has_engaged && (
+                    <span style={{ fontSize: '9px', fontWeight: 700, padding: '1px 5px', borderRadius: '4px', background: '#fff3ee', color: '#ff4d00', border: '1px solid #ffd4c2' }}>Resp.</span>
+                )}
+            </div>
+        </div>
+    )
+}
+
+export default PipelineLeadCard
+
+```
+
+## File: src\components\pipeline\PipelineTable.jsx
+```javascript
+import React, { useState, useMemo } from 'react'
+import { ChevronUp, ChevronDown, ChevronsUpDown, ArrowRightToLine, CheckSquare, Square, MinusSquare } from 'lucide-react'
+
+const PAGE_SIZE = 50
+
+const TH = { fontSize: '11px', fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em', padding: '10px 12px', borderBottom: '2px solid #e5e7eb', background: '#f9fafb', whiteSpace: 'nowrap', cursor: 'pointer', userSelect: 'none', position: 'sticky', top: 0, zIndex: 2 }
+const TD = { fontSize: '13px', color: '#111827', padding: '10px 12px', borderBottom: '1px solid #f3f4f6', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '200px' }
+const ICP_BG = { A: '#ecfdf5', B: '#fffbeb', C: '#f3f4f6' }
+const ICP_COLOR = { A: '#059669', B: '#d97706', C: '#6b7280' }
+
+// Custom sort value mappers — return a numeric rank so sort is meaningful
+const ICP_RANK = { A: 0, B: 1, C: 2 }          // asc → A first (best first)
+const CAD_RANK = { G1: 1, G2: 2, G3: 3, G4: 4, G5: 5 } // desc → G5 first (most advanced first)
+
+const getSortValue = (lead, field) => {
+    if (field === 'icp_score') return ICP_RANK[lead.icp_score] ?? 99
+    if (field === 'cadence_stage') return CAD_RANK[lead.cadence_stage] ?? 0
+    if (field === 'total_interactions_count') return lead.total_interactions_count ?? 0
+    const v = lead[field]
+    if (v == null) return ''
+    if (typeof v === 'string') return v.toLowerCase()
+    return v
+}
+
+const SortIcon = ({ field, sortField, sortDir }) => {
+    if (sortField !== field) return <ChevronsUpDown size={12} style={{ color: '#d1d5db' }} />
+    return sortDir === 'asc' ? <ChevronUp size={12} style={{ color: '#ff4d00' }} /> : <ChevronDown size={12} style={{ color: '#ff4d00' }} />
+}
+
+const PipelineTable = ({ leads, onOpenLead, onMoveToFunnel }) => {
+    const [selected, setSelected] = useState(new Set())
+    const [sortField, setSortField] = useState('nome')
+    const [sortDir, setSortDir] = useState('asc')
+    const [page, setPage] = useState(0)
+
+    // Columns — defaultDir controls direction on FIRST click
+    const columns = [
+        { key: 'nome', label: 'Nome', w: '180px', defaultDir: 'asc' },
+        { key: 'empresa', label: 'Empresa', w: '150px', defaultDir: 'asc' },
+        { key: 'icp_score', label: 'ICP', w: '60px', defaultDir: 'asc' }, // A first
+        { key: 'cadence_stage', label: 'Cadência', w: '80px', defaultDir: 'desc' }, // G5 first
+        { key: 'total_interactions_count', label: 'Interações', w: '90px', defaultDir: 'desc' }, // highest first
+        { key: 'has_engaged', label: 'Engajou?', w: '80px', defaultDir: 'desc' },
+        { key: 'tier', label: 'Tier', w: '50px', defaultDir: 'desc' },
+        { key: 'proposal_value', label: 'Proposta', w: '100px', defaultDir: 'desc' },
+        { key: 'crm_stage', label: 'Stage', w: '90px', defaultDir: 'asc' },
+    ]
+
+    const toggleSort = (field) => {
+        if (sortField === field) {
+            setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+        } else {
+            const col = columns.find(c => c.key === field)
+            setSortField(field)
+            setSortDir(col?.defaultDir || 'asc')
+        }
+        setPage(0)
+    }
+
+    const sorted = useMemo(() => {
+        // Deduplicate by ID (paginated fetch may produce overlapping rows)
+        const unique = [...new Map(leads.map(l => [l.id, l])).values()]
+        unique.sort((a, b) => {
+            const va = getSortValue(a, sortField)
+            const vb = getSortValue(b, sortField)
+            if (va < vb) return sortDir === 'asc' ? -1 : 1
+            if (va > vb) return sortDir === 'asc' ? 1 : -1
+            return 0
+        })
+        return unique
+    }, [leads, sortField, sortDir])
+
+    const totalPages = Math.ceil(sorted.length / PAGE_SIZE)
+    const pageLeads = sorted.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
+
+    const allOnPageSelected = pageLeads.length > 0 && pageLeads.every(l => selected.has(l.id))
+    const someOnPageSelected = pageLeads.some(l => selected.has(l.id))
+
+    const toggleAll = () => {
+        if (allOnPageSelected) {
+            setSelected(prev => { const n = new Set(prev); pageLeads.forEach(l => n.delete(l.id)); return n })
+        } else {
+            setSelected(prev => { const n = new Set(prev); pageLeads.forEach(l => n.add(l.id)); return n })
+        }
+    }
+
+    const toggleOne = (id) => {
+        setSelected(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })
+    }
+
+    const handleMoveToFunnel = () => {
+        if (selected.size === 0) return
+        onMoveToFunnel([...selected])
+        setSelected(new Set())
+    }
+
+    return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', flex: 1, minHeight: 0 }}>
+            {/* Bulk action bar */}
+            {selected.size > 0 && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '8px 16px', background: '#fff3ee', border: '1px solid #ffd4c2', borderRadius: '8px' }}>
+                    <span style={{ fontSize: '13px', fontWeight: 600, color: '#111827' }}>
+                        {selected.size} lead{selected.size > 1 ? 's' : ''} selecionado{selected.size > 1 ? 's' : ''}
+                    </span>
+                    <button
+                        onClick={handleMoveToFunnel}
+                        style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 14px', borderRadius: '6px', fontSize: '12px', fontWeight: 700, background: '#ff4d00', color: '#fff', border: 'none', cursor: 'pointer' }}
+                    >
+                        <ArrowRightToLine size={14} /> Mover para o Funil
+                    </button>
+                </div>
+            )}
+
+            {/* Table */}
+            <div style={{ flex: 1, overflow: 'auto', borderRadius: '8px', border: '1px solid #e5e7eb', background: '#fff' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                    <thead>
+                        <tr>
+                            <th style={{ ...TH, width: '40px', cursor: 'default' }} onClick={toggleAll}>
+                                {allOnPageSelected ? <CheckSquare size={16} style={{ color: '#ff4d00' }} /> : someOnPageSelected ? <MinusSquare size={16} style={{ color: '#ff4d00' }} /> : <Square size={16} style={{ color: '#d1d5db' }} />}
+                            </th>
+                            {columns.map(col => (
+                                <th key={col.key} style={{ ...TH, width: col.w }} onClick={() => toggleSort(col.key)}>
+                                    <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                        {col.label} <SortIcon field={col.key} sortField={sortField} sortDir={sortDir} />
+                                    </span>
+                                </th>
+                            ))}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {pageLeads.map(lead => {
+                            const isSelected = selected.has(lead.id)
+                            return (
+                                <tr
+                                    key={lead.id}
+                                    style={{ cursor: 'pointer', transition: 'background 0.1s', background: isSelected ? '#fff7f3' : '#fff' }}
+                                    onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = '#fafafa' }}
+                                    onMouseLeave={e => { e.currentTarget.style.background = isSelected ? '#fff7f3' : '#fff' }}
+                                >
+                                    <td style={{ ...TD, width: '40px' }} onClick={() => toggleOne(lead.id)}>
+                                        {isSelected ? <CheckSquare size={16} style={{ color: '#ff4d00' }} /> : <Square size={16} style={{ color: '#d1d5db' }} />}
+                                    </td>
+                                    <td style={{ ...TD, fontWeight: 600, color: '#111827', cursor: 'pointer' }} onClick={() => onOpenLead(lead)}>
+                                        {lead.nome || '—'}
+                                    </td>
+                                    <td style={{ ...TD, color: '#6b7280' }} onClick={() => onOpenLead(lead)}>{lead.empresa || '—'}</td>
+                                    <td style={TD} onClick={() => onOpenLead(lead)}>
+                                        <span title={lead.icp_reason || ''} style={{ fontSize: '10px', fontWeight: 700, padding: '2px 7px', borderRadius: '4px', background: ICP_BG[lead.icp_score] || '#f3f4f6', color: ICP_COLOR[lead.icp_score] || '#6b7280', border: '1px solid transparent', cursor: lead.icp_reason ? 'help' : 'default' }}>
+                                            {lead.icp_score || '—'}
+                                        </span>
+                                    </td>
+                                    <td style={{ ...TD, color: '#6b7280' }} onClick={() => onOpenLead(lead)} title={lead.stage_reasoning || ''}>{lead.cadence_stage || '—'}</td>
+                                    <td style={{ ...TD, textAlign: 'center' }} onClick={() => onOpenLead(lead)}>{lead.total_interactions_count || 0}</td>
+                                    <td style={{ ...TD, textAlign: 'center' }} onClick={() => onOpenLead(lead)}>
+                                        {lead.has_engaged ? <span style={{ color: '#059669', fontWeight: 700, fontSize: '11px' }}>Sim</span> : <span style={{ color: '#d1d5db', fontSize: '11px' }}>Não</span>}
+                                    </td>
+                                    <td style={{ ...TD, textAlign: 'center' }} onClick={() => onOpenLead(lead)}>{lead.tier || '—'}</td>
+                                    <td style={TD} onClick={() => onOpenLead(lead)}>
+                                        {parseFloat(lead.proposal_value) > 0 ? (
+                                            <span style={{ fontSize: '12px', fontWeight: 600, color: '#059669' }}>R$ {parseFloat(lead.proposal_value).toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</span>
+                                        ) : <span style={{ color: '#d1d5db' }}>—</span>}
+                                    </td>
+                                    <td style={TD} onClick={() => onOpenLead(lead)}>
+                                        {lead.crm_stage ? <span style={{ fontSize: '11px', fontWeight: 600, padding: '2px 7px', borderRadius: '4px', background: '#f3f4f6', color: '#374151' }}>{lead.crm_stage}</span> : <span style={{ color: '#d1d5db' }}>—</span>}
+                                    </td>
+                                </tr>
+                            )
+                        })}
+                        {pageLeads.length === 0 && (
+                            <tr><td colSpan={10} style={{ ...TD, textAlign: 'center', color: '#9ca3af', padding: '40px' }}>Nenhum lead encontrado</td></tr>
+                        )}
+                    </tbody>
+                </table>
+            </div>
+
+            {/* Pagination */}
+            {totalPages > 1 && (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 4px' }}>
+                    <span style={{ fontSize: '12px', color: '#9ca3af' }}>
+                        {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, sorted.length)} de {sorted.length}
+                    </span>
+                    <div style={{ display: 'flex', gap: '6px' }}>
+                        <button disabled={page === 0} onClick={() => setPage(p => p - 1)} style={{ padding: '4px 10px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, border: '1px solid #e5e7eb', background: '#fff', color: page === 0 ? '#d1d5db' : '#374151', cursor: page === 0 ? 'default' : 'pointer' }}>Anterior</button>
+                        <button disabled={page >= totalPages - 1} onClick={() => setPage(p => p + 1)} style={{ padding: '4px 10px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, border: '1px solid #e5e7eb', background: '#fff', color: page >= totalPages - 1 ? '#d1d5db' : '#374151', cursor: page >= totalPages - 1 ? 'default' : 'pointer' }}>Próxima</button>
+                    </div>
+                </div>
+            )}
+        </div>
+    )
+}
+
+export default PipelineTable
+
+```
+
+## File: src\components\pipeline\PipelineTableFilters.jsx
+```javascript
+import React from 'react'
+import { Filter, X, Search } from 'lucide-react'
+
+const btn = (active) => ({
+    padding: '5px 11px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, lineHeight: 1,
+    border: active ? '1.5px solid #ff4d00' : '1px solid #d1d5db',
+    background: active ? '#fff3ee' : '#fff', color: active ? '#ff4d00' : '#6b7280', cursor: 'pointer',
+})
+const label = { fontSize: '11px', color: '#9ca3af', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }
+const sep = () => ({ width: '1px', height: '22px', background: '#e5e7eb', flexShrink: 0 })
+const inp = { width: '56px', padding: '5px 8px', fontSize: '12px', borderRadius: '6px', border: '1px solid #d1d5db', background: '#fff', color: '#111827', outline: 'none' }
+
+const PipelineTableFilters = ({ filters, setFilters }) => {
+    const toggle = (key, val) => setFilters(p => {
+        const arr = p[key] || []
+        return { ...p, [key]: arr.includes(val) ? arr.filter(v => v !== val) : [...arr, val] }
+    })
+
+    const hasActive = !!filters.search || filters.icp?.length > 0 || filters.cadence?.length > 0 || filters.engagement !== 'all' || filters.minInteractions > 0 || filters.maxInteractions < 9999 || filters.hasProposal !== 'all'
+    const clear = () => setFilters({ search: '', icp: [], cadence: [], engagement: 'all', minInteractions: 0, maxInteractions: 9999, hasProposal: 'all' })
+
+    return (
+        <div className="flex flex-wrap items-center gap-3" style={{ padding: '10px 16px', background: '#fff', border: '1px solid #e5e7eb', borderRadius: '10px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+            {/* Search */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: '6px', padding: '4px 10px', minWidth: '180px' }}>
+                <Search size={13} style={{ color: '#9ca3af', flexShrink: 0 }} />
+                <input
+                    type="text"
+                    placeholder="Buscar por nome..."
+                    value={filters.search || ''}
+                    onChange={e => setFilters(p => ({ ...p, search: e.target.value }))}
+                    style={{ border: 'none', background: 'transparent', outline: 'none', fontSize: '13px', color: '#111827', width: '100%', fontFamily: 'inherit' }}
+                />
+            </div>
+            <div style={sep()} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#9ca3af' }}><Filter size={13} /><span style={label}>Filtros</span></div>
+            <div style={sep()} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span style={label}>ICP:</span>
+                {['A', 'B', 'C'].map(v => <button key={v} onClick={() => toggle('icp', v)} style={btn(filters.icp?.includes(v))}>{v}</button>)}
+            </div>
+            <div style={sep()} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span style={label}>Cadência:</span>
+                {['G1', 'G2', 'G3', 'G4', 'G5'].map(v => <button key={v} onClick={() => toggle('cadence', v)} style={btn(filters.cadence?.includes(v))}>{v}</button>)}
+            </div>
+            <div style={sep()} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span style={label}>Engajamento:</span>
+                {[{ v: 'all', l: 'Todos' }, { v: 'engaged', l: 'Respondeu' }, { v: 'ignored', l: 'Ignorou' }].map(o => <button key={o.v} onClick={() => setFilters(p => ({ ...p, engagement: o.v }))} style={btn(filters.engagement === o.v)}>{o.l}</button>)}
+            </div>
+            <div style={sep()} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span style={label}>Proposta:</span>
+                {[{ v: 'all', l: 'Todas' }, { v: 'with', l: 'Com' }, { v: 'without', l: 'Sem' }].map(o => <button key={o.v} onClick={() => setFilters(p => ({ ...p, hasProposal: o.v }))} style={btn(filters.hasProposal === o.v)}>{o.l}</button>)}
+            </div>
+            <div style={sep()} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span style={label}>Interações:</span>
+                <input type="number" min="0" placeholder="Min" value={filters.minInteractions === 0 ? '' : filters.minInteractions} onChange={e => setFilters(p => ({ ...p, minInteractions: parseInt(e.target.value) || 0 }))} style={inp} />
+                <span style={{ color: '#d1d5db', fontSize: '12px' }}>—</span>
+                <input type="number" min="0" placeholder="Max" value={filters.maxInteractions >= 9999 ? '' : filters.maxInteractions} onChange={e => setFilters(p => ({ ...p, maxInteractions: parseInt(e.target.value) || 9999 }))} style={inp} />
+            </div>
+            {hasActive && (<><div style={sep()} /><button onClick={clear} style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '5px 11px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, background: '#fff1f2', border: '1px solid #fecaca', color: '#ef4444', cursor: 'pointer' }}><X size={12} /> Limpar</button></>)}
+        </div>
+    )
+}
+
+export default PipelineTableFilters
 
 ```
 
@@ -29028,7 +29944,7 @@ const NetworkDashboard = () => {
 
     // Data Table State
     const [selectedLeads, setSelectedLeads] = useState(new Set())
-    const [sortConfig, setSortConfig] = useState({ key: 'added_at', direction: 'desc' })
+    const [sortConfig, setSortConfig] = useState({ key: 'created_at', direction: 'desc' })
     const [filters, setFilters] = useState({
         status: [],
         qualification: [],
@@ -29194,29 +30110,10 @@ const NetworkDashboard = () => {
     const fetchTotalMessages = async () => {
         if (!selectedClientId) return
         try {
-            // 1. Get lead IDs that belong to this client
-            const { data: campaignLeadIds, error: clError } = await supabase
-                .from('campaign_leads')
-                .select('id')
-                .eq('client_id', selectedClientId) // Multi-tenant guard
-
-            if (clError) throw clError
-            if (!campaignLeadIds || campaignLeadIds.length === 0) {
-                setTotalMessages(0)
-                return
-            }
-
-            const leadIds = campaignLeadIds.map(cl => cl.id).filter(Boolean)
-            if (leadIds.length === 0) {
-                setTotalMessages(0)
-                return
-            }
-
-            // 2. Count interactions only for these leads
             const { count, error } = await supabase
                 .from('interactions')
                 .select('*', { count: 'exact', head: true })
-                .in('lead_id', leadIds)
+                .eq('client_id', selectedClientId)
 
             if (error) throw error
             setTotalMessages(count || 0)
@@ -29229,30 +30126,10 @@ const NetworkDashboard = () => {
     const fetchTopLeads = async () => {
         if (!selectedClientId) return
         try {
-            // 1. Get lead IDs that belong to this client
-            const { data: campaignLeadIds, error: clError } = await supabase
-                .from('campaign_leads')
-                .select('id')
-                .eq('client_id', selectedClientId) // Multi-tenant guard
-
-            if (clError) throw clError
-            if (!campaignLeadIds || campaignLeadIds.length === 0) {
-                setTopLeads([])
-                return
-            }
-
-            const leadIds = campaignLeadIds.map(cl => cl.id).filter(Boolean)
-            if (leadIds.length === 0) {
-                setTopLeads([])
-                return
-            }
-
-            // 2. Fetch top leads only from this client
             const { data, error } = await supabase
                 .from('leads')
                 .select('id, nome, avatar_url, total_interactions_count, empresa')
-                .in('id', leadIds)
-                .eq('client_id', selectedClientId) // Double check
+                .eq('client_id', selectedClientId)
                 .gt('total_interactions_count', 0)
                 .order('total_interactions_count', { ascending: false })
                 .limit(5)
@@ -29264,7 +30141,7 @@ const NetworkDashboard = () => {
         }
     }
 
-    // SIMPLIFIED FETCH: Query campaign_leads view directly (flat structure)
+    // SIMPLIFIED FETCH: Query leads directly
     const fetchLeads = async (pageIndex = 0, isRefresh = false) => {
         if (!selectedClientId) return
 
@@ -29275,42 +30152,38 @@ const NetworkDashboard = () => {
             const from = pageIndex * ITEMS_per_PAGE
             const to = from + ITEMS_per_PAGE - 1
 
-            // Multi-tenant isolation: client_id only (no campaign_id)
+            // Multi-tenant isolation: client_id directly on leads
             let query = supabase
-                .from('campaign_leads')
+                .from('leads')
                 .select('*', { count: 'exact' })
-                .eq('client_id', selectedClientId) // Multi-tenant guard
+                .eq('client_id', selectedClientId)
                 .range(from, to)
 
-            // FIXED: Direct sorting (no foreignTable needed)
+            // Direct sorting
             if (sortConfig.key) {
                 query = query.order(sortConfig.key, { ascending: sortConfig.direction === 'asc' })
             } else {
-                query = query.order('added_at', { ascending: false })
+                query = query.order('created_at', { ascending: false })
             }
 
-            // FIXED: Direct search on view columns
+            // Direct search
             if (debouncedSearch) {
                 query = query.or(`nome.ilike.%${debouncedSearch}%,empresa.ilike.%${debouncedSearch}%,headline.ilike.%${debouncedSearch}%`)
             }
 
-            // FIXED: Direct filters on view columns
-            if (filters.status.length > 0) {
-                console.log('[Filter] Applying status filter:', filters.status)
-                query = query.in('status_pipeline', filters.status)
-            }
+            // Direct filters
+            // if (filters.status.length > 0) {
+            //     query = query.in('status_pipeline', filters.status)
+            // }
 
             if (filters.qualification.length > 0) {
-                console.log('[Filter] Applying qualification filter:', filters.qualification)
                 query = query.in('icp_score', filters.qualification)
             }
 
             if (filters.hasMessages === 'yes') {
-                console.log('[Filter] Applying hasMessages filter: with messages')
-                query = query.gt('total_interactions', 0)
+                query = query.gt('total_interactions_count', 0)
             } else if (filters.hasMessages === 'no') {
-                console.log('[Filter] Applying hasMessages filter: no messages')
-                query = query.eq('total_interactions', 0)
+                query = query.eq('total_interactions_count', 0)
             }
 
             const { data, error, count } = await query
@@ -30261,32 +31134,7 @@ const NetworkDashboard = () => {
                             )}
 
 
-                            <div className="flex flex-col items-end gap-1">
-                                {clientSyncTimestamp && !syncLoading && (
-                                    <div className="text-[10px] text-slate-500 flex items-center gap-1 mb-1">
-                                        <Clock size={10} />
-                                        <span>
-                                            Última sync: {new Date(clientSyncTimestamp).toLocaleString('pt-BR', {
-                                                day: '2-digit',
-                                                month: '2-digit',
-                                                hour: '2-digit',
-                                                minute: '2-digit'
-                                            })}
-                                        </span>
-                                    </div>
-                                )}
-                                <button
-                                    onClick={handleSyncMessages}
-                                    disabled={syncLoading}
-                                    className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-semibold text-sm transition-all ${syncLoading
-                                        ? 'bg-blue-50 text-blue-400 cursor-not-allowed'
-                                        : 'bg-blue-50 text-blue-600 hover:bg-blue-100 hover:text-blue-700 border border-blue-200'
-                                        }`}
-                                >
-                                    <RefreshCw size={16} className={syncLoading ? "animate-spin" : ""} />
-                                    {syncLoading ? 'Sincronizando...' : 'Sync Mensagens'}
-                                </button>
-                            </div>
+
 
 
                             <div className="flex flex-col items-end gap-1">
@@ -30470,11 +31318,11 @@ const NetworkDashboard = () => {
 
                                         <th
                                             className="py-4 px-4 w-[30%] cursor-pointer hover:bg-slate-100 transition-colors group"
-                                            onClick={() => handleSort('nome')}
+                                            onClick={() => handleSort('created_at')}
                                         >
                                             <div className="flex items-center gap-1">
-                                                Lead
-                                                <ArrowUpDown size={12} className={`text-slate-400 ${sortConfig.key === 'nome' ? 'opacity-100 text-orange-500' : 'opacity-0 group-hover:opacity-100'}`} />
+                                                Adicionado Em
+                                                <ArrowUpDown size={12} className={`text-slate-400 ${sortConfig.key === 'created_at' ? 'opacity-100 text-orange-500' : 'opacity-0 group-hover:opacity-100'}`} />
                                             </div>
                                         </th>
 
@@ -30512,11 +31360,11 @@ const NetworkDashboard = () => {
 
                                         <th
                                             className="py-4 px-4 w-[10%] text-center cursor-pointer hover:bg-slate-100 transition-colors group"
-                                            onClick={() => handleSort('total_interactions')}
+                                            onClick={() => handleSort('total_interactions_count')}
                                         >
                                             <div className="flex items-center justify-center gap-1">
                                                 Engagement
-                                                <ArrowUpDown size={12} className={`text-slate-400 ${sortConfig.key === 'total_interactions' ? 'opacity-100 text-orange-500' : 'opacity-0 group-hover:opacity-100'}`} />
+                                                <ArrowUpDown size={12} className={`text-slate-400 ${sortConfig.key === 'total_interactions_count' ? 'opacity-100 text-orange-500' : 'opacity-0 group-hover:opacity-100'}`} />
                                             </div>
                                         </th>
 
@@ -30545,7 +31393,7 @@ const NetworkDashboard = () => {
                                         console.log(`[Render ${index + 1}] Using lead data:`, lead)
 
                                         const campaignStatus = item.status_pipeline
-                                        const totalInteractions = lead.total_interactions || 0
+                                        const totalInteractions = lead.total_interactions_count || 0
 
                                         // Dynamic Status based on interactions
                                         let statusLabel = 'A Contatar'
@@ -30613,7 +31461,7 @@ const NetworkDashboard = () => {
                                                 {/* ENGAGEMENT HEAT INDICATOR */}
                                                 <td className="py-3 px-4">
                                                     {(() => {
-                                                        const count = lead.total_interactions || 0
+                                                        const count = lead.total_interactions_count || 0
                                                         const sentiment = lead.last_sentiment
 
                                                         // Determine heat level based on sentiment
@@ -30964,6 +31812,231 @@ const NetworkDashboard = () => {
 
 export default NetworkDashboard
 
+
+```
+
+## File: src\pages\PipelinePage.jsx
+```javascript
+import React, { useState, useEffect, useCallback } from 'react'
+import { supabase } from '../services/supabaseClient'
+import { useClientSelection } from '../contexts/ClientSelectionContext'
+import { Kanban, Table2, Loader2, Users } from 'lucide-react'
+import PipelineTable from '../components/pipeline/PipelineTable'
+import PipelineTableFilters from '../components/pipeline/PipelineTableFilters'
+import PipelineKanbanBoard from '../components/pipeline/PipelineKanbanBoard'
+import PipelineKanbanFilters from '../components/pipeline/PipelineKanbanFilters'
+import LeadDetailModal from '../components/pipeline/LeadDetailModal'
+
+const DEFAULT_TABLE_FILTERS = { search: '', icp: [], cadence: [], engagement: 'all', minInteractions: 0, maxInteractions: 9999, hasProposal: 'all' }
+const DEFAULT_KANBAN_FILTERS = { search: '', tier: null, hasProposal: false }
+
+const toggleBtnStyle = (active) => ({
+    display: 'flex', alignItems: 'center', gap: '6px',
+    padding: '7px 14px', borderRadius: '6px', fontSize: '13px', fontWeight: 600, cursor: 'pointer',
+    border: 'none',
+    background: active ? '#ff4d00' : '#fff',
+    color: active ? '#fff' : '#6b7280',
+    boxShadow: active ? '0 1px 4px rgba(255,77,0,0.3)' : 'none',
+    transition: 'all 0.15s',
+})
+
+const PipelinePage = () => {
+    const { selectedClientId } = useClientSelection()
+    const [viewMode, setViewMode] = useState('table')
+    const [allLeads, setAllLeads] = useState([])
+    const [funnelLeads, setFunnelLeads] = useState([])
+    const [loading, setLoading] = useState(false)
+    const [tableFilters, setTableFilters] = useState(DEFAULT_TABLE_FILTERS)
+    const [kanbanFilters, setKanbanFilters] = useState(DEFAULT_KANBAN_FILTERS)
+    const [selectedLead, setSelectedLead] = useState(null)
+
+    // Fetch ALL leads for Table — paginated loop to bypass Supabase 1000-row limit
+    const fetchAllLeads = useCallback(async () => {
+        if (!selectedClientId) return
+        setLoading(true)
+        const BATCH = 1000
+        const SELECT = 'id, nome, empresa, headline, avatar_url, linkedin_profile_url, icp_score, icp_reason, cadence_stage, stage_reasoning, crm_stage, has_engaged, tier, proposal_value, is_blacklisted, total_interactions_count, last_interaction_date, client_id'
+        let all = []
+        let from = 0
+        try {
+            while (true) {
+                const { data, error } = await supabase
+                    .from('leads')
+                    .select(SELECT)
+                    .eq('client_id', selectedClientId)
+                    .neq('is_blacklisted', true)
+                    .order('last_interaction_date', { ascending: false, nullsFirst: false })
+                    .range(from, from + BATCH - 1)
+                if (error) throw error
+                if (!data || data.length === 0) break
+                all = all.concat(data)
+                if (data.length < BATCH) break   // last page reached
+                from += BATCH
+            }
+            setAllLeads(all)
+        } catch (err) {
+            console.error('[Pipeline] Error fetching all leads:', err)
+        } finally {
+            setLoading(false)
+        }
+    }, [selectedClientId])
+
+    // Fetch only FUNNEL leads for Kanban
+    const fetchFunnelLeads = useCallback(async () => {
+        if (!selectedClientId) return
+        try {
+            const { data, error } = await supabase
+                .from('leads')
+                .select('id, nome, empresa, headline, avatar_url, linkedin_profile_url, icp_score, icp_reason, cadence_stage, stage_reasoning, crm_stage, has_engaged, tier, proposal_value, is_blacklisted, total_interactions_count, last_interaction_date, client_id')
+                .eq('client_id', selectedClientId)
+                .neq('is_blacklisted', true)
+                .not('crm_stage', 'is', null)
+                .order('last_interaction_date', { ascending: false, nullsFirst: false })
+            if (error) throw error
+            setFunnelLeads(data || [])
+        } catch (err) {
+            console.error('[Pipeline] Error fetching funnel leads:', err)
+        }
+    }, [selectedClientId])
+
+    useEffect(() => {
+        fetchAllLeads()
+        fetchFunnelLeads()
+    }, [fetchAllLeads, fetchFunnelLeads])
+
+    // Batch move to funnel
+    const handleMoveToFunnel = async (ids) => {
+        try {
+            await supabase.from('leads').update({ crm_stage: 'Frio' }).in('id', ids)
+            fetchAllLeads()
+            fetchFunnelLeads()
+        } catch (err) {
+            console.error('[Pipeline] Error moving to funnel:', err)
+        }
+    }
+
+    // Modal update
+    const handleLeadUpdated = (updatedLead) => {
+        setAllLeads(prev => prev.map(l => l.id === updatedLead.id ? { ...l, ...updatedLead } : l))
+        setFunnelLeads(prev => {
+            const exists = prev.find(l => l.id === updatedLead.id)
+            if (updatedLead.crm_stage) {
+                return exists ? prev.map(l => l.id === updatedLead.id ? { ...l, ...updatedLead } : l) : [...prev, updatedLead]
+            } else {
+                return prev.filter(l => l.id !== updatedLead.id)
+            }
+        })
+        setSelectedLead(prev => prev?.id === updatedLead.id ? { ...prev, ...updatedLead } : prev)
+    }
+
+    // Apply table filters
+    const filteredTableLeads = allLeads.filter(lead => {
+        if (tableFilters.search && !lead.nome?.toLowerCase().includes(tableFilters.search.toLowerCase())) return false
+        if (tableFilters.icp.length > 0 && !tableFilters.icp.includes(lead.icp_score)) return false
+        if (tableFilters.cadence.length > 0 && !tableFilters.cadence.includes(lead.cadence_stage)) return false
+        if (tableFilters.engagement === 'engaged' && !lead.has_engaged) return false
+        if (tableFilters.engagement === 'ignored' && lead.has_engaged) return false
+        const n = lead.total_interactions_count || 0
+        if (n < tableFilters.minInteractions || n > tableFilters.maxInteractions) return false
+        const pv = parseFloat(lead.proposal_value) || 0
+        if (tableFilters.hasProposal === 'with' && pv <= 0) return false
+        if (tableFilters.hasProposal === 'without' && pv > 0) return false
+        return true
+    })
+
+    // Apply kanban filters
+    const filteredKanbanLeads = funnelLeads.filter(lead => {
+        if (kanbanFilters.search && !lead.nome?.toLowerCase().includes(kanbanFilters.search.toLowerCase())) return false
+        if (kanbanFilters.tier && lead.tier !== kanbanFilters.tier) return false
+        if (kanbanFilters.hasProposal && !(parseFloat(lead.proposal_value) > 0)) return false
+        return true
+    })
+
+    if (!selectedClientId) {
+        return (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: 'calc(100vh - 64px)', background: '#f4f5f7', gap: '12px' }}>
+                <div style={{ width: 56, height: 56, borderRadius: '50%', background: '#fff3ee', border: '2px solid #ffd4c2', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Kanban size={24} style={{ color: '#ff4d00' }} />
+                </div>
+                <p style={{ color: '#6b7280', fontSize: '14px' }}>Selecione um cliente para ver o Pipeline.</p>
+            </div>
+        )
+    }
+
+    return (
+        <div style={{ background: '#f4f5f7', minHeight: 'calc(100vh - 64px)', display: 'flex', flexDirection: 'column', padding: '20px', gap: '14px', overflow: 'hidden' }}>
+            {/* Header */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
+                <h1 style={{ fontSize: '20px', fontWeight: 700, color: '#111827', display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
+                    <Kanban size={20} style={{ color: '#ff4d00' }} />
+                    Pipeline de Vendas
+                </h1>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    {/* Toggle */}
+                    <div style={{ display: 'flex', background: '#f3f4f6', borderRadius: '8px', padding: '3px', border: '1px solid #e5e7eb' }}>
+                        <button onClick={() => setViewMode('table')} style={toggleBtnStyle(viewMode === 'table')}>
+                            <Table2 size={15} /> Tabela
+                        </button>
+                        <button onClick={() => setViewMode('kanban')} style={toggleBtnStyle(viewMode === 'kanban')}>
+                            <Kanban size={15} /> Kanban
+                        </button>
+                    </div>
+
+                    {/* Count */}
+                    <span style={{ fontSize: '12px', color: '#9ca3af', background: '#fff', border: '1px solid #e5e7eb', borderRadius: '20px', padding: '4px 12px', fontWeight: 600 }}>
+                        <Users size={12} style={{ display: 'inline', verticalAlign: '-2px', marginRight: '4px' }} />
+                        {viewMode === 'table' ? `${filteredTableLeads.length} leads` : `${filteredKanbanLeads.length} no funil`}
+                    </span>
+                </div>
+            </div>
+
+            {/* Filters */}
+            <div style={{ flexShrink: 0 }}>
+                {viewMode === 'table' ? (
+                    <PipelineTableFilters filters={tableFilters} setFilters={setTableFilters} />
+                ) : (
+                    <PipelineKanbanFilters filters={kanbanFilters} setFilters={setKanbanFilters} />
+                )}
+            </div>
+
+            {/* Content */}
+            {loading ? (
+                <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: '12px' }}>
+                    <Loader2 size={28} className="animate-spin" style={{ color: '#ff4d00' }} />
+                    <span style={{ fontSize: '14px', color: '#9ca3af' }}>Carregando...</span>
+                </div>
+            ) : (
+                <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+                    {viewMode === 'table' ? (
+                        <PipelineTable
+                            leads={filteredTableLeads}
+                            onOpenLead={setSelectedLead}
+                            onMoveToFunnel={handleMoveToFunnel}
+                        />
+                    ) : (
+                        <PipelineKanbanBoard
+                            leads={filteredKanbanLeads}
+                            setLeads={setFunnelLeads}
+                            onCardClick={setSelectedLead}
+                        />
+                    )}
+                </div>
+            )}
+
+            {/* Modal */}
+            {selectedLead && (
+                <LeadDetailModal
+                    lead={selectedLead}
+                    onClose={() => setSelectedLead(null)}
+                    onLeadUpdated={handleLeadUpdated}
+                />
+            )}
+        </div>
+    )
+}
+
+export default PipelinePage
 
 ```
 
@@ -32521,664 +33594,279 @@ export default PostsPage
 
 ## File: src\pages\SalesHubPage.jsx
 ```javascript
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { supabase } from '../services/supabaseClient'
 import { useClientSelection } from '../contexts/ClientSelectionContext'
 import {
-    Search,
-    Filter,
-    MessageCircle,
-    X,
-    Copy,
-    RefreshCw,
-    Loader2,
-    Sparkles,
-    Briefcase,
-    MapPin,
-    Hash,
-    ArrowRight,
-    Users,
-    Zap,
-    Gem,
-    Building2,
-    Globe,
-    Send,
-    CheckCircle2,
-    XCircle,
-    Bot
+    CheckCircle2, Ban, MessageCircle, Loader2, AlertTriangle,
+    Users, Clock, Zap, RefreshCw
 } from 'lucide-react'
 
+// ── helpers ──────────────────────────────────────────────────────────────────
+const ICP_BG = { A: '#ecfdf5', B: '#fffbeb', C: '#f3f4f6' }
+const ICP_COLOR = { A: '#059669', B: '#d97706', C: '#6b7280' }
+const CAD_COLOR = { G1: '#3b82f6', G2: '#3b82f6', G3: '#f59e0b', G4: '#ef4444', G5: '#ef4444' }
+
+const isFollowupDue = (lead) => {
+    if (!lead.last_task_completed_at) return false
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+    return new Date(lead.last_task_completed_at) < sevenDaysAgo && !lead.has_engaged
+}
+
+// ── sub-components ────────────────────────────────────────────────────────────
+// eslint-disable-next-line no-unused-vars
+const KpiCard = ({ icon: Icon, label, value, color }) => (
+    <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: '10px', padding: '16px 20px', display: 'flex', alignItems: 'center', gap: '14px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+        <div style={{ width: 40, height: 40, borderRadius: '8px', background: `${color}18`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <Icon size={18} style={{ color }} />
+        </div>
+        <div>
+            <div style={{ fontSize: '22px', fontWeight: 800, color: '#111827', lineHeight: 1 }}>{value}</div>
+            <div style={{ fontSize: '11px', fontWeight: 600, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.04em', marginTop: '2px' }}>{label}</div>
+        </div>
+    </div>
+)
+
+const LeadRow = ({ lead, onComplete, onBlacklist, onInbox, completing, blacklisting }) => {
+    const followup = isFollowupDue(lead)
+    const isLoading = completing || blacklisting
+
+    return (
+        <div style={{
+            display: 'flex', alignItems: 'center', gap: '14px',
+            padding: '14px 20px',
+            background: '#fff',
+            borderBottom: '1px solid #f3f4f6',
+            opacity: isLoading ? 0.5 : 1,
+            transition: 'opacity 0.2s, background 0.1s',
+        }}
+            onMouseEnter={e => { if (!isLoading) e.currentTarget.style.background = '#fafafa' }}
+            onMouseLeave={e => { e.currentTarget.style.background = '#fff' }}
+        >
+            {/* Avatar */}
+            <div style={{ width: 40, height: 40, borderRadius: '50%', background: '#f3f4f6', border: '1px solid #e5e7eb', overflow: 'hidden', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '15px', fontWeight: 700, color: '#6b7280' }}>
+                {lead.avatar_url
+                    ? <img src={lead.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    : lead.nome?.charAt(0)?.toUpperCase() || '?'}
+            </div>
+
+            {/* Main info */}
+            <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: '14px', fontWeight: 700, color: '#111827' }}>{lead.nome || 'Sem Nome'}</span>
+                    {lead.empresa && <span style={{ fontSize: '12px', color: '#9ca3af' }}>· {lead.empresa}</span>}
+
+                    {/* ICP badge */}
+                    {lead.icp_score && (
+                        <span style={{ fontSize: '10px', fontWeight: 700, padding: '1px 7px', borderRadius: '4px', background: ICP_BG[lead.icp_score] || '#f3f4f6', color: ICP_COLOR[lead.icp_score] || '#6b7280' }}>
+                            ICP {lead.icp_score}
+                        </span>
+                    )}
+
+                    {/* Cadence badge */}
+                    {lead.cadence_stage && (
+                        <span style={{ fontSize: '10px', fontWeight: 700, padding: '1px 7px', borderRadius: '4px', background: '#eff6ff', color: CAD_COLOR[lead.cadence_stage] || '#3b82f6', border: `1px solid ${CAD_COLOR[lead.cadence_stage] || '#3b82f6'}30` }}>
+                            {lead.cadence_stage}
+                        </span>
+                    )}
+
+                    {/* Follow-up tag */}
+                    {followup && (
+                        <span style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '10px', fontWeight: 700, padding: '2px 8px', borderRadius: '4px', background: '#fff3ee', color: '#ff4d00', border: '1px solid #ffd4c2' }}>
+                            <AlertTriangle size={10} /> Follow-up Necessário
+                        </span>
+                    )}
+
+                    {/* Stage */}
+                    {lead.crm_stage && (
+                        <span style={{ fontSize: '10px', fontWeight: 600, padding: '1px 7px', borderRadius: '4px', background: '#f3f4f6', color: '#374151' }}>
+                            {lead.crm_stage}
+                        </span>
+                    )}
+                </div>
+            </div>
+
+            {/* Actions */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+                <button
+                    onClick={() => onInbox(lead.id)}
+                    title="Ir para o Inbox"
+                    style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '6px 12px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, background: '#fff', border: '1px solid #e5e7eb', color: '#374151', cursor: 'pointer' }}
+                    onMouseEnter={e => { e.currentTarget.style.borderColor = '#ff4d00'; e.currentTarget.style.color = '#ff4d00' }}
+                    onMouseLeave={e => { e.currentTarget.style.borderColor = '#e5e7eb'; e.currentTarget.style.color = '#374151' }}
+                >
+                    <MessageCircle size={13} /> Inbox
+                </button>
+
+                <button
+                    onClick={() => onComplete(lead.id)}
+                    disabled={isLoading}
+                    title="Marcar como Concluído"
+                    style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '6px 12px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, background: completing ? '#f0fdf4' : '#fff', border: `1px solid ${completing ? '#86efac' : '#e5e7eb'}`, color: '#059669', cursor: isLoading ? 'default' : 'pointer' }}
+                    onMouseEnter={e => { if (!isLoading) { e.currentTarget.style.background = '#f0fdf4'; e.currentTarget.style.borderColor = '#86efac' } }}
+                    onMouseLeave={e => { if (!isLoading) { e.currentTarget.style.background = '#fff'; e.currentTarget.style.borderColor = '#e5e7eb' } }}
+                >
+                    {completing ? <Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} /> : <CheckCircle2 size={13} />}
+                    Concluído
+                </button>
+
+                <button
+                    onClick={() => onBlacklist(lead.id)}
+                    disabled={isLoading}
+                    title="Mover para Lista Negra"
+                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '32px', height: '32px', borderRadius: '6px', background: '#fff', border: '1px solid #e5e7eb', color: '#9ca3af', cursor: isLoading ? 'default' : 'pointer' }}
+                    onMouseEnter={e => { if (!isLoading) { e.currentTarget.style.background = '#fef2f2'; e.currentTarget.style.borderColor = '#fca5a5'; e.currentTarget.style.color = '#ef4444' } }}
+                    onMouseLeave={e => { if (!isLoading) { e.currentTarget.style.background = '#fff'; e.currentTarget.style.borderColor = '#e5e7eb'; e.currentTarget.style.color = '#9ca3af' } }}
+                >
+                    {blacklisting ? <Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} /> : <Ban size={14} />}
+                </button>
+            </div>
+        </div>
+    )
+}
+
+// ── main page ─────────────────────────────────────────────────────────────────
 const SalesHubPage = () => {
+    const navigate = useNavigate()
     const { selectedClientId } = useClientSelection()
     const [leads, setLeads] = useState([])
     const [loading, setLoading] = useState(false)
-    const [selectedLead, setSelectedLead] = useState(null)
-    const [searchTerm, setSearchTerm] = useState('')
-    const [debouncedSearch, setDebouncedSearch] = useState('')
-    const [stats, setStats] = useState({ total: 0, hot: 0, interactions: 0 })
+    const [actionState, setActionState] = useState({}) // { [id]: 'completing' | 'blacklisting' }
 
-    // Pagination State
-    const [page, setPage] = useState(0)
-    const [hasMore, setHasMore] = useState(true)
-    const [loadingMore, setLoadingMore] = useState(false)
-    const ITEMS_per_PAGE = 50
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
 
-    // Sync Logic State
-    const [syncLoading, setSyncLoading] = useState(false)
-    const [enrichmentLoading, setEnrichmentLoading] = useState(false)
-    const [notification, setNotification] = useState(null)
-
-    // Strategy Logic State
-    const [sendingMessage, setSendingMessage] = useState(false)
-    const [messageDraft, setMessageDraft] = useState('')
-
-    // Debounce Search
-    useEffect(() => {
-        const timer = setTimeout(() => {
-            setDebouncedSearch(searchTerm)
-        }, 500)
-        return () => clearTimeout(timer)
-    }, [searchTerm])
-
-    useEffect(() => {
-        if (selectedLead) {
-            setMessageDraft(selectedLead.suggested_message || '')
-        }
-    }, [selectedLead])
-
-    const handleSync = async () => {
+    const fetchLeads = useCallback(async () => {
         if (!selectedClientId) return
-        setSyncLoading(true)
-
+        setLoading(true)
         try {
-            const response = await fetch('https://n8n-n8n-start.kfocge.easypanel.host/webhook/sync-connections', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ client_id: selectedClientId })
-            })
-
-            if (response.ok) {
-                const result = await response.json()
-
-                let msg
-                if (result.total_leads && result.total_leads > 0) {
-                    msg = `Iniciamos a leitura de ${result.total_leads.toLocaleString()} conexões. O processo levará cerca de ${result.estimated_time_human || 'alguns minutos'}. Você pode continuar usando o sistema normalmente.`
-                } else {
-                    msg = result.message || 'Sincronização iniciada. A atualização aparecerá em breve.'
-                }
-
-                setNotification({ message: msg, type: 'success' })
-            } else {
-                setNotification({ message: `Erro ao iniciar sincronização (${response.status}).`, type: 'error' })
-            }
-        } catch (error) {
-            console.error(error)
-            setNotification({ message: 'Erro de conexão.', type: 'error' })
-        } finally {
-            setSyncLoading(false)
-            setTimeout(() => setNotification(null), 10000)
-        }
-    }
-
-    const handleEnrichment = async (singleLead = null) => {
-        if (!selectedClientId) return
-        setEnrichmentLoading(true)
-
-        let leadsToProcess = []
-
-        if (singleLead) {
-            leadsToProcess = [singleLead]
-            setNotification({ message: `Enviando ${singleLead.nome} para análise...`, type: 'info' })
-        } else {
-            // Filter leads in current view that are not qualified yet
-            leadsToProcess = leads.filter(l => !l.qualification_status)
-            if (leadsToProcess.length === 0) {
-                setNotification({ message: 'Todos os leads desta lista já foram analisados.', type: 'info' })
-                setEnrichmentLoading(false)
-                setTimeout(() => setNotification(null), 3000)
-                return
-            }
-            setNotification({ message: `Enviando ${leadsToProcess.length} leads para análise...`, type: 'info' })
-        }
-
-
-        try {
-            // Loop and send requests
-            let processedCount = 0
-
-            for (const lead of leadsToProcess) {
-                try {
-                    await fetch('https://n8n-n8n-start.kfocge.easypanel.host/webhook-test/qualificacao-cascata', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            id: lead.id,
-                            name: lead.nome,
-                            headline: lead.headline,
-                            summary: lead.summary || '',
-                            company_name: lead.company || lead.empresa || '',
-                            client_id: selectedClientId
-                        })
-                    })
-                    processedCount++
-                } catch (err) {
-                    console.error(`Erro ao enviar lead ${lead.id}`, err)
-                }
-            }
-
-            setNotification({ message: `Processo iniciado! ${processedCount} leads enviados para enriquecimento.`, type: 'success' })
-
-        } catch (error) {
-            console.error(error)
-            setNotification({ message: 'Erro ao conectar com servidor de enriquecimento.', type: 'error' })
-        } finally {
-            setEnrichmentLoading(false)
-            setTimeout(() => setNotification(null), 5000)
-        }
-    }
-
-    const fetchStats = async () => {
-        if (!selectedClientId) return
-
-        try {
-            const { count: totalCount } = await supabase
+            const { data, error } = await supabase
                 .from('leads')
-                .select('*', { count: 'exact', head: true })
+                .select('id, nome, empresa, avatar_url, icp_score, cadence_stage, crm_stage, has_engaged, last_task_completed_at, tier')
                 .eq('client_id', selectedClientId)
-
-            const { count: hotCount } = await supabase
-                .from('leads')
-                .select('*', { count: 'exact', head: true })
-                .eq('client_id', selectedClientId)
-                .eq('icp_score', 'A')
-
-            const sevenDaysAgo = new Date()
-            sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
-
-            const { count: interactionsCount } = await supabase
-                .from('interactions')
-                .select('*, leads!inner(client_id)', { count: 'exact', head: true })
-                .eq('leads.client_id', selectedClientId)
-                .gte('interaction_date', sevenDaysAgo.toISOString())
-
-            setStats({
-                total: totalCount || 0,
-                hot: hotCount || 0,
-                interactions: interactionsCount || 0
-            })
-
-        } catch (error) {
-            console.error('Erro ao buscar KPIs:', error)
-        }
-    }
-
-    useEffect(() => {
-        if (selectedClientId) {
-            setLeads([])
-            setPage(0)
-            setHasMore(true)
-            fetchLeads(0, true)
-            fetchStats()
-        } else {
-            setLeads([])
-            setStats({ total: 0, hot: 0, interactions: 0 })
-        }
-    }, [selectedClientId, debouncedSearch])
-
-    useEffect(() => {
-        if (!selectedClientId) return
-        const channel = supabase.channel('leads-changes')
-            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'leads', filter: `client_id=eq.${selectedClientId}` }, () => {
-                setNotification({ message: 'Novos leads encontrados!', type: 'success' })
-                fetchLeads(0, true)
-                fetchStats()
-            })
-            // Listen for UPDATES too (Enrichment coming back)
-            .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'leads', filter: `client_id=eq.${selectedClientId}` }, () => {
-                // Determine if we should show toast? Maybe too noisy. Just refresh.
-                fetchLeads(0, true)
-                fetchStats()
-            })
-            .subscribe()
-        return () => { supabase.removeChannel(channel) }
-    }, [selectedClientId])
-
-    const fetchLeads = async (pageIndex = 0, isRefresh = false) => {
-        if (!selectedClientId) return
-
-        try {
-            if (pageIndex === 0) setLoading(true)
-            else setLoadingMore(true)
-
-            const from = pageIndex * ITEMS_per_PAGE
-            const to = from + ITEMS_per_PAGE - 1
-
-            let query = supabase
-                .from('leads')
-                .select('*', { count: 'exact' })
-                .eq('client_id', selectedClientId)
-                .range(from, to)
-
-            if (debouncedSearch) {
-                query = query.or(`nome.ilike.%${debouncedSearch}%,company.ilike.%${debouncedSearch}%,empresa.ilike.%${debouncedSearch}%`)
-            }
-
-            const { data, count, error } = await query.order('created_at', { ascending: false })
-
+                .neq('is_blacklisted', true)
+                .neq('crm_stage', 'Ganho')
+                .or(`last_task_completed_at.is.null,and(last_task_completed_at.lt.${sevenDaysAgo},has_engaged.eq.false)`)
+                .order('tier', { ascending: false, nullsFirst: false })
+                .order('icp_score', { ascending: true, nullsFirst: false })
             if (error) throw error
-
-            if (data) {
-                if (isRefresh || pageIndex === 0) {
-                    setLeads(data)
-                } else {
-                    setLeads(prev => [...prev, ...data])
-                }
-
-                if (pageIndex === 0 && count !== null) {
-                    setStats(prev => ({ ...prev, total: count }))
-                }
-
-                setHasMore(data.length === ITEMS_per_PAGE)
-            }
+            setLeads(data || [])
         } catch (err) {
-            console.error(err)
+            console.error('[Cockpit] fetch error:', err)
         } finally {
             setLoading(false)
-            setLoadingMore(false)
         }
-    }
+    }, [selectedClientId]) // eslint-disable-line react-hooks/exhaustive-deps
 
-    const loadMore = () => {
-        if (!loadingMore && hasMore) {
-            const nextPage = page + 1
-            setPage(nextPage)
-            fetchLeads(nextPage, false)
-        }
-    }
-
-    const observerTarget = useRef(null);
     useEffect(() => {
-        const observer = new IntersectionObserver(
-            entries => {
-                if (entries[0].isIntersecting && hasMore && !loading && !loadingMore) {
-                    loadMore();
-                }
-            },
-            { threshold: 1.0 }
-        );
-        if (observerTarget.current) observer.observe(observerTarget.current);
-        return () => observer.disconnect();
-    }, [hasMore, loading, loadingMore, leads]);
+        fetchLeads()
+    }, [fetchLeads])
 
-    const handleCopy = (text) => {
-        navigator.clipboard.writeText(text)
-        setNotification({ message: 'Copiado para a área de transferência', type: 'info' })
-        setTimeout(() => setNotification(null), 2000)
-    }
+    const removeOptimistically = (id) =>
+        setLeads(prev => prev.filter(l => l.id !== id))
 
-    const handleSendMessage = async () => {
-        if (!selectedLead) return
-        setSendingMessage(true)
-
+    const handleComplete = async (id) => {
+        setActionState(prev => ({ ...prev, [id]: 'completing' }))
+        removeOptimistically(id)
         try {
-            await new Promise(resolve => setTimeout(resolve, 1500))
-            setNotification({ message: 'Conexão enviada com sucesso!', type: 'success' })
-            setSelectedLead(null)
-        } catch (e) {
-            setNotification({ message: 'Erro ao enviar.', type: 'error' })
+            await supabase.from('leads').update({ last_task_completed_at: new Date().toISOString() }).eq('id', id)
+        } catch (err) {
+            console.error('[Cockpit] complete error:', err)
         } finally {
-            setSendingMessage(false)
-            setTimeout(() => setNotification(null), 3000)
+            setActionState(prev => { const n = { ...prev }; delete n[id]; return n })
         }
     }
 
-    // --- HELPER COMPONENTS ---
-    const QualificationBadge = ({ isHighTicket, isB2B, companySize }) => {
-        return (
-            <div className="flex flex-wrap gap-1.5 justify-start">
-                {isHighTicket && (
-                    <div className="w-6 h-6 rounded-md bg-purple-50 text-purple-600 border border-purple-100 flex items-center justify-center shadow-sm" title="High Ticket Potential">
-                        <Gem size={14} />
-                    </div>
-                )}
-
-                {isB2B && (
-                    <span className="px-1.5 py-0.5 rounded-md bg-blue-50 text-blue-700 text-[10px] font-extrabold border border-blue-100 flex items-center shadow-sm">
-                        B2B
-                    </span>
-                )}
-
-                {companySize && (
-                    <span className={`px-1.5 py-0.5 rounded-md text-[10px] font-bold border flex items-center shadow-sm ${companySize === 'Enterprise'
-                        ? 'bg-purple-100 text-purple-700 border-purple-200'
-                        : companySize === 'Mid-Market'
-                            ? 'bg-indigo-50 text-indigo-600 border-indigo-100'
-                            : 'bg-gray-100 text-gray-600 border-gray-200'
-                        }`}>
-                        {companySize}
-                    </span>
-                )}
-            </div>
-        )
+    const handleBlacklist = async (id) => {
+        setActionState(prev => ({ ...prev, [id]: 'blacklisting' }))
+        removeOptimistically(id)
+        try {
+            await supabase.from('leads').update({ is_blacklisted: true }).eq('id', id)
+        } catch (err) {
+            console.error('[Cockpit] blacklist error:', err)
+        } finally {
+            setActionState(prev => { const n = { ...prev }; delete n[id]; return n })
+        }
     }
+
+    const handleInbox = (id) => navigate(`/sales/inbox?leadId=${id}`)
+
+    // KPI derived values
+    const followupCount = leads.filter(isFollowupDue).length
+    const newCount = leads.filter(l => !l.last_task_completed_at).length
 
     return (
-        <div className="min-h-screen bg-gray-50 p-6 md:p-8 font-sans text-slate-800">
-
-            {/* NOTIFICATION TOAST */}
-            {notification && (
-                <div className={`fixed top-6 right-6 z-50 px-4 py-3 rounded-lg shadow-lg border flex items-center gap-3 animate-slide-in-right ${notification.type === 'error' ? 'bg-red-50 border-red-200 text-red-600' : 'bg-white border-gray-200 text-slate-700'
-                    }`}>
-                    {notification.type === 'error' ? <Zap size={18} /> : <RefreshCw size={18} className={syncLoading || enrichmentLoading ? "animate-spin text-orange-500" : "text-green-500"} />}
-                    <span className="text-sm font-medium">{notification.message}</span>
+        <div style={{ padding: '28px', background: '#f9fafb', minHeight: '100vh', fontFamily: 'inherit' }}>
+            {/* Header */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
+                <div>
+                    <h1 style={{ fontSize: '22px', fontWeight: 800, color: '#111827', margin: 0 }}>Cockpit de Vendas</h1>
+                    <p style={{ fontSize: '13px', color: '#9ca3af', margin: '4px 0 0' }}>Tarefas diárias de follow-up e prospecção</p>
                 </div>
-            )}
-
-            {/* HEADER */}
-            <div className="max-w-7xl mx-auto mb-10">
-                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
-                    <div>
-                        <h1 className="text-3xl font-bold text-slate-900 tracking-tight mb-2">Mineração de Base & Cadência</h1>
-                        <p className="text-slate-500 text-lg">Identifique oportunidades ocultas e inicie conversas com contexto.</p>
-                    </div>
-                </div>
-
-                {/* KPI CARDS */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                    <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm hover:shadow-md transition-all">
-                        <div className="flex items-center gap-3 mb-2 text-slate-500 text-sm font-semibold uppercase tracking-wider">
-                            <Users size={16} /> Total na Base
-                        </div>
-                        <div className="text-4xl font-extrabold text-slate-900">{stats.total}</div>
-                    </div>
-                    <div className="bg-white p-6 rounded-2xl border border-orange-100 shadow-sm hover:shadow-md transition-all relative overflow-hidden group">
-                        <div className="absolute top-0 right-0 w-20 h-20 bg-orange-500/5 rounded-bl-full -mr-4 -mt-4 transition-transform group-hover:scale-110"></div>
-                        <div className="flex items-center gap-3 mb-2 text-orange-600 text-sm font-bold uppercase tracking-wider">
-                            <Zap size={16} fill="currentColor" /> Oportunidades ICP A
-                        </div>
-                        <div className="text-4xl font-extrabold text-orange-600">{stats.hot}</div>
-                    </div>
-                    <div className="bg-white p-6 rounded-2xl border border-blue-100 shadow-sm hover:shadow-md transition-all">
-                        <div className="flex items-center gap-3 mb-2 text-blue-600 text-sm font-bold uppercase tracking-wider">
-                            <MessageCircle size={16} /> Interações (7d)
-                        </div>
-                        <div className="text-4xl font-extrabold text-blue-600">{stats.interactions}</div>
-                    </div>
-                </div>
-
-                {/* CONTROLS */}
-                <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm mb-6 flex flex-col md:flex-row justify-between items-center gap-4">
-                    <div className="relative w-full md:w-96">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-                        <input
-                            type="text"
-                            placeholder="Buscar por nome, cargo ou empresa..."
-                            value={searchTerm}
-                            onChange={e => setSearchTerm(e.target.value)}
-                            className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-slate-700 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 transition-all font-medium placeholder:text-gray-400"
-                        />
-                    </div>
-                    <div className="flex gap-3 w-full md:w-auto">
-                        <button
-                            onClick={handleSync}
-                            disabled={syncLoading || enrichmentLoading}
-                            className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-semibold text-sm transition-all ${syncLoading
-                                ? 'bg-orange-50 text-orange-400 cursor-not-allowed'
-                                : 'bg-orange-50 text-orange-600 hover:bg-orange-100 hover:text-orange-700 border border-orange-200'
-                                }`}
-                        >
-                            <RefreshCw size={16} className={syncLoading ? "animate-spin" : ""} />
-                            {syncLoading ? 'Sincronizando...' : 'Sincronizar Conexões'}
-                        </button>
-
-                        <button
-                            onClick={() => handleEnrichment()}
-                            disabled={enrichmentLoading || syncLoading}
-                            className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-semibold text-sm transition-all ${enrichmentLoading
-                                ? 'bg-purple-50 text-purple-400 cursor-not-allowed'
-                                : 'bg-purple-50 text-purple-600 hover:bg-purple-100 hover:text-purple-700 border border-purple-200'
-                                }`}
-                        >
-                            <Sparkles size={16} className={enrichmentLoading ? "animate-spin" : ""} />
-                            {enrichmentLoading ? 'Analisando...' : '✨ Enriquecer Base'}
-                        </button>
-
-                        <button className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-gray-50 text-slate-600 border border-gray-200 hover:bg-gray-100 font-semibold text-sm transition-all">
-                            <Filter size={16} /> Filtros
-                        </button>
-                    </div>
-                </div>
-
-                {/* TABLE */}
-                <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-left border-collapse">
-                            <thead>
-                                <tr className="bg-gray-50 border-b border-gray-200 text-xs font-bold text-gray-400 uppercase tracking-wider">
-                                    <th className="py-4 px-6 border-r border-gray-100/50 w-[30%]">Lead & Motivo</th>
-                                    <th className="py-4 px-6 border-r border-gray-100/50 w-[15%]">Empresa</th>
-                                    <th className="py-4 px-6 border-r border-gray-100/50 w-[15%]">Qualificação</th>
-                                    <th className="py-4 px-6 border-r border-gray-100/50 w-[15%]">Status</th>
-                                    <th className="py-4 px-6 border-r border-gray-100/50 w-[10%]">Engajamento</th>
-                                    <th className="py-4 px-6 w-[15%]">Ação</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-100">
-                                {loading && stats.total === 0 ? (
-                                    <tr><td colSpan="5" className="py-12 text-center text-gray-400"><Loader2 className="animate-spin mx-auto mb-2" />Carregando...</td></tr>
-                                ) : leads.map(lead => {
-
-                                    // Row Visual Logic
-                                    const isQualified = lead.qualification_status === 'QUALIFIED'
-                                    const isDisqualified = lead.qualification_status === 'DISQUALIFIED'
-
-                                    let rowClass = "hover:bg-gray-50/80 transition-all group border-l-[3px] border-l-transparent"
-                                    if (isQualified) rowClass += " bg-green-50/30 border-l-green-500"
-                                    if (isDisqualified) rowClass += " opacity-60 grayscale-[0.5]"
-
-                                    return (
-                                        <tr key={lead.id} className={rowClass}>
-                                            <td className="py-4 px-6">
-                                                <div className="flex items-start gap-4">
-                                                    <div className="w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center text-slate-500 font-bold border-2 border-white shadow-sm overflow-hidden shrink-0 mt-1">
-                                                        {lead.avatar_url ? <img src={lead.avatar_url} className="w-full h-full object-cover" /> : (lead.nome?.charAt(0) || '?')}
-                                                    </div>
-                                                    <div className="flex-1 min-w-0">
-                                                        <div className="flex items-center gap-2">
-                                                            <div className="font-bold text-slate-800 text-sm truncate">{lead.nome || 'Sem Nome'}</div>
-                                                        </div>
-                                                        <div className="text-xs text-gray-400 truncate mb-1">{lead.headline}</div>
-
-                                                        {/* ICP REASON (TRUNCATED) */}
-                                                        {lead.icp_reason && (
-                                                            <div className="text-[11px] text-slate-500 bg-slate-50 px-2 py-1 rounded border border-slate-100 inline-block max-w-full truncate hover:whitespace-normal hover:border-slate-300 transition-colors cursor-help" title={lead.icp_reason}>
-                                                                <span className="font-semibold text-slate-400 mr-1">🔎</span>
-                                                                {lead.icp_reason}
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            </td>
-                                            <td className="py-4 px-6 align-top pt-5">
-                                                <span className="text-sm font-medium text-slate-700 truncate block max-w-[150px]" title={lead.empresa}>
-                                                    {lead.empresa || '-'}
-                                                </span>
-                                            </td>
-                                            <td className="py-4 px-6 align-top pt-5">
-                                                <QualificationBadge
-                                                    isHighTicket={lead.is_high_ticket}
-                                                    isB2B={lead.is_b2b}
-                                                    companySize={lead.company_size_type}
-                                                />
-                                            </td>
-                                            <td className="py-4 px-6 align-top pt-5">
-                                                <span className={`px-2.5 py-1 rounded-md text-[11px] font-bold uppercase tracking-wide border ${lead.status_pipeline === 'Conexão'
-                                                    ? 'bg-blue-50 text-blue-600 border-blue-100'
-                                                    : 'bg-gray-100 text-gray-500 border-gray-200'
-                                                    }`}>
-                                                    {lead.status_pipeline || 'Desconhecido'}
-                                                </span>
-                                            </td>
-                                            <td className="py-4 px-6 align-top pt-5">
-                                                {lead.engagement_score > 0 ? (
-                                                    <div className="flex items-center gap-1.5 font-bold text-orange-600 text-sm">
-                                                        <Zap size={14} fill="currentColor" /> {lead.engagement_score} pts
-                                                    </div>
-                                                ) : (
-                                                    <span className="text-gray-300 text-xs font-medium">-</span>
-                                                )}
-                                            </td>
-                                            <td className="py-4 px-6 align-top pt-4">
-                                                <div className="flex gap-2">
-                                                    <button
-                                                        onClick={() => !isDisqualified && setSelectedLead(lead)}
-                                                        disabled={isDisqualified}
-                                                        className={`px-4 py-2 rounded-lg font-semibold text-xs transition-all shadow-sm flex-1 ${isDisqualified
-                                                            ? 'bg-gray-100 text-gray-400 cursor-not-allowed border border-gray-200'
-                                                            : 'bg-white hover:bg-orange-50 text-slate-600 hover:text-orange-600 border border-gray-200 hover:border-orange-200 shadow-sm hover:shadow'
-                                                            }`}
-                                                    >
-                                                        {isDisqualified ? 'Desqualificado' : 'Abordar'}
-                                                    </button>
-                                                    <button
-                                                        onClick={(e) => {
-                                                            e.stopPropagation()
-                                                            handleEnrichment(lead)
-                                                        }}
-                                                        disabled={enrichmentLoading}
-                                                        title="Re-analisar com IA"
-                                                        className="px-2 py-2 rounded-lg bg-gray-50 text-gray-400 hover:bg-purple-50 hover:text-purple-600 border border-gray-200 transition-all"
-                                                    >
-                                                        <Bot size={16} />
-                                                    </button>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    )
-                                })}
-                            </tbody>
-                        </table>
-                    </div>
-                    {/* Load More Sentinel */}
-                    <div ref={observerTarget} className="py-6 text-center">
-                        {loadingMore && <div className="flex items-center justify-center gap-2 text-gray-500 text-sm"><Loader2 className="animate-spin" size={16} /> Carregando mais...</div>}
-                        {!hasMore && leads.length > 0 && <span className="text-gray-400 text-xs">Você chegou ao fim da lista.</span>}
-                    </div>
-                </div>
+                <button
+                    onClick={fetchLeads}
+                    disabled={loading}
+                    style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', borderRadius: '8px', fontSize: '13px', fontWeight: 600, background: '#fff', border: '1px solid #e5e7eb', color: '#6b7280', cursor: loading ? 'default' : 'pointer' }}
+                >
+                    <RefreshCw size={14} style={loading ? { animation: 'spin 1s linear infinite' } : {}} />
+                    Atualizar
+                </button>
             </div>
 
-            {/* DRAWER (Slide-Over) */}
-            {selectedLead && (
-                <div className="fixed inset-0 z-50 flex justify-end">
-                    <div className="absolute inset-0 bg-slate-900/20 backdrop-blur-sm transition-opacity" onClick={() => setSelectedLead(null)} />
-                    <div className="relative w-full max-w-lg bg-white h-full shadow-2xl flex flex-col animate-slide-in-right overflow-hidden border-l border-gray-200">
-                        {/* Drawer Header */}
-                        <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-white">
-                            <div>
-                                <h2 className="text-xl font-bold text-slate-800">Cadência de Venda</h2>
-                                <p className="text-xs text-gray-500 mt-1">Gerencie a interação com este lead</p>
-                            </div>
-                            <button onClick={() => setSelectedLead(null)} className="p-2 rounded-full hover:bg-gray-100 text-gray-400 hover:text-slate-600 transition-colors">
-                                <X size={20} />
-                            </button>
-                        </div>
+            {/* KPI row */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '14px', marginBottom: '24px' }}>
+                <KpiCard icon={Users} label="Pendentes Hoje" value={leads.length} color="#374151" />
+                <KpiCard icon={AlertTriangle} label="Follow-up Atrasado" value={followupCount} color="#ff4d00" />
+                <KpiCard icon={Zap} label="Nunca Abordados" value={newCount} color="#059669" />
+            </div>
 
-                        {/* Drawer Body - Split into Context and Action */}
-                        <div className="flex-1 overflow-y-auto p-6 space-y-8 custom-scrollbar bg-slate-50/50">
-
-                            {/* BLOCK 1: CONTEXT (Why is this lead here?) */}
-                            <div className="bg-white p-5 rounded-xl border border-orange-100 shadow-sm">
-                                <div className="flex items-start gap-4 mb-4">
-                                    <div className="w-14 h-14 rounded-full bg-slate-100 flex items-center justify-center text-lg font-bold text-slate-500 shrink-0 border border-gray-200">
-                                        {selectedLead.avatar_url ? <img src={selectedLead.avatar_url} className="w-full h-full object-cover rounded-full" /> : (selectedLead.nome?.charAt(0) || '?')}
-                                    </div>
-                                    <div className="flex-1">
-                                        <div className="flex justify-between items-start">
-                                            <h3 className="text-lg font-bold text-slate-900 leading-tight">{selectedLead.nome}</h3>
-                                            {selectedLead.company_website && (
-                                                <a href={selectedLead.company_website} target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-blue-600 transition-colors" title="Visitar Site">
-                                                    <Globe size={18} />
-                                                </a>
-                                            )}
-                                        </div>
-                                        <p className="text-sm text-gray-500 mb-1">{selectedLead.headline}</p>
-                                        <div className="flex flex-wrap gap-2 mt-2">
-                                            {selectedLead.is_high_ticket && <span className="px-2 py-0.5 bg-indigo-50 text-indigo-700 text-[10px] font-bold rounded border border-indigo-100 flex items-center gap-1"><Gem size={10} /> High Ticket</span>}
-                                            {selectedLead.company_size_type && <span className="px-2 py-0.5 bg-gray-100 text-gray-600 text-[10px] font-bold rounded border border-gray-200"><Building2 size={10} className="inline mr-1" />{selectedLead.company_size_type}</span>}
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* ICP REASON */}
-                                <div className="p-3 bg-orange-50 rounded-lg border border-orange-100/60">
-                                    <h4 className="flex items-center gap-2 text-[10px] font-bold text-orange-600 uppercase tracking-wider mb-1">
-                                        <Sparkles size={12} /> Motivo da Qualificação
-                                    </h4>
-                                    <p className="text-sm text-slate-700 leading-relaxed font-medium">
-                                        {selectedLead.icp_reason || "Este perfil apresenta alta aderência com seu ICP ideal, ocupando cargo de decisão em setor estratégico."}
-                                    </p>
-                                </div>
-                            </div>
-
-                            {/* Skills Tag Cloud (Collapsed/Secondary) */}
-                            {selectedLead.skills && (
-                                <div>
-                                    <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 px-2">Habilidades Detectadas</h4>
-                                    <div className="flex flex-wrap gap-2 px-2">
-                                        {(() => {
-                                            try {
-                                                const tags = typeof selectedLead.skills === 'string' ? JSON.parse(selectedLead.skills) : selectedLead.skills
-                                                return tags.slice(0, 5).map((t, i) => (
-                                                    <span key={i} className="px-2 py-1 rounded-md bg-white text-slate-500 text-xs font-medium border border-gray-200 shadow-sm">
-                                                        {typeof t === 'string' ? t : t.name}
-                                                    </span>
-                                                ))
-                                            } catch (e) { return null }
-                                        })()}
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-
-                        {/* BLOCK 2: ACTION (Bottom Fixed) */}
-                        <div className="p-6 border-t border-gray-200 bg-white">
-                            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Mensagem de Conexão</label>
-
-                            <div className="relative mb-4">
-                                <textarea
-                                    className="w-full h-32 p-3 bg-slate-50 border border-gray-300 rounded-lg text-sm text-slate-700 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 resize-none font-medium leading-relaxed"
-                                    value={messageDraft}
-                                    onChange={(e) => setMessageDraft(e.target.value)}
-                                    placeholder="Escreva sua mensagem de conexão..."
-                                />
-                                <button
-                                    onClick={() => handleCopy(messageDraft)}
-                                    className="absolute top-2 right-2 p-1.5 rounded-md bg-white text-gray-400 hover:text-orange-600 border border-gray-200 shadow-sm transition-all"
-                                    title="Copiar texto"
-                                >
-                                    <Copy size={14} />
-                                </button>
-                            </div>
-
-                            <button
-                                onClick={handleSendMessage}
-                                disabled={sendingMessage}
-                                className={`w-full py-3.5 rounded-xl text-white font-bold shadow-lg transition-all transform active:scale-95 flex items-center justify-center gap-2 ${sendingMessage
-                                    ? 'bg-orange-300 cursor-not-allowed'
-                                    : 'bg-orange-600 hover:bg-orange-700 shadow-orange-200 hover:shadow-orange-300'
-                                    }`}
-                            >
-                                {sendingMessage ? <Loader2 className="animate-spin" size={20} /> : <Send size={18} />}
-                                {sendingMessage ? 'Enviando...' : 'Enviar Conexão'}
-                            </button>
-
-                            <p className="text-center text-[10px] text-gray-400 mt-2">
-                                Esta ação enviará um convite de conexão via LinkedIn.
-                            </p>
+            {/* List */}
+            {!selectedClientId ? (
+                <div style={{ textAlign: 'center', padding: '60px', color: '#9ca3af', fontSize: '14px' }}>
+                    Selecione um cliente para ver as tarefas.
+                </div>
+            ) : loading ? (
+                <div style={{ textAlign: 'center', padding: '60px', color: '#9ca3af' }}>
+                    <Loader2 size={24} style={{ animation: 'spin 1s linear infinite', margin: '0 auto 8px', display: 'block' }} />
+                    <span style={{ fontSize: '13px' }}>Carregando tarefas...</span>
+                </div>
+            ) : leads.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '60px', background: '#fff', borderRadius: '12px', border: '1px solid #e5e7eb' }}>
+                    <CheckCircle2 size={40} style={{ color: '#10b981', margin: '0 auto 12px', display: 'block' }} />
+                    <p style={{ fontSize: '16px', fontWeight: 700, color: '#111827', margin: '0 0 4px' }}>Tudo em dia! 🎉</p>
+                    <p style={{ fontSize: '13px', color: '#9ca3af', margin: 0 }}>Nenhuma tarefa pendente no momento.</p>
+                </div>
+            ) : (
+                <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #e5e7eb', overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+                    {/* Table header */}
+                    <div style={{ display: 'flex', alignItems: 'center', padding: '10px 20px', background: '#f9fafb', borderBottom: '2px solid #e5e7eb' }}>
+                        <span style={{ flex: 1, fontSize: '11px', fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                            Lead — {leads.length} tarefa{leads.length !== 1 ? 's' : ''}
+                        </span>
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                            <span style={{ width: '72px' }} />
+                            <span style={{ width: '96px' }} />
+                            <span style={{ width: '32px' }} />
                         </div>
                     </div>
+
+                    {/* Rows */}
+                    {leads.map(lead => (
+                        <LeadRow
+                            key={lead.id}
+                            lead={lead}
+                            onComplete={handleComplete}
+                            onBlacklist={handleBlacklist}
+                            onInbox={handleInbox}
+                            completing={actionState[lead.id] === 'completing'}
+                            blacklisting={actionState[lead.id] === 'blacklisting'}
+                        />
+                    ))}
                 </div>
             )}
+
+            {/* Spin keyframe */}
+            <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
         </div>
     )
 }
@@ -33201,12 +33889,9 @@ import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { supabase } from '../services/supabaseClient'
 import { useClientSelection } from '../contexts/ClientSelectionContext'
-import { Search, Send, MoreVertical, Phone, Mail, MapPin, Briefcase, Zap, Star, Sparkles, MessageSquare, Copy, Check, LayoutGrid, List, Loader2, X, ClipboardList } from 'lucide-react'
-
+import { Search, Send, MoreVertical, Phone, Mail, MapPin, Briefcase, Zap, Star, Sparkles, MessageSquare, Check, LayoutGrid, List, Loader2, X, ClipboardList } from 'lucide-react'
 const N8N_GENERATE_REPLY_URL = 'https://n8n-n8n-start.kfocge.easypanel.host/webhook/generate-reply'
 const N8N_SEND_MESSAGE_URL = 'https://n8n-n8n-start.kfocge.easypanel.host/webhook/send-linkedin-message'
-import KanbanColumn from '../components/kanban/KanbanColumn'
-import KanbanLeadCard from '../components/kanban/KanbanLeadCard'
 import StrategicContextCard from '../components/StrategicContextCard'
 
 const SalesInboxPage = () => {
@@ -33217,7 +33902,6 @@ const SalesInboxPage = () => {
     const [activeLead, setActiveLead] = useState(null)
 
     // View Mode
-    const [viewMode, setViewMode] = useState('list') // 'list' | 'kanban'
     const [searchTerm, setSearchTerm] = useState('')
     const [isSearchingGlobal, setIsSearchingGlobal] = useState(false)
     const [globalSearchResults, setGlobalSearchResults] = useState(null)
@@ -33232,7 +33916,6 @@ const SalesInboxPage = () => {
     // AI Actions State
     const [draftMessage, setDraftMessage] = useState('')
     const [selectedSuggestionIdx, setSelectedSuggestionIdx] = useState(null)
-    const [copiedIdx, setCopiedIdx] = useState(null)
     const [generatingReply, setGeneratingReply] = useState(false)
     const [sdrSeniorGenerated, setSdrSeniorGenerated] = useState(false)
     const [generatedReasoning, setGeneratedReasoning] = useState(null)
@@ -33337,7 +34020,6 @@ const SalesInboxPage = () => {
 
                     if (targetLead) {
                         setActiveLead(targetLead)
-                        setViewMode('list')
                     }
 
                     // Store taskId for auto-complete after sending message
@@ -33400,53 +34082,6 @@ const SalesInboxPage = () => {
         fetchInteractions()
     }, [activeLead])
 
-    // Kanban Categorization Logic
-    // 1) Prioridade Alta: confiança >= 75
-    // 2) Para Responder: confiança < 75, lead enviou a última msg (eu preciso responder)
-    // 3) Aguardando: confiança < 75, eu enviei a última msg (aguardando lead responder)
-    // 4) Stand-by: confiança < 75, mais de 7 dias desde a última mensagem
-    const categorizeLeads = (leadsArray) => {
-        const now = new Date()
-        const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
-
-        const highPriority = []
-        const toRespond = []
-        const waiting = []
-        const standby = []
-
-        leadsArray.forEach(lead => {
-            const trustScore = lead?.trust_score || lead?.engagement_score || 0
-            const lastDate = lead?.last_interaction_date ? new Date(lead.last_interaction_date) : null
-
-            // Rule 1: Prioridade Alta — confiança >= 75
-            if (trustScore >= 75) {
-                highPriority.push(lead)
-                return
-            }
-
-            // Rule 4: Stand-by — mais de 7 dias sem interação
-            if (lastDate && lastDate < sevenDaysAgo) {
-                standby.push(lead)
-                return
-            }
-
-            // Rule 2 & 3: baseado em quem enviou a última mensagem
-            // _lastMsgIsSender: true = eu enviei, false = lead enviou, null = sem dados
-            if (lead._lastMsgIsSender === false) {
-                // Lead enviou a última msg → eu preciso responder
-                toRespond.push(lead)
-            } else if (lead._lastMsgIsSender === true) {
-                // Eu enviei a última msg → aguardando resposta do lead
-                waiting.push(lead)
-            } else {
-                // Sem histórico de interação → Para Responder (default)
-                toRespond.push(lead)
-            }
-        })
-
-        return { highPriority, toRespond, waiting, standby }
-    }
-
     // Global Search Effect
     useEffect(() => {
         if (!selectedClientId) return
@@ -33460,9 +34095,9 @@ const SalesInboxPage = () => {
                         .from('leads')
                         .select('*')
                         .eq('client_id', selectedClientId)
-                        .or(`nome.ilike.%${term}%,headline.ilike.%${term}%,company.ilike.%${term}%`)
-                        .order('last_interaction_date', { ascending: false, nullsFirst: false })
-                        .limit(50)
+                        .or(`nome.ilike.%${term}%,headline.ilike.%${term}%,empresa.ilike.%${term}%`)
+                        .order('total_interactions_count', { ascending: false })
+                        .limit(100)
 
                     if (error) throw error
 
@@ -33524,7 +34159,6 @@ const SalesInboxPage = () => {
         })
         : baseLeads
 
-    const kanbanData = categorizeLeads(filteredLeads)
 
     // Fetch tasks when sidebar tab is active
     const fetchSidebarTasks = useCallback(async () => {
@@ -33576,7 +34210,6 @@ const SalesInboxPage = () => {
         if (lead) {
             setActiveLead(lead)
             setPendingTaskId(task.id)
-            setViewMode('list')
         }
     }
 
@@ -33650,39 +34283,6 @@ const SalesInboxPage = () => {
         } finally {
             setIsSending(false)
         }
-    }
-
-    const handleAiSend = async () => {
-        if (!draftMessage.trim() || !activeLead || isSending) return
-
-        const messageText = draftMessage.trim()
-        setIsSending(true)
-
-        try {
-            await sendToWebhook(messageText)
-
-            const tempMsg = {
-                id: Date.now(),
-                content: messageText,
-                is_sender: true,
-                interaction_date: new Date().toISOString()
-            }
-            setInteractions(prev => [tempMsg, ...prev])
-            setDraftMessage('')
-            showToast('Mensagem enviada via LinkedIn!')
-            await completeTaskIfPending()
-        } catch (err) {
-            console.error('[AI Send] Error:', err)
-            showToast('Erro ao enviar mensagem. Tente novamente.', 'error')
-        } finally {
-            setIsSending(false)
-        }
-    }
-
-    const copyToClipboard = (text, idx) => {
-        navigator.clipboard.writeText(text)
-        setCopiedIdx(idx)
-        setTimeout(() => setCopiedIdx(null), 2000)
     }
 
     const generateAISuggestion = async () => {
@@ -33803,542 +34403,414 @@ const SalesInboxPage = () => {
                         </button>
                     ) : null}
                 </div>
-
-                <div className="bg-black/40 p-1 rounded-xl border border-white/10 flex gap-1 backdrop-blur-md">
-                    <button
-                        onClick={() => setViewMode('kanban')}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-2 ${viewMode === 'kanban' ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
-                    >
-                        <LayoutGrid size={14} /> Kanban
-                    </button>
-                    <button
-                        onClick={() => setViewMode('list')}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-2 ${viewMode === 'list' ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
-                    >
-                        <List size={14} /> Lista
-                    </button>
-                </div>
             </div>
 
-            {/* KANBAN VIEW */}
-            {viewMode === 'kanban' && (
-                <div className="flex-1 overflow-x-auto pb-4 custom-scrollbar">
-                    <div className="flex gap-6 min-w-max h-full px-4">
-                        {/* Column 1: High Priority */}
-                        <KanbanColumn
-                            title="Prioridade Alta"
-                            icon="🔥"
-                            count={kanbanData.highPriority.length}
-                            colorClass="bg-red-500"
-                        >
-                            {kanbanData.highPriority.map(lead => (
-                                <KanbanLeadCard
-                                    key={lead.id}
-                                    lead={lead}
-                                    onClick={(l) => { setActiveLead(l); setViewMode('list') }}
-                                />
-                            ))}
-                        </KanbanColumn>
-
-                        {/* Column 2: To Respond */}
-                        <KanbanColumn
-                            title="Para Responder"
-                            icon="📩"
-                            count={kanbanData.toRespond.length}
-                            colorClass="bg-blue-500"
-                        >
-                            {kanbanData.toRespond.map(lead => (
-                                <KanbanLeadCard
-                                    key={lead.id}
-                                    lead={lead}
-                                    onClick={(l) => { setActiveLead(l); setViewMode('list') }}
-                                />
-                            ))}
-                        </KanbanColumn>
-
-                        {/* Column 3: Waiting */}
-                        <KanbanColumn
-                            title="Aguardando"
-                            icon="⏳"
-                            count={kanbanData.waiting.length}
-                            colorClass="bg-amber-500"
-                        >
-                            {kanbanData.waiting.map(lead => (
-                                <KanbanLeadCard
-                                    key={lead.id}
-                                    lead={lead}
-                                    onClick={(l) => { setActiveLead(l); setViewMode('list') }}
-                                />
-                            ))}
-                        </KanbanColumn>
-
-                        {/* Column 4: Stand-by */}
-                        <KanbanColumn
-                            title="Stand-by / Frios"
-                            icon="💤"
-                            count={kanbanData.standby.length}
-                            colorClass="bg-slate-400"
-                        >
-                            {kanbanData.standby.map(lead => (
-                                <KanbanLeadCard
-                                    key={lead.id}
-                                    lead={lead}
-                                    onClick={(l) => { setActiveLead(l); setViewMode('list') }}
-                                />
-                            ))}
-                        </KanbanColumn>
-                    </div>
-                </div>
-            )}
-
             {/* LIST / DETAIL VIEW */}
-            {viewMode === 'list' && (
-                <div className="flex-1 flex gap-4 lg:gap-6 overflow-hidden">
-                    {/* LEFT: Lead List */}
-                    <div className="hidden md:flex w-72 lg:w-80 flex-col bg-charcoal rounded-2xl border border-glass-border overflow-hidden shrink-0">
-                        {/* Sidebar Tabs */}
-                        <div className="p-2 border-b border-glass-border bg-black/20">
-                            <div className="flex bg-black/30 rounded-lg p-0.5 gap-0.5">
-                                <button
-                                    onClick={() => setSidebarTab('conversas')}
-                                    className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-md text-xs font-bold uppercase tracking-wider transition-all ${sidebarTab === 'conversas'
-                                        ? 'bg-primary text-white shadow-lg shadow-primary/20'
-                                        : 'text-gray-400 hover:text-white hover:bg-white/5'
-                                        }`}
-                                >
-                                    <MessageSquare size={13} />
-                                    Conversas
-                                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${sidebarTab === 'conversas' ? 'bg-white/20' : 'bg-white/10'
-                                        }`}>
-                                        {filteredLeads.length}
-                                    </span>
-                                </button>
-                                <button
-                                    onClick={() => setSidebarTab('tarefas')}
-                                    className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-md text-xs font-bold uppercase tracking-wider transition-all ${sidebarTab === 'tarefas'
-                                        ? 'bg-primary text-white shadow-lg shadow-primary/20'
-                                        : 'text-gray-400 hover:text-white hover:bg-white/5'
-                                        }`}
-                                >
-                                    <ClipboardList size={13} />
-                                    Tarefas
-                                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${sidebarTab === 'tarefas' ? 'bg-white/20' : 'bg-white/10'
-                                        }`}>
-                                        {pendingTaskCount}
-                                    </span>
-                                </button>
-                            </div>
+            <div className="flex-1 flex gap-4 lg:gap-6 overflow-hidden">
+                {/* LEFT: Lead List */}
+                <div className="hidden md:flex w-72 lg:w-80 flex-col bg-charcoal rounded-2xl border border-glass-border overflow-hidden shrink-0">
+                    {/* Sidebar Tabs */}
+                    <div className="p-2 border-b border-glass-border bg-black/20">
+                        <div className="flex bg-black/30 rounded-lg p-0.5 gap-0.5">
+                            <button
+                                onClick={() => setSidebarTab('conversas')}
+                                className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-md text-xs font-bold uppercase tracking-wider transition-all ${sidebarTab === 'conversas'
+                                    ? 'bg-primary text-white shadow-lg shadow-primary/20'
+                                    : 'text-gray-400 hover:text-white hover:bg-white/5'
+                                    }`}
+                            >
+                                <MessageSquare size={13} />
+                                Conversas
+                                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${sidebarTab === 'conversas' ? 'bg-white/20' : 'bg-white/10'
+                                    }`}>
+                                    {filteredLeads.length}
+                                </span>
+                            </button>
+                            <button
+                                onClick={() => setSidebarTab('tarefas')}
+                                className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-md text-xs font-bold uppercase tracking-wider transition-all ${sidebarTab === 'tarefas'
+                                    ? 'bg-primary text-white shadow-lg shadow-primary/20'
+                                    : 'text-gray-400 hover:text-white hover:bg-white/5'
+                                    }`}
+                            >
+                                <ClipboardList size={13} />
+                                Tarefas
+                                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${sidebarTab === 'tarefas' ? 'bg-white/20' : 'bg-white/10'
+                                    }`}>
+                                    {pendingTaskCount}
+                                </span>
+                            </button>
                         </div>
+                    </div>
 
-                        {/* TAB CONTENT */}
-                        <div className="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-2">
+                    {/* TAB CONTENT */}
+                    <div className="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-2">
 
-                            {/* ── CONVERSAS TAB ── */}
-                            {sidebarTab === 'conversas' && (
-                                <>
-                                    {loadingLeads ? (
-                                        <div className="p-8 text-center text-text-muted text-sm">Carregando...</div>
-                                    ) : filteredLeads.map(lead => (
+                        {/* ── CONVERSAS TAB ── */}
+                        {sidebarTab === 'conversas' && (
+                            <>
+                                {loadingLeads ? (
+                                    <div className="p-8 text-center text-text-muted text-sm">Carregando...</div>
+                                ) : filteredLeads.map(lead => (
+                                    <div
+                                        key={lead.id}
+                                        onClick={() => setActiveLead(lead)}
+                                        className={`p-3 rounded-xl border cursor-pointer transition-all ${activeLead?.id === lead.id
+                                            ? 'bg-primary/10 border-primary/40 shadow-lg shadow-primary/5'
+                                            : 'border-transparent hover:bg-glass hover:border-glass-border'
+                                            }`}
+                                    >
+                                        <div className="flex justify-between items-start mb-1">
+                                            <span className={`font-semibold text-sm truncate max-w-[140px] lg:max-w-[160px] text-text-heading`}>
+                                                {lead.nome || 'Sem Nome'}
+                                            </span>
+                                            <span className="text-[10px] text-text-muted">
+                                                {lead.last_interaction ? new Date(lead.last_interaction).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : ''}
+                                            </span>
+                                        </div>
+                                        <div className="text-xs text-text-body mb-2 truncate">
+                                            {lead.headline || 'Lead qualificado'}
+                                        </div>
+                                        <div className="flex items-center gap-2 text-[10px]">
+                                            <span className={`font-bold px-1.5 py-0.5 rounded ${lead.icp_score === 'A' ? 'bg-emerald-500/20 text-emerald-400' :
+                                                lead.icp_score === 'B' ? 'bg-amber-500/20 text-amber-400' :
+                                                    'bg-slate-500/20 text-slate-400'
+                                                }`}>
+                                                ICP {lead.icp_score || 'C'}
+                                            </span>
+                                            <span className="text-text-muted">
+                                                {(() => {
+                                                    const d = lead.last_interaction_date
+                                                    if (!d) return 'Sem interação'
+                                                    const diff = Date.now() - new Date(d).getTime()
+                                                    const mins = Math.floor(diff / 60000)
+                                                    if (mins < 60) return `💬 há ${mins}m`
+                                                    const hrs = Math.floor(mins / 60)
+                                                    if (hrs < 24) return `💬 há ${hrs}h`
+                                                    const days = Math.floor(hrs / 24)
+                                                    return `💬 há ${days}d`
+                                                })()}
+                                            </span>
+                                        </div>
+                                    </div>
+                                ))}
+                                {!loadingLeads && filteredLeads.length === 0 && (
+                                    <div className="p-8 text-center text-text-muted text-sm">
+                                        {searchTerm ? 'Nenhum lead encontrado.' : 'Nenhum lead com engajamento.'}
+                                    </div>
+                                )}
+                            </>
+                        )}
+
+                        {/* ── TAREFAS DO DIA TAB ── */}
+                        {sidebarTab === 'tarefas' && (
+                            <>
+                                {loadingTasks ? (
+                                    <div className="p-8 text-center text-text-muted text-sm flex flex-col items-center gap-2">
+                                        <Loader2 size={18} className="animate-spin text-primary" />
+                                        Carregando tarefas...
+                                    </div>
+                                ) : sidebarTasks.length === 0 ? (
+                                    <div className="p-8 text-center text-text-muted text-sm flex flex-col items-center gap-3">
+                                        <div className="w-12 h-12 rounded-full bg-emerald-500/10 flex items-center justify-center">
+                                            <Check size={20} className="text-emerald-400" />
+                                        </div>
+                                        <span>Nenhuma tarefa pendente! 🎉</span>
+                                    </div>
+                                ) : sidebarTasks.map(task => {
+                                    const tLead = task.leads || {}
+                                    const stage = tLead.cadence_stage || ''
+                                    const stageColor = stage === 'G4' || stage === 'G5' ? 'bg-red-500/20 text-red-400 border-red-500/30'
+                                        : stage === 'G2' || stage === 'G3' ? 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30'
+                                            : 'bg-blue-500/20 text-blue-400 border-blue-500/30'
+
+                                    const interactionCount = tLead.total_interactions_count || 0
+                                    const isFirstContact = interactionCount === 0
+                                    const actionLabel = isFirstContact ? '✉️ Enviar Icebreaker' : '💬 Continuar Conversa'
+                                    const actionColor = isFirstContact
+                                        ? 'bg-orange-500/15 text-orange-400 border-orange-500/30'
+                                        : 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+
+                                    return (
                                         <div
-                                            key={lead.id}
-                                            onClick={() => setActiveLead(lead)}
-                                            className={`p-3 rounded-xl border cursor-pointer transition-all ${activeLead?.id === lead.id
-                                                ? 'bg-primary/10 border-primary/40 shadow-lg shadow-primary/5'
-                                                : 'border-transparent hover:bg-glass hover:border-glass-border'
-                                                }`}
+                                            key={task.id}
+                                            onClick={() => handleTaskClick(task)}
+                                            className="p-3 rounded-xl border border-transparent hover:bg-glass hover:border-glass-border cursor-pointer transition-all group"
                                         >
-                                            <div className="flex justify-between items-start mb-1">
-                                                <span className={`font-semibold text-sm truncate max-w-[140px] lg:max-w-[160px] text-text-heading`}>
-                                                    {lead.nome || 'Sem Nome'}
-                                                </span>
-                                                <span className="text-[10px] text-text-muted">
-                                                    {lead.last_interaction ? new Date(lead.last_interaction).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : ''}
-                                                </span>
-                                            </div>
-                                            <div className="text-xs text-text-body mb-2 truncate">
-                                                {lead.headline || 'Lead qualificado'}
-                                            </div>
-                                            <div className="flex items-center gap-2 text-[10px]">
-                                                <span className={`font-bold px-1.5 py-0.5 rounded ${lead.icp_score === 'A' ? 'bg-emerald-500/20 text-emerald-400' :
-                                                    lead.icp_score === 'B' ? 'bg-amber-500/20 text-amber-400' :
-                                                        'bg-slate-500/20 text-slate-400'
-                                                    }`}>
-                                                    ICP {lead.icp_score || 'C'}
-                                                </span>
-                                                <span className="text-text-muted">
-                                                    {(() => {
-                                                        const d = lead.last_interaction_date
-                                                        if (!d) return 'Sem interação'
-                                                        const diff = Date.now() - new Date(d).getTime()
-                                                        const mins = Math.floor(diff / 60000)
-                                                        if (mins < 60) return `💬 há ${mins}m`
-                                                        const hrs = Math.floor(mins / 60)
-                                                        if (hrs < 24) return `💬 há ${hrs}h`
-                                                        const days = Math.floor(hrs / 24)
-                                                        return `💬 há ${days}d`
-                                                    })()}
-                                                </span>
-                                            </div>
-                                        </div>
-                                    ))}
-                                    {!loadingLeads && filteredLeads.length === 0 && (
-                                        <div className="p-8 text-center text-text-muted text-sm">
-                                            {searchTerm ? 'Nenhum lead encontrado.' : 'Nenhum lead com engajamento.'}
-                                        </div>
-                                    )}
-                                </>
-                            )}
-
-                            {/* ── TAREFAS DO DIA TAB ── */}
-                            {sidebarTab === 'tarefas' && (
-                                <>
-                                    {loadingTasks ? (
-                                        <div className="p-8 text-center text-text-muted text-sm flex flex-col items-center gap-2">
-                                            <Loader2 size={18} className="animate-spin text-primary" />
-                                            Carregando tarefas...
-                                        </div>
-                                    ) : sidebarTasks.length === 0 ? (
-                                        <div className="p-8 text-center text-text-muted text-sm flex flex-col items-center gap-3">
-                                            <div className="w-12 h-12 rounded-full bg-emerald-500/10 flex items-center justify-center">
-                                                <Check size={20} className="text-emerald-400" />
-                                            </div>
-                                            <span>Nenhuma tarefa pendente! 🎉</span>
-                                        </div>
-                                    ) : sidebarTasks.map(task => {
-                                        const tLead = task.leads || {}
-                                        const stage = tLead.cadence_stage || ''
-                                        const stageColor = stage === 'G4' || stage === 'G5' ? 'bg-red-500/20 text-red-400 border-red-500/30'
-                                            : stage === 'G2' || stage === 'G3' ? 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30'
-                                                : 'bg-blue-500/20 text-blue-400 border-blue-500/30'
-
-                                        const interactionCount = tLead.total_interactions_count || 0
-                                        const isFirstContact = interactionCount === 0
-                                        const actionLabel = isFirstContact ? '✉️ Enviar Icebreaker' : '💬 Continuar Conversa'
-                                        const actionColor = isFirstContact
-                                            ? 'bg-orange-500/15 text-orange-400 border-orange-500/30'
-                                            : 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
-
-                                        return (
-                                            <div
-                                                key={task.id}
-                                                onClick={() => handleTaskClick(task)}
-                                                className="p-3 rounded-xl border border-transparent hover:bg-glass hover:border-glass-border cursor-pointer transition-all group"
-                                            >
-                                                <div className="flex items-center gap-2 mb-1.5">
-                                                    {tLead.avatar_url ? (
-                                                        <img src={tLead.avatar_url} alt="" className="w-7 h-7 rounded-full object-cover border border-glass-border" />
-                                                    ) : (
-                                                        <div className="w-7 h-7 rounded-full bg-glass border border-glass-border flex items-center justify-center text-[10px] font-bold text-text-heading">
-                                                            {tLead.nome?.charAt(0) || '?'}
-                                                        </div>
-                                                    )}
-                                                    <div className="flex-1 min-w-0">
-                                                        <span className="text-sm font-semibold text-text-heading truncate block">{tLead.nome || 'Lead'}</span>
+                                            <div className="flex items-center gap-2 mb-1.5">
+                                                {tLead.avatar_url ? (
+                                                    <img src={tLead.avatar_url} alt="" className="w-7 h-7 rounded-full object-cover border border-glass-border" />
+                                                ) : (
+                                                    <div className="w-7 h-7 rounded-full bg-glass border border-glass-border flex items-center justify-center text-[10px] font-bold text-text-heading">
+                                                        {tLead.nome?.charAt(0) || '?'}
                                                     </div>
-                                                    {stage && (
-                                                        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${stageColor}`}>
-                                                            {stage}
-                                                        </span>
-                                                    )}
+                                                )}
+                                                <div className="flex-1 min-w-0">
+                                                    <span className="text-sm font-semibold text-text-heading truncate block">{tLead.nome || 'Lead'}</span>
                                                 </div>
-                                                {/* Action label */}
-                                                <div className="pl-9 mb-1">
-                                                    <span className={`inline-flex items-center text-[10px] font-bold px-2 py-0.5 rounded-full border ${actionColor}`}>
-                                                        {actionLabel}
+                                                {stage && (
+                                                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${stageColor}`}>
+                                                        {stage}
                                                     </span>
-                                                </div>
-                                                {task.instruction && (
-                                                    <p className="text-[11px] text-text-muted leading-relaxed line-clamp-2 pl-9">
-                                                        💡 {task.instruction}
-                                                    </p>
                                                 )}
                                             </div>
-                                        )
-                                    })}
-                                </>
-                            )}
-                        </div>
+                                            {/* Action label */}
+                                            <div className="pl-9 mb-1">
+                                                <span className={`inline-flex items-center text-[10px] font-bold px-2 py-0.5 rounded-full border ${actionColor}`}>
+                                                    {actionLabel}
+                                                </span>
+                                            </div>
+                                            {task.instruction && (
+                                                <p className="text-[11px] text-text-muted leading-relaxed line-clamp-2 pl-9">
+                                                    💡 {task.instruction}
+                                                </p>
+                                            )}
+                                        </div>
+                                    )
+                                })}
+                            </>
+                        )}
                     </div>
+                </div>
 
-                    {/* MIDDLE: Chat Area */}
-                    {activeLead ? (
-                        <div className="flex-1 flex flex-col bg-charcoal rounded-2xl border border-glass-border overflow-hidden relative">
-                            {/* Header */}
-                            <div className="p-4 border-b border-glass-border bg-black/20 flex items-center justify-between z-10">
-                                <div className="flex items-center gap-3 flex-1 min-w-0">
-                                    <div className="w-10 h-10 shrink-0 rounded-full bg-gradient-to-br from-gray-800 to-black border border-glass-border flex items-center justify-center text-white font-bold shadow-inner overflow-hidden">
-                                        {activeLead.avatar_url ? (
-                                            <img src={activeLead.avatar_url} alt={activeLead.nome} className="w-full h-full object-cover" />
-                                        ) : (
-                                            activeLead.nome?.charAt(0)
-                                        )}
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                        <div className="font-bold text-text-heading text-sm truncate">{activeLead.nome}</div>
-                                        <div className="text-xs text-text-muted truncate">{activeLead.headline || activeLead.company}</div>
-                                    </div>
+                {/* MIDDLE: Chat Area */}
+                {activeLead ? (
+                    <div className="flex-1 flex flex-col bg-charcoal rounded-2xl border border-glass-border overflow-hidden relative">
+                        {/* Header */}
+                        <div className="p-4 border-b border-glass-border bg-black/20 flex items-center justify-between z-10">
+                            <div className="flex items-center gap-3 flex-1 min-w-0">
+                                <div className="w-10 h-10 shrink-0 rounded-full bg-gradient-to-br from-gray-800 to-black border border-glass-border flex items-center justify-center text-white font-bold shadow-inner overflow-hidden">
+                                    {activeLead.avatar_url ? (
+                                        <img src={activeLead.avatar_url} alt={activeLead.nome} className="w-full h-full object-cover" />
+                                    ) : (
+                                        activeLead.nome?.charAt(0)
+                                    )}
                                 </div>
-                                <button className="p-2 rounded-lg hover:bg-glass text-text-muted hover:text-text-heading transition-colors shrink-0">
-                                    <MoreVertical size={18} />
-                                </button>
-                            </div>
-
-                            {/* Timeline */}
-                            <div className="flex-1 overflow-y-auto p-4 lg:p-6 flex flex-col-reverse gap-4 custom-scrollbar bg-black/10">
-                                {loadingChat ? (
-                                    <div className="text-center text-text-muted text-sm py-10">Carregando histórico...</div>
-                                ) : interactions.length === 0 ? (
-                                    <div className="text-center text-text-muted text-sm py-10 flex flex-col items-center gap-2">
-                                        <MessageSquare size={24} className="opacity-20" />
-                                        Nenhuma mensagem trocada ainda.
-                                    </div>
-                                ) : (() => {
-                                    // Build date label helper
-                                    const getDateLabel = (dateStr) => {
-                                        const date = new Date(dateStr)
-                                        const now = new Date()
-                                        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-                                        const msgDay = new Date(date.getFullYear(), date.getMonth(), date.getDate())
-                                        const diffDays = Math.round((today - msgDay) / (1000 * 60 * 60 * 24))
-
-                                        if (diffDays === 0) return 'HOJE'
-                                        if (diffDays === 1) return 'ONTEM'
-                                        if (diffDays < 7) {
-                                            return date.toLocaleDateString('pt-BR', { weekday: 'long' }).toUpperCase()
-                                        }
-                                        const day = date.getDate()
-                                        const month = date.toLocaleDateString('pt-BR', { month: 'short' }).toUpperCase().replace('.', '')
-                                        return `${day} DE ${month}.`
-                                    }
-
-                                    const getDateKey = (dateStr) => {
-                                        const d = new Date(dateStr)
-                                        return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`
-                                    }
-
-                                    // interactions are sorted desc (newest first), rendered with flex-col-reverse
-                                    const elements = []
-                                    let lastDateKey = null
-
-                                    interactions.forEach((msg, idx) => {
-                                        const dateKey = getDateKey(msg.interaction_date)
-
-                                        // When date changes, insert divider BEFORE the message bubble
-                                        // (in reversed layout, this renders ABOVE the group)
-                                        if (dateKey !== lastDateKey) {
-                                            // Look at next message — if it's a different day, the divider goes here
-                                            // For the first message (newest), always show divider
-                                            if (lastDateKey !== null) {
-                                                elements.push(
-                                                    <div key={`divider-${lastDateKey}`} className="flex items-center gap-3 my-2 self-stretch">
-                                                        <div className="flex-1 h-px bg-glass-border" />
-                                                        <span className="text-[10px] font-bold text-text-muted tracking-widest uppercase">
-                                                            {getDateLabel(interactions[idx - 1].interaction_date)}
-                                                        </span>
-                                                        <div className="flex-1 h-px bg-glass-border" />
-                                                    </div>
-                                                )
-                                            }
-                                            lastDateKey = dateKey
-                                        }
-
-                                        elements.push(
-                                            <div key={msg.id} className={`flex flex-col max-w-[85%] lg:max-w-[80%] ${msg.is_sender === true ? 'self-end items-end' : 'self-start items-start'}`}>
-                                                <div className={`px-4 py-3 rounded-2xl text-sm leading-relaxed ${msg.is_sender === true
-                                                    ? 'bg-primary text-white rounded-br-sm shadow-lg shadow-primary/10'
-                                                    : 'bg-glass text-text-body rounded-bl-sm border border-glass-border'
-                                                    }`}>
-                                                    {msg.content}
-                                                </div>
-                                                <span className="text-[10px] text-text-muted mt-1 px-1">
-                                                    {new Date(msg.interaction_date).toLocaleString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                                                </span>
-                                            </div>
-                                        )
-                                    })
-
-                                    // Add divider for the last (oldest) group
-                                    if (lastDateKey !== null) {
-                                        elements.push(
-                                            <div key={`divider-${lastDateKey}`} className="flex items-center gap-3 my-2 self-stretch">
-                                                <div className="flex-1 h-px bg-glass-border" />
-                                                <span className="text-[10px] font-bold text-text-muted tracking-widest uppercase">
-                                                    {getDateLabel(interactions[interactions.length - 1].interaction_date)}
-                                                </span>
-                                                <div className="flex-1 h-px bg-glass-border" />
-                                            </div>
-                                        )
-                                    }
-
-                                    return elements
-                                })()}
-                            </div>
-
-                            {/* Input Area */}
-                            <div className="p-4 border-t border-glass-border bg-black/20">
-                                <div className="relative">
-                                    <textarea
-                                        className="w-full bg-black/40 border border-glass-border rounded-xl pl-4 pr-12 py-3 text-white placeholder-text-muted focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition-all resize-none text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                                        rows="1"
-                                        placeholder={isSending ? 'Enviando...' : 'Digite sua resposta... (Ctrl+Enter para enviar)'}
-                                        value={newMessage}
-                                        onChange={e => setNewMessage(e.target.value)}
-                                        disabled={isSending}
-                                        onKeyDown={e => {
-                                            if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-                                                e.preventDefault()
-                                                handleSendMessage()
-                                            }
-                                        }}
-                                    />
-                                    <button
-                                        onClick={handleSendMessage}
-                                        disabled={isSending || !newMessage.trim()}
-                                        className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-lg bg-primary hover:bg-primary/80 text-white shadow-lg shadow-primary/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                                    >
-                                        {isSending ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
-                                    </button>
+                                <div className="flex-1 min-w-0">
+                                    <div className="font-bold text-text-heading text-sm truncate">{activeLead.nome}</div>
+                                    <div className="text-xs text-text-muted truncate">{activeLead.headline || activeLead.company}</div>
                                 </div>
                             </div>
+                            <button className="p-2 rounded-lg hover:bg-glass text-text-muted hover:text-text-heading transition-colors shrink-0">
+                                <MoreVertical size={18} />
+                            </button>
                         </div>
-                    ) : (
-                        <div className="flex-1 flex flex-col items-center justify-center bg-charcoal rounded-2xl border border-glass-border text-text-muted gap-4">
-                            <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center">
-                                <Zap size={32} className="text-primary/50" />
-                            </div>
-                            <p className="text-sm text-text-muted">Selecione um lead para iniciar o atendimento.</p>
-                        </div>
-                    )}
 
-                    {/* RIGHT: Context & AI (ENHANCED) */}
-                    <div className="hidden xl:flex w-80 flex-col gap-4 shrink-0 overflow-y-auto custom-scrollbar">
-                        {activeLead ? (
-                            <>
-                                {/* Lead Info Card - 3 Main Indicators */}
-                                <div className="bg-charcoal rounded-2xl border border-glass-border p-5">
-                                    <h4 className="text-xs font-bold text-primary uppercase tracking-wider mb-4">Dados do Lead</h4>
-                                    <div className="flex items-center justify-between gap-3">
-                                        {/* ICP Score */}
-                                        <div className={`flex-1 text-center py-2 px-3 rounded-lg border ${activeLead.icp_score === 'A' ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400' :
-                                            activeLead.icp_score === 'B' ? 'bg-amber-500/20 border-amber-500/50 text-amber-400' :
-                                                'bg-slate-500/20 border-slate-500/50 text-text-muted'
-                                            }`}>
-                                            <div className="text-[10px] uppercase tracking-wider opacity-70 mb-1">ICP</div>
-                                            <div className="text-lg font-bold">{activeLead.icp_score || 'C'}</div>
-                                        </div>
+                        {/* Timeline */}
+                        <div className="flex-1 overflow-y-auto p-4 lg:p-6 flex flex-col-reverse gap-4 custom-scrollbar bg-black/10">
+                            {loadingChat ? (
+                                <div className="text-center text-text-muted text-sm py-10">Carregando histórico...</div>
+                            ) : interactions.length === 0 ? (
+                                <div className="text-center text-text-muted text-sm py-10 flex flex-col items-center gap-2">
+                                    <MessageSquare size={24} className="opacity-20" />
+                                    Nenhuma mensagem trocada ainda.
+                                </div>
+                            ) : (() => {
+                                // Build date label helper
+                                const getDateLabel = (dateStr) => {
+                                    const date = new Date(dateStr)
+                                    const now = new Date()
+                                    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+                                    const msgDay = new Date(date.getFullYear(), date.getMonth(), date.getDate())
+                                    const diffDays = Math.round((today - msgDay) / (1000 * 60 * 60 * 24))
 
-                                        {/* Interactions Count */}
-                                        <div className="flex-1 text-center py-2 px-3 rounded-lg bg-blue-500/20 border border-blue-500/50 text-blue-400">
-                                            <div className="text-[10px] uppercase tracking-wider opacity-70 mb-1">Interações</div>
-                                            <div className="text-lg font-bold">{activeLead.total_interactions_count || activeLead.total_interactions || 0}</div>
-                                        </div>
+                                    if (diffDays === 0) return 'HOJE'
+                                    if (diffDays === 1) return 'ONTEM'
+                                    if (diffDays < 7) {
+                                        return date.toLocaleDateString('pt-BR', { weekday: 'long' }).toUpperCase()
+                                    }
+                                    const day = date.getDate()
+                                    const month = date.toLocaleDateString('pt-BR', { month: 'short' }).toUpperCase().replace('.', '')
+                                    return `${day} DE ${month}.`
+                                }
 
-                                        {/* Cadence Stage */}
-                                        {(() => {
-                                            const stage = activeLead.cadence_stage || ''
-                                            const match = stage?.toString().match(/(\d+)/)
-                                            const level = match ? parseInt(match[1], 10) : 0
-                                            const style = level >= 5 ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400'
-                                                : level >= 3 ? 'bg-amber-500/20 border-amber-500/50 text-amber-400'
-                                                    : level >= 1 ? 'bg-blue-500/20 border-blue-500/50 text-blue-400'
-                                                        : 'bg-slate-500/20 border-slate-500/50 text-text-muted'
-                                            return (
-                                                <div className={`flex-1 text-center py-2 px-3 rounded-lg border ${style}`}>
-                                                    <div className="text-[10px] uppercase tracking-wider opacity-70 mb-1">Cadência</div>
-                                                    <div className="text-lg font-bold">{stage || '—'}</div>
+                                const getDateKey = (dateStr) => {
+                                    const d = new Date(dateStr)
+                                    return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`
+                                }
+
+                                // interactions are sorted desc (newest first), rendered with flex-col-reverse
+                                const elements = []
+                                let lastDateKey = null
+
+                                interactions.forEach((msg, idx) => {
+                                    const dateKey = getDateKey(msg.interaction_date)
+
+                                    // When date changes, insert divider BEFORE the message bubble
+                                    // (in reversed layout, this renders ABOVE the group)
+                                    if (dateKey !== lastDateKey) {
+                                        // Look at next message — if it's a different day, the divider goes here
+                                        // For the first message (newest), always show divider
+                                        if (lastDateKey !== null) {
+                                            elements.push(
+                                                <div key={`divider-${lastDateKey}`} className="flex items-center gap-3 my-2 self-stretch">
+                                                    <div className="flex-1 h-px bg-glass-border" />
+                                                    <span className="text-[10px] font-bold text-text-muted tracking-widest uppercase">
+                                                        {getDateLabel(interactions[idx - 1].interaction_date)}
+                                                    </span>
+                                                    <div className="flex-1 h-px bg-glass-border" />
                                                 </div>
                                             )
-                                        })()}
-                                    </div>
-                                </div>
+                                        }
+                                        lastDateKey = dateKey
+                                    }
 
-                                {/* Raio-X da Negociação */}
-                                <StrategicContextCard lead={activeLead} isIcebreaker={interactions.length === 0} />
-
-                                {/* AI Suggestion Card - Always starts clean */}
-                                <div className="relative p-[1px] rounded-2xl bg-gradient-to-br from-primary/50 to-purple-600/50 shadow-lg shadow-primary/10">
-                                    <div className="bg-charcoal rounded-2xl p-5 h-full flex flex-col gap-4">
-                                        <div className="flex items-center gap-2 text-primary font-bold text-sm">
-                                            <Sparkles size={16} /> Próximo Passo
+                                    elements.push(
+                                        <div key={msg.id} className={`flex flex-col max-w-[85%] lg:max-w-[80%] ${msg.is_sender === true ? 'self-end items-end' : 'self-start items-start'}`}>
+                                            <div className={`px-4 py-3 rounded-2xl text-sm leading-relaxed ${msg.is_sender === true
+                                                ? 'bg-primary text-white rounded-br-sm shadow-lg shadow-primary/10'
+                                                : 'bg-glass text-text-body rounded-bl-sm border border-glass-border'
+                                                }`}>
+                                                {msg.content}
+                                            </div>
+                                            <span className="text-[10px] text-text-muted mt-1 px-1">
+                                                {new Date(msg.interaction_date).toLocaleString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                                            </span>
                                         </div>
+                                    )
+                                })
 
-                                        {(() => {
-                                            const isIcebreaker = interactions.length === 0
-                                            const hasGeneratedReply = !!draftMessage
+                                // Add divider for the last (oldest) group
+                                if (lastDateKey !== null) {
+                                    elements.push(
+                                        <div key={`divider-${lastDateKey}`} className="flex items-center gap-3 my-2 self-stretch">
+                                            <div className="flex-1 h-px bg-glass-border" />
+                                            <span className="text-[10px] font-bold text-text-muted tracking-widest uppercase">
+                                                {getDateLabel(interactions[interactions.length - 1].interaction_date)}
+                                            </span>
+                                            <div className="flex-1 h-px bg-glass-border" />
+                                        </div>
+                                    )
+                                }
 
-                                            // Has a message (from DB or just generated) → show it
-                                            if (hasGeneratedReply) {
-                                                return (
-                                                    <>
-                                                        {/* SDR Senior Badge */}
-                                                        <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gradient-to-r from-amber-500/20 to-orange-500/20 border border-amber-500/30 text-amber-400 text-[10px] font-bold uppercase tracking-wider">
-                                                            <Sparkles size={12} />
-                                                            Gerada pelo Agente SDR Senior
-                                                        </div>
+                                return elements
+                            })()}
+                        </div>
 
-                                                        {/* Message - Prominent Display */}
-                                                        <div className="p-4 rounded-xl bg-white/5 border border-primary/30">
-                                                            <p className="text-text-heading text-sm leading-relaxed whitespace-pre-wrap">
-                                                                "{draftMessage}"
+                        {/* Input Area */}
+                        <div className="p-4 border-t border-glass-border bg-black/20">
+                            <div className="relative">
+                                <textarea
+                                    className="w-full bg-black/40 border border-glass-border rounded-xl pl-4 pr-12 py-3 text-white placeholder-text-muted focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition-all resize-none text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                                    rows="1"
+                                    placeholder={isSending ? 'Enviando...' : 'Digite sua resposta... (Ctrl+Enter para enviar)'}
+                                    value={newMessage}
+                                    onChange={e => setNewMessage(e.target.value)}
+                                    disabled={isSending}
+                                    onKeyDown={e => {
+                                        if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                                            e.preventDefault()
+                                            handleSendMessage()
+                                        }
+                                    }}
+                                />
+                                <button
+                                    onClick={handleSendMessage}
+                                    disabled={isSending || !newMessage.trim()}
+                                    className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-lg bg-primary hover:bg-primary/80 text-white shadow-lg shadow-primary/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    {isSending ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                ) : (
+                    <div className="flex-1 flex flex-col items-center justify-center bg-charcoal rounded-2xl border border-glass-border text-text-muted gap-4">
+                        <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center">
+                            <Zap size={32} className="text-primary/50" />
+                        </div>
+                        <p className="text-sm text-text-muted">Selecione um lead para iniciar o atendimento.</p>
+                    </div>
+                )}
+
+                {/* RIGHT: Context & AI (ENHANCED) */}
+                <div className="hidden xl:flex w-80 flex-col gap-4 shrink-0 overflow-y-auto custom-scrollbar">
+                    {activeLead ? (
+                        <>
+                            {/* Lead Info Card - 3 Main Indicators */}
+                            <div className="bg-charcoal rounded-2xl border border-glass-border p-5">
+                                <h4 className="text-xs font-bold text-primary uppercase tracking-wider mb-4">Dados do Lead</h4>
+                                <div className="flex items-center justify-between gap-3">
+                                    {/* ICP Score */}
+                                    <div className={`flex-1 text-center py-2 px-3 rounded-lg border ${activeLead.icp_score === 'A' ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400' :
+                                        activeLead.icp_score === 'B' ? 'bg-amber-500/20 border-amber-500/50 text-amber-400' :
+                                            'bg-slate-500/20 border-slate-500/50 text-text-muted'
+                                        }`}>
+                                        <div className="text-[10px] uppercase tracking-wider opacity-70 mb-1">ICP</div>
+                                        <div className="text-lg font-bold">{activeLead.icp_score || 'C'}</div>
+                                    </div>
+
+                                    {/* Interactions Count */}
+                                    <div className="flex-1 text-center py-2 px-3 rounded-lg bg-blue-500/20 border border-blue-500/50 text-blue-400">
+                                        <div className="text-[10px] uppercase tracking-wider opacity-70 mb-1">Interações</div>
+                                        <div className="text-lg font-bold">{activeLead.total_interactions_count || activeLead.total_interactions || 0}</div>
+                                    </div>
+
+                                    {/* Cadence Stage */}
+                                    {(() => {
+                                        const stage = activeLead.cadence_stage || ''
+                                        const match = stage?.toString().match(/(\d+)/)
+                                        const level = match ? parseInt(match[1], 10) : 0
+                                        const style = level >= 5 ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400'
+                                            : level >= 3 ? 'bg-amber-500/20 border-amber-500/50 text-amber-400'
+                                                : level >= 1 ? 'bg-blue-500/20 border-blue-500/50 text-blue-400'
+                                                    : 'bg-slate-500/20 border-slate-500/50 text-text-muted'
+                                        return (
+                                            <div className={`flex-1 text-center py-2 px-3 rounded-lg border ${style}`}>
+                                                <div className="text-[10px] uppercase tracking-wider opacity-70 mb-1">Cadência</div>
+                                                <div className="text-lg font-bold">{stage || '—'}</div>
+                                            </div>
+                                        )
+                                    })()}
+                                </div>
+                            </div>
+
+                            {/* Raio-X da Negociação */}
+                            <StrategicContextCard lead={activeLead} isIcebreaker={interactions.length === 0} />
+
+                            {/* AI Suggestion Card - Always starts clean */}
+                            <div className="relative p-[1px] rounded-2xl bg-gradient-to-br from-primary/50 to-purple-600/50 shadow-lg shadow-primary/10">
+                                <div className="bg-charcoal rounded-2xl p-5 h-full flex flex-col gap-4">
+                                    <div className="flex items-center gap-2 text-primary font-bold text-sm">
+                                        <Sparkles size={16} /> Próximo Passo
+                                    </div>
+
+                                    {(() => {
+                                        const isIcebreaker = interactions.length === 0
+                                        const hasGeneratedReply = !!draftMessage
+
+                                        // Has a message (from DB or just generated) → show it
+                                        if (hasGeneratedReply) {
+                                            return (
+                                                <>
+                                                    {/* SDR Senior Badge */}
+                                                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gradient-to-r from-amber-500/20 to-orange-500/20 border border-amber-500/30 text-amber-400 text-[10px] font-bold uppercase tracking-wider">
+                                                        <Sparkles size={12} />
+                                                        Gerada pelo Agente SDR Senior
+                                                    </div>
+
+                                                    {/* Message - Prominent Display */}
+                                                    <div className="p-4 rounded-xl bg-white/5 border border-primary/30">
+                                                        <p className="text-text-heading text-sm leading-relaxed whitespace-pre-wrap">
+                                                            "{draftMessage}"
+                                                        </p>
+                                                    </div>
+
+                                                    {/* Reasoning (only if available) */}
+                                                    {generatedReasoning && (
+                                                        <div className="flex gap-2 text-text-muted text-xs">
+                                                            <span className="text-primary/60 shrink-0">💡</span>
+                                                            <p className="leading-relaxed italic">
+                                                                {generatedReasoning}
                                                             </p>
                                                         </div>
+                                                    )}
 
-                                                        {/* Reasoning (only if available) */}
-                                                        {generatedReasoning && (
-                                                            <div className="flex gap-2 text-text-muted text-xs">
-                                                                <span className="text-primary/60 shrink-0">💡</span>
-                                                                <p className="leading-relaxed italic">
-                                                                    {generatedReasoning}
-                                                                </p>
-                                                            </div>
-                                                        )}
-
-                                                        {/* Regenerate Button */}
-                                                        <button
-                                                            onClick={generateAISuggestion}
-                                                            disabled={generatingReply}
-                                                            className="w-full mt-2 py-2.5 rounded-lg bg-gradient-to-r from-amber-500/20 to-orange-500/20 hover:from-amber-500/30 hover:to-orange-500/30 border border-amber-500/30 text-xs font-semibold text-amber-300 hover:text-amber-200 transition-all flex justify-center items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                                                        >
-                                                            {generatingReply ? (
-                                                                <>
-                                                                    <Loader2 size={14} className="animate-spin" />
-                                                                    {isIcebreaker ? 'Gerando Icebreaker...' : 'Gerando Resposta...'}
-                                                                </>
-                                                            ) : (
-                                                                <>
-                                                                    <Sparkles size={14} />
-                                                                    {isIcebreaker ? 'Gerar Novo Icebreaker' : 'Gerar Nova Resposta'}
-                                                                </>
-                                                            )}
-                                                        </button>
-
-                                                        {/* Use in Chat Button */}
-                                                        <button
-                                                            onClick={() => {
-                                                                setNewMessage(draftMessage)
-                                                                setSelectedSuggestionIdx(0)
-                                                            }}
-                                                            className="w-full py-2.5 rounded-lg bg-primary hover:bg-primary/80 text-white text-xs font-bold shadow-lg shadow-primary/20 transition-all flex justify-center items-center gap-2"
-                                                        >
-                                                            <Check size={14} />
-                                                            Usar no Chat
-                                                        </button>
-                                                    </>
-                                                )
-                                            }
-
-                                            // Default: Empty state → show generate button
-                                            return (
-                                                <div className="text-center py-6">
-                                                    <p className="text-sm text-text-muted mb-5">
-                                                        {isIcebreaker
-                                                            ? 'Nenhuma conversa iniciada com este lead.'
-                                                            : 'Clique para gerar uma sugestão de resposta com IA.'}
-                                                    </p>
+                                                    {/* Regenerate Button */}
                                                     <button
                                                         onClick={generateAISuggestion}
                                                         disabled={generatingReply}
-                                                        className="w-full py-3 rounded-lg bg-gradient-to-r from-amber-500/20 to-orange-500/20 hover:from-amber-500/30 hover:to-orange-500/30 border border-amber-500/30 text-sm font-semibold text-amber-300 hover:text-amber-200 transition-all flex justify-center items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                        className="w-full mt-2 py-2.5 rounded-lg bg-gradient-to-r from-amber-500/20 to-orange-500/20 hover:from-amber-500/30 hover:to-orange-500/30 border border-amber-500/30 text-xs font-semibold text-amber-300 hover:text-amber-200 transition-all flex justify-center items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                                                     >
                                                         {generatingReply ? (
                                                             <>
@@ -34348,24 +34820,64 @@ const SalesInboxPage = () => {
                                                         ) : (
                                                             <>
                                                                 <Sparkles size={14} />
-                                                                {isIcebreaker ? 'Gerar Icebreaker' : 'Gerar Resposta'}
+                                                                {isIcebreaker ? 'Gerar Novo Icebreaker' : 'Gerar Nova Resposta'}
                                                             </>
                                                         )}
                                                     </button>
-                                                </div>
+
+                                                    {/* Use in Chat Button */}
+                                                    <button
+                                                        onClick={() => {
+                                                            setNewMessage(draftMessage)
+                                                            setSelectedSuggestionIdx(0)
+                                                        }}
+                                                        className="w-full py-2.5 rounded-lg bg-primary hover:bg-primary/80 text-white text-xs font-bold shadow-lg shadow-primary/20 transition-all flex justify-center items-center gap-2"
+                                                    >
+                                                        <Check size={14} />
+                                                        Usar no Chat
+                                                    </button>
+                                                </>
                                             )
-                                        })()}
-                                    </div>
+                                        }
+
+                                        // Default: Empty state → show generate button
+                                        return (
+                                            <div className="text-center py-6">
+                                                <p className="text-sm text-text-muted mb-5">
+                                                    {isIcebreaker
+                                                        ? 'Nenhuma conversa iniciada com este lead.'
+                                                        : 'Clique para gerar uma sugestão de resposta com IA.'}
+                                                </p>
+                                                <button
+                                                    onClick={generateAISuggestion}
+                                                    disabled={generatingReply}
+                                                    className="w-full py-3 rounded-lg bg-gradient-to-r from-amber-500/20 to-orange-500/20 hover:from-amber-500/30 hover:to-orange-500/30 border border-amber-500/30 text-sm font-semibold text-amber-300 hover:text-amber-200 transition-all flex justify-center items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                >
+                                                    {generatingReply ? (
+                                                        <>
+                                                            <Loader2 size={14} className="animate-spin" />
+                                                            {isIcebreaker ? 'Gerando Icebreaker...' : 'Gerando Resposta...'}
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <Sparkles size={14} />
+                                                            {isIcebreaker ? 'Gerar Icebreaker' : 'Gerar Resposta'}
+                                                        </>
+                                                    )}
+                                                </button>
+                                            </div>
+                                        )
+                                    })()}
                                 </div>
-                            </>
-                        ) : (
-                            <div className="bg-charcoal rounded-2xl border border-glass-border p-8 text-center text-text-muted text-sm h-40 flex items-center justify-center">
-                                Contexto do lead aparecerá aqui.
                             </div>
-                        )}
-                    </div>
+                        </>
+                    ) : (
+                        <div className="bg-charcoal rounded-2xl border border-glass-border p-8 text-center text-text-muted text-sm h-40 flex items-center justify-center">
+                            Contexto do lead aparecerá aqui.
+                        </div>
+                    )}
                 </div>
-            )}
+            </div>
         </div>
     )
 }

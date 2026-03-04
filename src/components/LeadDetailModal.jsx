@@ -130,43 +130,6 @@ const LeadDetailModal = ({ lead, campaignLead, onClose }) => {
 
     if (!lead) return null
 
-    // Circular Progress Ring Component
-    const CircularGauge = ({ percent, color, size = 80, strokeWidth = 6, children }) => {
-        const radius = (size - strokeWidth) / 2
-        const circumference = radius * 2 * Math.PI
-        const offset = circumference - (percent / 100) * circumference
-
-        return (
-            <div className="relative" style={{ width: size, height: size }}>
-                <svg className="transform -rotate-90" width={size} height={size}>
-                    <circle
-                        cx={size / 2}
-                        cy={size / 2}
-                        r={radius}
-                        stroke="rgba(255,255,255,0.1)"
-                        strokeWidth={strokeWidth}
-                        fill="none"
-                    />
-                    <circle
-                        cx={size / 2}
-                        cy={size / 2}
-                        r={radius}
-                        stroke={color}
-                        strokeWidth={strokeWidth}
-                        fill="none"
-                        strokeLinecap="round"
-                        strokeDasharray={circumference}
-                        strokeDashoffset={offset}
-                        style={{ transition: 'stroke-dashoffset 0.5s ease' }}
-                    />
-                </svg>
-                <div className="absolute inset-0 flex items-center justify-center">
-                    {children}
-                </div>
-            </div>
-        )
-    }
-
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md p-4" onClick={onClose}>
             <div
@@ -221,34 +184,32 @@ const LeadDetailModal = ({ lead, campaignLead, onClose }) => {
                     </div>
                 </div>
 
-                {/* ========== TRUST TRIAD: 3 Gauges (Light Theme) ========== */}
+                {/* ========== TRUST TRIAD: 3 Stat Badges ========== */}
                 <div className="px-6 py-5 border-b border-slate-200 bg-slate-50">
-                    <div className="grid grid-cols-3 gap-4">
-                        {/* Gauge 1: Qualificação ICP */}
-                        <div className="flex flex-col items-center">
-                            <CircularGauge percent={quality.percent} color={quality.color}>
-                                <span className={`text-xl font-bold ${quality.text}`}>{quality.label}</span>
-                            </CircularGauge>
-                            <span className="text-[11px] text-slate-600 font-semibold uppercase tracking-wider mt-2">Qualificação ICP</span>
+                    <div className="grid grid-cols-3 gap-3">
+                        {/* Badge 1: Qualificação ICP */}
+                        <div className={`flex flex-col items-center gap-1 py-3 px-2 rounded-2xl border-2 ${quality.label === 'A' ? 'bg-emerald-50 border-emerald-300' :
+                                quality.label === 'B' ? 'bg-amber-50 border-amber-300' :
+                                    'bg-red-50 border-red-300'
+                            }`}>
+                            <span className={`text-2xl font-black ${quality.text}`}>{quality.label}</span>
+                            <span className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider text-center leading-tight">Qualificação ICP</span>
                         </div>
 
-                        {/* Gauge 2: Interações */}
-                        <div className="flex flex-col items-center">
-                            <CircularGauge percent={interaction.percent} color={interaction.color}>
-                                <span className={`text-xl font-bold ${interaction.text}`}>{interaction.label}</span>
-                            </CircularGauge>
-                            <span className="text-[11px] text-slate-600 font-semibold uppercase tracking-wider mt-2">Interações</span>
+                        {/* Badge 2: Interações */}
+                        <div className={`flex flex-col items-center gap-1 py-3 px-2 rounded-2xl border-2 ${interaction.percent === 100 ? 'bg-emerald-50 border-emerald-300' :
+                                interaction.percent === 66 ? 'bg-amber-50 border-amber-300' :
+                                    'bg-red-50 border-red-300'
+                            }`}>
+                            <span className={`text-2xl font-black ${interaction.text}`}>{interaction.label}</span>
+                            <span className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider text-center leading-tight">Interações</span>
                         </div>
 
-                        {/* Gauge 3: Nível de Cadência (Trust Proxy) */}
-                        <div className="flex flex-col items-center">
-                            <CircularGauge percent={cadence.percent} color={cadence.color}>
-                                <div className="flex flex-col items-center">
-                                    <span className={`text-lg font-bold ${cadence.text}`}>{cadence.stage || '—'}</span>
-                                </div>
-                            </CircularGauge>
-                            <span className="text-[11px] text-slate-600 font-semibold uppercase tracking-wider mt-2">Cadência</span>
-                            <span className={`text-[9px] font-medium mt-0.5 ${cadence.text}`}>{cadence.label}</span>
+                        {/* Badge 3: Cadência */}
+                        <div className="flex flex-col items-center gap-1 py-3 px-2 rounded-2xl border-2 bg-blue-50 border-blue-200">
+                            <span className={`text-2xl font-black ${cadence.text}`}>{cadence.stage || '—'}</span>
+                            <span className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider text-center leading-tight">Cadência</span>
+                            {cadence.label && <span className={`text-[9px] font-medium ${cadence.text} leading-tight text-center`}>{cadence.label}</span>}
                         </div>
                     </div>
 

@@ -15,6 +15,7 @@ import ClientsPage from './pages/ClientsPage'
 import IdeasPage from './pages/IdeasPage'
 import SalesHubPage from './pages/SalesHubPage'
 import SalesInboxPage from './pages/SalesInboxPage'
+import PipelinePage from './pages/PipelinePage'
 import NetworkDashboard from './pages/NetworkDashboard'
 import SystemInfoPage from './pages/SystemInfoPage'
 import LinkedInEngagementPage from './pages/LinkedInEngagementPage'
@@ -177,6 +178,7 @@ function App() {
                 <Route path="/sales" element={<SalesHubPage />} />
                 <Route path="/network" element={<NetworkDashboard />} />
                 <Route path="/sales/inbox" element={<SalesInboxPage />} />
+                <Route path="/pipeline" element={<PipelinePage />} />
                 <Route path="/system-info" element={<SystemInfoPage />} />
                 <Route path="/engagement" element={<LinkedInEngagementPage />} />
                 <Route path="/missions" element={<MissionsPage />} />
