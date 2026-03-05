@@ -3,18 +3,19 @@ import { useSearchParams } from 'react-router-dom'
 import { supabase } from '../services/supabaseClient'
 import { useClientSelection } from '../contexts/ClientSelectionContext'
 import { Search, Send, MoreVertical, Phone, Mail, MapPin, Briefcase, Zap, Star, Sparkles, MessageSquare, Check, LayoutGrid, List, Loader2, X, ClipboardList, CheckCircle2, Ban } from 'lucide-react'
-const N8N_GENERATE_REPLY_URL = 'https://n8n-n8n-start.kfocge.easypanel.host/webhook/generate-reply'
+import SafeImage from '../components/SafeImage'
+const N8N_GENERATE_REPLY_URL = 'https://n8n-n8n-start.kfocge.easypanel.host/webhook-test/generate-reply'
 const N8N_SEND_MESSAGE_URL = 'https://n8n-n8n-start.kfocge.easypanel.host/webhook/send-linkedin-message'
 import StrategicContextCard from '../components/StrategicContextCard'
 
-// Returns true only for confirmed OVERDUE follow-ups (last_task_completed_at NOT null)
-// leads with null last_task_completed_at are excluded here to avoid false positives
+// Returns true if lead meets the strict conditions to be considered a task
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000
-const isCockpitPendingStrict = (lead) => {
+const isLeadTask = (lead) => {
     if (!lead) return false
     if (lead.is_blacklisted) return false
     if (lead.crm_stage === 'Ganho') return false
-    if (!lead.last_task_completed_at) return false // null handled via cockpitLeadId
+    if (!lead.last_task_completed_at) return true // NULL is a task
+
     const overdue = new Date(lead.last_task_completed_at).getTime() < Date.now() - SEVEN_DAYS_MS
     return overdue && !lead.has_engaged
 }
@@ -68,6 +69,11 @@ const SalesInboxPage = () => {
         if (!activeLead) return
         try {
             await supabase.from('leads').update({ last_task_completed_at: new Date().toISOString() }).eq('id', activeLead.id)
+
+            // Sync with Cockpit's tasks table
+            await supabase.from('tasks').update({ status: 'COMPLETED', completed_at: new Date().toISOString() })
+                .eq('lead_id', activeLead.id).eq('status', 'PENDING')
+
             showCrmToast('✅ Tarefa concluída!')
         } catch (err) {
             console.error('[Inbox] markDone error:', err)
@@ -79,6 +85,11 @@ const SalesInboxPage = () => {
         if (!activeLead) return
         try {
             await supabase.from('leads').update({ is_blacklisted: true }).eq('id', activeLead.id)
+
+            // Remove pending tasks for blacklisted lead
+            await supabase.from('tasks').update({ status: 'CANCELLED', completed_at: new Date().toISOString() })
+                .eq('lead_id', activeLead.id).eq('status', 'PENDING')
+
             showCrmToast('🚫 Lead adicionado à lista negra.')
         } catch (err) {
             console.error('[Inbox] blacklist error:', err)
@@ -99,7 +110,11 @@ const SalesInboxPage = () => {
         try {
             const conversationHistory = interactions
                 .slice().reverse()
-                .map(msg => ({ is_sender: !!msg.is_sender, content: msg.content || '' }))
+                .map(msg => ({
+                    is_sender: !!msg.is_sender,
+                    content: msg.content || '',
+                    interaction_date: msg.interaction_date || null
+                }))
 
             const payload = {
                 user_id: selectedClientId,
@@ -140,12 +155,19 @@ const SalesInboxPage = () => {
     useEffect(() => {
         if (!selectedClientId) return
         const fetchCount = async () => {
+            const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
             const { data } = await supabase
-                .from('tasks')
-                .select('id, leads!inner(client_id)')
-                .eq('leads.client_id', selectedClientId)
-                .eq('status', 'PENDING')
-            setPendingTaskCount(data?.length || 0)
+                .from('leads')
+                .select('id, is_blacklisted, crm_stage, last_task_completed_at, has_engaged')
+                .eq('client_id', selectedClientId)
+                .neq('is_blacklisted', true)
+                .neq('crm_stage', 'Ganho')
+                .or(`last_task_completed_at.is.null,and(last_task_completed_at.lt.${sevenDaysAgo},has_engaged.eq.false)`)
+                .limit(30)
+
+            if (data) {
+                setPendingTaskCount(data.length)
+            }
         }
         fetchCount()
     }, [selectedClientId])
@@ -377,19 +399,31 @@ const SalesInboxPage = () => {
         if (!selectedClientId) return
         setLoadingTasks(true)
         try {
+            const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
+            // Unification of task query directly from leads table
             const { data } = await supabase
-                .from('tasks')
-                .select('*, leads!inner(id, client_id, nome, empresa, headline, cadence_stage, avatar_url, linkedin_profile_url, total_interactions_count)')
-                .eq('leads.client_id', selectedClientId)
-                .eq('status', 'PENDING')
-                .order('created_at', { ascending: true })
+                .from('leads')
+                .select('id, client_id, nome, empresa, headline, cadence_stage, avatar_url, linkedin_profile_url, total_interactions_count, is_blacklisted, crm_stage, last_task_completed_at, has_engaged, last_interaction_date')
+                .eq('client_id', selectedClientId)
+                .neq('is_blacklisted', true)
+                .neq('crm_stage', 'Ganho')
+                .or(`last_task_completed_at.is.null,and(last_task_completed_at.lt.${sevenDaysAgo},has_engaged.eq.false)`)
+                .order('last_interaction_date', { ascending: false, nullsFirst: false })
+                .limit(30)
 
-            // Sort by temperature: HOT (G4/G5) > WARM (G2/G3) > COLD (G1)
-            const stagePriority = { G5: 0, G4: 1, G3: 2, G2: 3, G1: 4 }
-            const sorted = (data || []).sort((a, b) => {
-                const pa = stagePriority[a.leads?.cadence_stage] ?? 5
-                const pb = stagePriority[b.leads?.cadence_stage] ?? 5
-                return pa - pb
+            const candidates = data || []
+
+            // Convert to the shape expected by sidebar rendering UI { id: lead.id, leads: lead }
+            const processedTasks = candidates.map(lead => ({
+                id: lead.id,
+                leads: lead
+            }))
+
+            // Sort by last interaction date DESC (newest interactions / message first)
+            const sorted = processedTasks.sort((a, b) => {
+                const timeA = a.leads?.last_interaction_date ? new Date(a.leads.last_interaction_date).getTime() : 0
+                const timeB = b.leads?.last_interaction_date ? new Date(b.leads.last_interaction_date).getTime() : 0
+                return timeB - timeA
             })
             setSidebarTasks(sorted)
         } catch (err) {
@@ -402,6 +436,66 @@ const SalesInboxPage = () => {
     useEffect(() => {
         if (sidebarTab === 'tarefas') fetchSidebarTasks()
     }, [sidebarTab, fetchSidebarTasks])
+
+    // Realtime implementation for task sidebar
+    useEffect(() => {
+        if (!selectedClientId) return
+
+        const channel = supabase.channel('public:leads:tasks')
+            .on(
+                'postgres_changes',
+                { event: 'UPDATE', schema: 'public', table: 'leads', filter: `client_id=eq.${selectedClientId}` },
+                (payload) => {
+                    const updatedLead = payload.new
+
+                    setSidebarTasks((prevTasks) => {
+                        const existingTaskIndex = prevTasks.findIndex(t => t.leads?.id === updatedLead.id)
+                        const isValidTask = isLeadTask(updatedLead)
+
+                        let newTasks = [...prevTasks]
+
+                        if (!isValidTask && existingTaskIndex !== -1) {
+                            // Lead is no longer a task, remove from sidebar IMMEDIATELY
+                            newTasks.splice(existingTaskIndex, 1)
+                        } else if (isValidTask && existingTaskIndex === -1 && sidebarTab === 'tarefas') {
+                            // Lead became a task, add to sidebar
+                            const newTask = { id: updatedLead.id, leads: updatedLead }
+                            newTasks.push(newTask)
+                            // Re-sort
+                            newTasks.sort((a, b) => {
+                                const timeA = a.leads?.last_interaction_date ? new Date(a.leads.last_interaction_date).getTime() : 0
+                                const timeB = b.leads?.last_interaction_date ? new Date(b.leads.last_interaction_date).getTime() : 0
+                                return timeB - timeA
+                            })
+                        } else if (isValidTask && existingTaskIndex !== -1) {
+                            // Update existing task details
+                            newTasks[existingTaskIndex].leads = { ...newTasks[existingTaskIndex].leads, ...updatedLead }
+                            // Re-sort
+                            newTasks.sort((a, b) => {
+                                const timeA = a.leads?.last_interaction_date ? new Date(a.leads.last_interaction_date).getTime() : 0
+                                const timeB = b.leads?.last_interaction_date ? new Date(b.leads.last_interaction_date).getTime() : 0
+                                return timeB - timeA
+                            })
+                        }
+
+                        // Also update the global badge count to stay in sync
+                        // We do this by adjusting the delta
+                        setPendingTaskCount(current => {
+                            if (!isValidTask && existingTaskIndex !== -1) return Math.max(0, current - 1)
+                            if (isValidTask && existingTaskIndex === -1) return current + 1
+                            return current
+                        })
+
+                        return newTasks
+                    })
+                }
+            )
+            .subscribe()
+
+        return () => {
+            supabase.removeChannel(channel)
+        }
+    }, [selectedClientId, sidebarTab])
 
     const handleTaskClick = async (task) => {
         const taskLead = task.leads
@@ -509,7 +603,8 @@ const SalesInboxPage = () => {
                 .slice().reverse()
                 .map(msg => ({
                     is_sender: !!msg.is_sender,
-                    content: msg.content || ''
+                    content: msg.content || '',
+                    interaction_date: msg.interaction_date || null
                 }))
 
             const payload = {
@@ -751,13 +846,12 @@ const SalesInboxPage = () => {
                                             className="p-3 rounded-xl border border-transparent hover:bg-glass hover:border-glass-border cursor-pointer transition-all group"
                                         >
                                             <div className="flex items-center gap-2 mb-1.5">
-                                                {tLead.avatar_url ? (
-                                                    <img src={tLead.avatar_url} alt="" className="w-7 h-7 rounded-full object-cover border border-glass-border" />
-                                                ) : (
-                                                    <div className="w-7 h-7 rounded-full bg-glass border border-glass-border flex items-center justify-center text-[10px] font-bold text-text-heading">
-                                                        {tLead.nome?.charAt(0) || '?'}
-                                                    </div>
-                                                )}
+                                                <SafeImage
+                                                    src={tLead.avatar_url}
+                                                    alt={tLead.nome}
+                                                    className="w-7 h-7 rounded-full object-cover border border-glass-border"
+                                                    fallbackText={tLead.nome?.charAt(0) || '?'}
+                                                />
                                                 <div className="flex-1 min-w-0">
                                                     <span className="text-sm font-semibold text-text-heading truncate block">{tLead.nome || 'Lead'}</span>
                                                 </div>
@@ -792,12 +886,13 @@ const SalesInboxPage = () => {
                         {/* Header */}
                         <div className="p-4 border-b border-glass-border bg-black/20 flex items-center justify-between z-10">
                             <div className="flex items-center gap-3 flex-1 min-w-0">
-                                <div className="w-10 h-10 shrink-0 rounded-full bg-gradient-to-br from-gray-800 to-black border border-glass-border flex items-center justify-center text-white font-bold shadow-inner overflow-hidden">
-                                    {activeLead.avatar_url ? (
-                                        <img src={activeLead.avatar_url} alt={activeLead.nome} className="w-full h-full object-cover" />
-                                    ) : (
-                                        activeLead.nome?.charAt(0)
-                                    )}
+                                <div className="w-10 h-10 shrink-0 rounded-full border border-glass-border flex items-center justify-center bg-black/40 text-text-muted font-bold shadow-inner overflow-hidden">
+                                    <SafeImage
+                                        src={activeLead.avatar_url}
+                                        alt={activeLead.nome}
+                                        className="w-full h-full object-cover"
+                                        fallbackText={activeLead.nome?.charAt(0)}
+                                    />
                                 </div>
                                 <div className="flex-1 min-w-0">
                                     <div className="font-bold text-text-heading text-sm truncate">{activeLead.nome}</div>
@@ -807,7 +902,7 @@ const SalesInboxPage = () => {
 
                             {/* CRM Quick Actions — only for Cockpit-originated leads or overdue follow-ups */}
                             <div className="flex items-center gap-1.5 shrink-0 ml-2">
-                                {(cockpitLeadId === String(activeLead?.id) || isCockpitPendingStrict(activeLead)) && (
+                                {(cockpitLeadId === String(activeLead?.id) || isLeadTask(activeLead)) && (
                                     <>
                                         <button
                                             onClick={handleMarkDone}

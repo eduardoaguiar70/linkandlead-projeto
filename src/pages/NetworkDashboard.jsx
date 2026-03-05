@@ -39,6 +39,7 @@ import {
 import AddLeadsModal from '../components/AddLeadsModal'
 import LeadDetailModal from '../components/LeadDetailModal'
 import HistorySyncModal from '../components/HistorySyncModal'
+import SafeImage from '../components/SafeImage'
 
 const NetworkDashboard = () => {
     const { id: campaignId } = useParams()
@@ -1196,12 +1197,13 @@ const NetworkDashboard = () => {
                                             }`}>
                                             {idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : idx + 1}
                                         </div>
-                                        <div className="w-7 h-7 rounded-full bg-slate-200 flex items-center justify-center text-xs font-semibold overflow-hidden shrink-0">
-                                            {lead.avatar_url ? (
-                                                <img src={lead.avatar_url} className="w-full h-full object-cover" alt="" />
-                                            ) : (
-                                                lead.nome?.charAt(0) || '?'
-                                            )}
+                                        <div className="w-10 h-10 rounded-full border border-slate-200 overflow-hidden shrink-0 flex items-center justify-center bg-slate-100 text-slate-500 font-bold">
+                                            <SafeImage
+                                                src={lead.avatar_url}
+                                                alt={lead.nome}
+                                                className="w-full h-full object-cover"
+                                                fallbackText={lead.nome?.charAt(0) || '?'}
+                                            />
                                         </div>
                                         <div className="flex-1 min-w-0">
                                             <div className="text-sm font-medium text-slate-800 truncate">{lead.nome}</div>
@@ -1549,7 +1551,12 @@ const NetworkDashboard = () => {
                                                 <td className="py-3 px-4">
                                                     <div className="flex items-center gap-3">
                                                         <div className="w-9 h-9 rounded-full bg-slate-200 flex items-center justify-center text-slate-600 font-semibold text-sm border border-slate-300 overflow-hidden shrink-0">
-                                                            {lead.avatar_url ? <img src={lead.avatar_url} className="w-full h-full object-cover" alt="" /> : (lead.nome?.charAt(0) || '?')}
+                                                            <SafeImage
+                                                                src={lead.avatar_url}
+                                                                alt={lead.nome}
+                                                                className="w-full h-full object-cover"
+                                                                fallbackText={lead.nome?.charAt(0) || '?'}
+                                                            />
                                                         </div>
                                                         <div className="min-w-0">
                                                             <div className="font-semibold text-slate-900 text-sm truncate max-w-[220px]" title={lead.nome}>{lead.nome || 'Lead #' + item.id}</div>

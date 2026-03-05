@@ -75,6 +75,18 @@ const PipelineKanbanBoard = ({ leads, setLeads, onCardClick }) => {
         }
     }, [leads])
 
+    const handleRemoveLead = useCallback(async (leadId) => {
+        // Optimistic update: remove immediately from local state
+        setLeads(prev => prev.filter(l => l.id !== leadId))
+        try {
+            await supabase.from('leads').update({ crm_stage: null }).eq('id', leadId)
+        } catch (err) {
+            console.error('[Pipeline] Error removing lead from funnel:', err)
+            // If it fails, re-fetch would be ideal but we don't have access to fetchFunnelLeads here
+            // The parent (PipelinePage) re-fetches on next mount / manual refresh
+        }
+    }, [setLeads])
+
     return (
         <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={handleDragStart} onDragOver={handleDragOver} onDragEnd={handleDragEnd}>
             <div style={{ display: 'flex', gap: '10px', overflowX: 'auto', paddingBottom: '10px', height: '100%', scrollbarWidth: 'thin', scrollbarColor: '#e5e7eb transparent' }}>
@@ -86,6 +98,7 @@ const PipelineKanbanBoard = ({ leads, setLeads, onCardClick }) => {
                         icon={stage.icon}
                         leads={groupedLeads[stage.id]}
                         onCardClick={onCardClick}
+                        onRemoveLead={handleRemoveLead}
                     />
                 ))}
             </div>

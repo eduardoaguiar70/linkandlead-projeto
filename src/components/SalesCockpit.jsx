@@ -27,6 +27,7 @@ import {
     DollarSign,
     Snowflake
 } from 'lucide-react'
+import SafeImage from './SafeImage'
 
 // ═══════════════════════════════════════════════
 // CONSTANTS
@@ -122,13 +123,18 @@ const SalesCockpit = () => {
         setError(null)
 
         try {
+            const todayStart = new Date()
+            todayStart.setHours(0, 0, 0, 0)
+
             const [pendingResult, doneResult] = await Promise.all([
                 supabase
                     .from('tasks')
                     .select('*, lead:leads!inner(id, client_id, nome, empresa, headline, linkedin_profile_url, cadence_stage, total_interactions_count, avatar_url)')
                     .eq('leads.client_id', selectedClientId)
                     .eq('status', 'PENDING')
-                    .order('created_at', { ascending: true }),
+                    .gte('created_at', todayStart.toISOString())
+                    .order('created_at', { ascending: true })
+                    .limit(30),
                 supabase
                     .from('tasks')
                     .select('id, leads!inner(client_id)', { count: 'exact' })
@@ -159,6 +165,10 @@ const SalesCockpit = () => {
 
     const handleComplete = async (taskId) => {
         setCompletingIds(prev => new Set(prev).add(taskId))
+
+        // Find task before removing it to get lead ID
+        const taskToComplete = tasks.find(t => t.id === taskId)
+
         setTasks(prev => prev.filter(t => t.id !== taskId))
         setDoneCount(prev => prev + 1)
 
@@ -169,6 +179,15 @@ const SalesCockpit = () => {
                 .eq('id', taskId)
 
             if (updateError) throw updateError
+
+            // Sync with leads table so realtime updates trigger correctly in Inbox
+            if (taskToComplete?.lead?.id) {
+                await supabase
+                    .from('leads')
+                    .update({ last_task_completed_at: new Date().toISOString() })
+                    .eq('id', taskToComplete.lead.id)
+            }
+
         } catch (err) {
             console.error('Error completing task:', err)
             fetchTasks(true)
@@ -507,17 +526,14 @@ const TaskCard = ({ task, themeKey, completing, onComplete, onExecute }) => {
         >
             {/* Row 1: Avatar + Lead Info + Stage Badge */}
             <div className="flex items-start gap-3 mb-2">
-                {lead?.avatar_url ? (
-                    <img
-                        src={lead.avatar_url}
+                <div className="w-9 h-9 rounded-lg shrink-0 border border-gray-200 flex items-center justify-center bg-gray-100 text-gray-600 font-bold text-xs overflow-hidden">
+                    <SafeImage
+                        src={lead?.avatar_url}
                         alt={lead.nome || 'Lead'}
-                        className="w-9 h-9 rounded-lg shrink-0 object-cover border border-white/[0.1]"
+                        className="w-full h-full object-cover"
+                        fallbackText={initial}
                     />
-                ) : (
-                    <div className="w-9 h-9 rounded-lg shrink-0 bg-gray-100 border border-gray-200 flex items-center justify-center">
-                        <span className="text-xs font-bold text-gray-600">{initial}</span>
-                    </div>
-                )}
+                </div>
                 <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-0.5">
                         <h4 className="text-sm font-semibold text-gray-900 truncate">{lead.nome || 'Lead'}</h4>

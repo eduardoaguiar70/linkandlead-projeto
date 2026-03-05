@@ -21,6 +21,7 @@ import SystemInfoPage from './pages/SystemInfoPage'
 import LinkedInEngagementPage from './pages/LinkedInEngagementPage'
 import MissionsPage from './pages/MissionsPage'
 import ContentLibraryPage from './pages/ContentLibraryPage'
+import BlacklistPage from './pages/BlacklistPage'
 import AdminLayout from './components/AdminLayout'
 
 // Client Portal New (Ideas/Insights)
@@ -183,6 +184,7 @@ function App() {
                 <Route path="/engagement" element={<LinkedInEngagementPage />} />
                 <Route path="/missions" element={<MissionsPage />} />
                 <Route path="/content-library" element={<ContentLibraryPage />} />
+                <Route path="/blacklist" element={<BlacklistPage />} />
               </Route>
 
               {/* Fallback */}

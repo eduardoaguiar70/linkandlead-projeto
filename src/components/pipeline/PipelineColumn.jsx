@@ -14,7 +14,7 @@ const ACCENTS = {
     Perdido: { dot: '#ef4444', iconBg: '#fff1f2', iconColor: '#ef4444' },
 }
 
-const PipelineColumn = ({ id, title, icon: Icon, leads, onCardClick }) => { // eslint-disable-line no-unused-vars
+const PipelineColumn = ({ id, title, icon: Icon, leads, onCardClick, onRemoveLead }) => { // eslint-disable-line no-unused-vars
     const { setNodeRef, isOver } = useDroppable({ id })
     const accent = ACCENTS[id] || ACCENTS.Frio
     const totalProposal = leads.reduce((sum, l) => sum + (parseFloat(l.proposal_value) || 0), 0)
@@ -50,7 +50,7 @@ const PipelineColumn = ({ id, title, icon: Icon, leads, onCardClick }) => { // e
                 }}
             >
                 <SortableContext items={leads.map(l => l.id)} strategy={verticalListSortingStrategy}>
-                    {leads.map(lead => <PipelineLeadCard key={lead.id} lead={lead} onClick={onCardClick} />)}
+                    {leads.map(lead => <PipelineLeadCard key={lead.id} lead={lead} onClick={onCardClick} onRemove={onRemoveLead} />)}
                 </SortableContext>
                 {leads.length === 0 && (
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '60px', fontSize: '12px', color: '#d1d5db' }}>Arraste leads aqui</div>

@@ -4,8 +4,11 @@ import { supabase } from '../services/supabaseClient'
 import { useClientSelection } from '../contexts/ClientSelectionContext'
 import {
     CheckCircle2, Ban, MessageCircle, Loader2, AlertTriangle,
-    Users, Clock, Zap, RefreshCw
+    Users,
+    DollarSign,
+    Target
 } from 'lucide-react'
+import SafeImage from '../components/SafeImage'
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 const ICP_BG = { A: '#ecfdf5', B: '#fffbeb', C: '#f3f4f6' }
@@ -50,9 +53,12 @@ const LeadRow = ({ lead, onComplete, onBlacklist, onInbox, completing, blacklist
         >
             {/* Avatar */}
             <div style={{ width: 40, height: 40, borderRadius: '50%', background: '#f3f4f6', border: '1px solid #e5e7eb', overflow: 'hidden', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '15px', fontWeight: 700, color: '#6b7280' }}>
-                {lead.avatar_url
-                    ? <img src={lead.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                    : lead.nome?.charAt(0)?.toUpperCase() || '?'}
+                <SafeImage
+                    src={lead.avatar_url}
+                    alt={lead.nome}
+                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                    fallbackText={lead.nome?.charAt(0)?.toUpperCase()}
+                />
             </div>
 
             {/* Main info */}
@@ -146,13 +152,13 @@ const SalesHubPage = () => {
         try {
             const { data, error } = await supabase
                 .from('leads')
-                .select('id, nome, empresa, avatar_url, icp_score, cadence_stage, crm_stage, has_engaged, last_task_completed_at, tier')
+                .select('id, nome, empresa, avatar_url, icp_score, cadence_stage, crm_stage, has_engaged, last_task_completed_at, tier, last_interaction_date')
                 .eq('client_id', selectedClientId)
                 .neq('is_blacklisted', true)
                 .neq('crm_stage', 'Ganho')
                 .or(`last_task_completed_at.is.null,and(last_task_completed_at.lt.${sevenDaysAgo},has_engaged.eq.false)`)
-                .order('tier', { ascending: false, nullsFirst: false })
-                .order('icp_score', { ascending: true, nullsFirst: false })
+                .order('last_interaction_date', { ascending: false, nullsFirst: false })
+                .limit(30)
             if (error) throw error
             setLeads(data || [])
         } catch (err) {
