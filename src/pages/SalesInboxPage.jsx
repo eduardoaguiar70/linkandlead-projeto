@@ -696,7 +696,7 @@ const SalesInboxPage = () => {
                         placeholder="Pesquisar lead..."
                         value={searchTerm}
                         onChange={e => setSearchTerm(e.target.value)}
-                        className="w-full bg-black/40 border border-white/10 rounded-xl pl-9 pr-8 py-2 text-sm text-gray-800 placeholder-gray-500 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30 transition-all"
+                        className="w-full bg-gray-50 border border-gray-200 rounded-xl pl-9 pr-8 py-2 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30 transition-all"
                     />
                     {isSearchingGlobal ? (
                         <div className="absolute right-2.5 top-1/2 -translate-y-1/2 text-primary">
@@ -705,7 +705,7 @@ const SalesInboxPage = () => {
                     ) : searchTerm ? (
                         <button
                             onClick={() => setSearchTerm('')}
-                            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white transition-colors"
+                            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700 transition-colors"
                         >
                             <X size={14} />
                         </button>
@@ -716,20 +716,20 @@ const SalesInboxPage = () => {
             {/* LIST / DETAIL VIEW */}
             <div className="flex-1 flex gap-4 lg:gap-6 overflow-hidden">
                 {/* LEFT: Lead List */}
-                <div className="hidden md:flex w-72 lg:w-80 flex-col bg-charcoal rounded-2xl border border-glass-border overflow-hidden shrink-0">
+                <div className="hidden md:flex w-72 lg:w-80 flex-col bg-white rounded-2xl border border-gray-200 overflow-hidden shrink-0 shadow-sm">
                     {/* Sidebar Tabs */}
-                    <div className="p-2 border-b border-glass-border bg-black/20">
-                        <div className="flex bg-black/30 rounded-lg p-0.5 gap-0.5">
+                    <div className="p-2 border-b border-gray-200 bg-gray-50">
+                        <div className="flex bg-gray-100 rounded-lg p-0.5 gap-0.5">
                             <button
                                 onClick={() => setSidebarTab('conversas')}
                                 className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-md text-xs font-bold uppercase tracking-wider transition-all ${sidebarTab === 'conversas'
                                     ? 'bg-primary text-white shadow-lg shadow-primary/20'
-                                    : 'text-gray-400 hover:text-white hover:bg-white/5'
+                                    : 'text-gray-500 hover:text-gray-800 hover:bg-gray-200'
                                     }`}
                             >
                                 <MessageSquare size={13} />
                                 Conversas
-                                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${sidebarTab === 'conversas' ? 'bg-white/20' : 'bg-white/10'
+                                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${sidebarTab === 'conversas' ? 'bg-white/20' : 'bg-gray-200 text-gray-600'
                                     }`}>
                                     {filteredLeads.length}
                                 </span>
@@ -738,12 +738,12 @@ const SalesInboxPage = () => {
                                 onClick={() => setSidebarTab('tarefas')}
                                 className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-md text-xs font-bold uppercase tracking-wider transition-all ${sidebarTab === 'tarefas'
                                     ? 'bg-primary text-white shadow-lg shadow-primary/20'
-                                    : 'text-gray-400 hover:text-white hover:bg-white/5'
+                                    : 'text-gray-500 hover:text-gray-800 hover:bg-gray-200'
                                     }`}
                             >
                                 <ClipboardList size={13} />
                                 Tarefas
-                                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${sidebarTab === 'tarefas' ? 'bg-white/20' : 'bg-white/10'
+                                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${sidebarTab === 'tarefas' ? 'bg-white/20' : 'bg-gray-200 text-gray-600'
                                     }`}>
                                     {pendingTaskCount}
                                 </span>
@@ -764,29 +764,29 @@ const SalesInboxPage = () => {
                                         key={lead.id}
                                         onClick={() => setActiveLead(lead)}
                                         className={`p-3 rounded-xl border cursor-pointer transition-all ${activeLead?.id === lead.id
-                                            ? 'bg-primary/10 border-primary/40 shadow-lg shadow-primary/5'
-                                            : 'border-transparent hover:bg-glass hover:border-glass-border'
+                                            ? 'bg-orange-50 border-orange-300 shadow-sm'
+                                            : 'border-transparent hover:bg-gray-50 hover:border-gray-200'
                                             }`}
                                     >
                                         <div className="flex justify-between items-start mb-1">
-                                            <span className={`font-semibold text-sm truncate max-w-[140px] lg:max-w-[160px] text-text-heading`}>
+                                            <span className={`font-semibold text-sm truncate max-w-[140px] lg:max-w-[160px] text-gray-900`}>
                                                 {lead.nome || 'Sem Nome'}
                                             </span>
-                                            <span className="text-[10px] text-text-muted">
+                                            <span className="text-[10px] text-gray-400">
                                                 {lead.last_interaction ? new Date(lead.last_interaction).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : ''}
                                             </span>
                                         </div>
-                                        <div className="text-xs text-text-body mb-2 truncate">
+                                        <div className="text-xs text-gray-500 mb-2 truncate">
                                             {lead.headline || 'Lead qualificado'}
                                         </div>
                                         <div className="flex items-center gap-2 text-[10px]">
-                                            <span className={`font-bold px-1.5 py-0.5 rounded ${lead.icp_score === 'A' ? 'bg-emerald-500/20 text-emerald-400' :
-                                                lead.icp_score === 'B' ? 'bg-amber-500/20 text-amber-400' :
-                                                    'bg-slate-500/20 text-slate-400'
+                                            <span className={`font-bold px-1.5 py-0.5 rounded ${lead.icp_score === 'A' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
+                                                lead.icp_score === 'B' ? 'bg-amber-50 text-amber-700 border border-amber-200' :
+                                                    'bg-gray-100 text-gray-500 border border-gray-200'
                                                 }`}>
                                                 ICP {lead.icp_score || 'C'}
                                             </span>
-                                            <span className="text-text-muted">
+                                            <span className="text-gray-400">
                                                 {(() => {
                                                     const d = lead.last_interaction_date
                                                     if (!d) return 'Sem interação'
@@ -814,46 +814,46 @@ const SalesInboxPage = () => {
                         {sidebarTab === 'tarefas' && (
                             <>
                                 {loadingTasks ? (
-                                    <div className="p-8 text-center text-text-muted text-sm flex flex-col items-center gap-2">
+                                    <div className="p-8 text-center text-gray-400 text-sm flex flex-col items-center gap-2">
                                         <Loader2 size={18} className="animate-spin text-primary" />
                                         Carregando tarefas...
                                     </div>
                                 ) : sidebarTasks.length === 0 ? (
-                                    <div className="p-8 text-center text-text-muted text-sm flex flex-col items-center gap-3">
-                                        <div className="w-12 h-12 rounded-full bg-emerald-500/10 flex items-center justify-center">
-                                            <Check size={20} className="text-emerald-400" />
+                                    <div className="p-8 text-center text-gray-400 text-sm flex flex-col items-center gap-3">
+                                        <div className="w-12 h-12 rounded-full bg-emerald-50 flex items-center justify-center">
+                                            <Check size={20} className="text-emerald-600" />
                                         </div>
                                         <span>Nenhuma tarefa pendente! 🎉</span>
                                     </div>
                                 ) : sidebarTasks.map(task => {
                                     const tLead = task.leads || {}
                                     const stage = tLead.cadence_stage || ''
-                                    const stageColor = stage === 'G4' || stage === 'G5' ? 'bg-red-500/20 text-red-400 border-red-500/30'
-                                        : stage === 'G2' || stage === 'G3' ? 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30'
-                                            : 'bg-blue-500/20 text-blue-400 border-blue-500/30'
+                                    const stageColor = stage === 'G4' || stage === 'G5' ? 'bg-red-50 text-red-600 border-red-200'
+                                        : stage === 'G2' || stage === 'G3' ? 'bg-yellow-50 text-yellow-700 border-yellow-200'
+                                            : 'bg-blue-50 text-blue-600 border-blue-200'
 
                                     const interactionCount = tLead.total_interactions_count || 0
                                     const isFirstContact = interactionCount === 0
                                     const actionLabel = isFirstContact ? '✉️ Enviar Icebreaker' : '💬 Continuar Conversa'
                                     const actionColor = isFirstContact
-                                        ? 'bg-orange-500/15 text-orange-400 border-orange-500/30'
-                                        : 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+                                        ? 'bg-orange-50 text-orange-600 border-orange-200'
+                                        : 'bg-emerald-50 text-emerald-600 border-emerald-200'
 
                                     return (
                                         <div
                                             key={task.id}
                                             onClick={() => handleTaskClick(task)}
-                                            className="p-3 rounded-xl border border-transparent hover:bg-glass hover:border-glass-border cursor-pointer transition-all group"
+                                            className="p-3 rounded-xl border border-transparent hover:bg-gray-50 hover:border-gray-200 cursor-pointer transition-all group"
                                         >
                                             <div className="flex items-center gap-2 mb-1.5">
                                                 <SafeImage
                                                     src={tLead.avatar_url}
                                                     alt={tLead.nome}
-                                                    className="w-7 h-7 rounded-full object-cover border border-glass-border"
+                                                    className="w-7 h-7 rounded-full object-cover border border-gray-200"
                                                     fallbackText={tLead.nome?.charAt(0) || '?'}
                                                 />
                                                 <div className="flex-1 min-w-0">
-                                                    <span className="text-sm font-semibold text-text-heading truncate block">{tLead.nome || 'Lead'}</span>
+                                                    <span className="text-sm font-semibold text-gray-900 truncate block">{tLead.nome || 'Lead'}</span>
                                                 </div>
                                                 {stage && (
                                                     <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${stageColor}`}>
@@ -868,7 +868,7 @@ const SalesInboxPage = () => {
                                                 </span>
                                             </div>
                                             {task.instruction && (
-                                                <p className="text-[11px] text-text-muted leading-relaxed line-clamp-2 pl-9">
+                                                <p className="text-[11px] text-gray-400 leading-relaxed line-clamp-2 pl-9">
                                                     💡 {task.instruction}
                                                 </p>
                                             )}
@@ -882,11 +882,11 @@ const SalesInboxPage = () => {
 
                 {/* MIDDLE: Chat Area */}
                 {activeLead ? (
-                    <div className="flex-1 flex flex-col bg-charcoal rounded-2xl border border-glass-border overflow-hidden relative">
+                    <div className="flex-1 flex flex-col bg-white rounded-2xl border border-gray-200 overflow-hidden relative shadow-sm">
                         {/* Header */}
-                        <div className="p-4 border-b border-glass-border bg-black/20 flex items-center justify-between z-10">
+                        <div className="p-4 border-b border-gray-200 bg-gray-50 flex items-center justify-between z-10">
                             <div className="flex items-center gap-3 flex-1 min-w-0">
-                                <div className="w-10 h-10 shrink-0 rounded-full border border-glass-border flex items-center justify-center bg-black/40 text-text-muted font-bold shadow-inner overflow-hidden">
+                                <div className="w-10 h-10 shrink-0 rounded-full border border-gray-200 flex items-center justify-center bg-gray-100 text-gray-500 font-bold shadow-inner overflow-hidden">
                                     <SafeImage
                                         src={activeLead.avatar_url}
                                         alt={activeLead.nome}
@@ -895,8 +895,8 @@ const SalesInboxPage = () => {
                                     />
                                 </div>
                                 <div className="flex-1 min-w-0">
-                                    <div className="font-bold text-text-heading text-sm truncate">{activeLead.nome}</div>
-                                    <div className="text-xs text-text-muted truncate">{activeLead.headline || activeLead.company}</div>
+                                    <div className="font-bold text-gray-900 text-sm truncate">{activeLead.nome}</div>
+                                    <div className="text-xs text-gray-500 truncate">{activeLead.headline || activeLead.company}</div>
                                 </div>
                             </div>
 
@@ -907,20 +907,20 @@ const SalesInboxPage = () => {
                                         <button
                                             onClick={handleMarkDone}
                                             title="Marcar tarefa como Concluída"
-                                            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-bold text-emerald-400 border border-emerald-400/30 hover:bg-emerald-500/10 hover:border-emerald-400/60 transition-all"
+                                            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-bold text-emerald-600 border border-emerald-200 hover:bg-emerald-50 hover:border-emerald-300 transition-all"
                                         >
                                             <CheckCircle2 size={13} /> Concluído
                                         </button>
                                         <button
                                             onClick={handleBlacklistLead}
                                             title="Adicionar à Lista Negra"
-                                            className="flex items-center justify-center w-8 h-8 rounded-lg text-red-400/60 border border-red-400/20 hover:bg-red-500/10 hover:text-red-400 hover:border-red-400/40 transition-all"
+                                            className="flex items-center justify-center w-8 h-8 rounded-lg text-red-400 border border-red-200 hover:bg-red-50 hover:text-red-500 hover:border-red-300 transition-all"
                                         >
                                             <Ban size={13} />
                                         </button>
                                     </>
                                 )}
-                                <button className="p-2 rounded-lg hover:bg-glass text-text-muted hover:text-text-heading transition-colors">
+                                <button className="p-2 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-700 transition-colors">
                                     <MoreVertical size={18} />
                                 </button>
                             </div>
@@ -928,8 +928,8 @@ const SalesInboxPage = () => {
                             {/* CRM Toast */}
                             {crmToast && (
                                 <div className={`absolute top-16 right-4 z-50 px-3 py-2 rounded-lg text-xs font-semibold shadow-lg border ${crmToast.type === 'error'
-                                    ? 'bg-red-900/80 border-red-500/40 text-red-200'
-                                    : 'bg-gray-900/90 border-emerald-500/40 text-emerald-300'
+                                    ? 'bg-red-50 border-red-200 text-red-600'
+                                    : 'bg-emerald-50 border-emerald-200 text-emerald-600'
                                     }`}>
                                     {crmToast.msg}
                                 </div>
@@ -937,11 +937,11 @@ const SalesInboxPage = () => {
                         </div>
 
                         {/* Timeline */}
-                        <div className="flex-1 overflow-y-auto p-4 lg:p-6 flex flex-col-reverse gap-4 custom-scrollbar bg-black/10">
+                        <div className="flex-1 overflow-y-auto p-4 lg:p-6 flex flex-col-reverse gap-4 custom-scrollbar bg-gray-50/50">
                             {loadingChat ? (
-                                <div className="text-center text-text-muted text-sm py-10">Carregando histórico...</div>
+                                <div className="text-center text-gray-400 text-sm py-10">Carregando histórico...</div>
                             ) : interactions.length === 0 ? (
-                                <div className="text-center text-text-muted text-sm py-10 flex flex-col items-center gap-2">
+                                <div className="text-center text-gray-400 text-sm py-10 flex flex-col items-center gap-2">
                                     <MessageSquare size={24} className="opacity-20" />
                                     Nenhuma mensagem trocada ainda.
                                 </div>
@@ -984,11 +984,11 @@ const SalesInboxPage = () => {
                                         if (lastDateKey !== null) {
                                             elements.push(
                                                 <div key={`divider-${lastDateKey}`} className="flex items-center gap-3 my-2 self-stretch">
-                                                    <div className="flex-1 h-px bg-glass-border" />
-                                                    <span className="text-[10px] font-bold text-text-muted tracking-widest uppercase">
+                                                    <div className="flex-1 h-px bg-gray-200" />
+                                                    <span className="text-[10px] font-bold text-gray-400 tracking-widest uppercase">
                                                         {getDateLabel(interactions[idx - 1].interaction_date)}
                                                     </span>
-                                                    <div className="flex-1 h-px bg-glass-border" />
+                                                    <div className="flex-1 h-px bg-gray-200" />
                                                 </div>
                                             )
                                         }
@@ -999,11 +999,11 @@ const SalesInboxPage = () => {
                                         <div key={msg.id} className={`flex flex-col max-w-[85%] lg:max-w-[80%] ${msg.is_sender === true ? 'self-end items-end' : 'self-start items-start'}`}>
                                             <div className={`px-4 py-3 rounded-2xl text-sm leading-relaxed ${msg.is_sender === true
                                                 ? 'bg-primary text-white rounded-br-sm shadow-lg shadow-primary/10'
-                                                : 'bg-glass text-text-body rounded-bl-sm border border-glass-border'
+                                                : 'bg-gray-100 text-gray-700 rounded-bl-sm border border-gray-200'
                                                 }`}>
                                                 {msg.content}
                                             </div>
-                                            <span className="text-[10px] text-text-muted mt-1 px-1">
+                                            <span className="text-[10px] text-gray-400 mt-1 px-1">
                                                 {new Date(msg.interaction_date).toLocaleString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
                                             </span>
                                         </div>
@@ -1014,11 +1014,11 @@ const SalesInboxPage = () => {
                                 if (lastDateKey !== null) {
                                     elements.push(
                                         <div key={`divider-${lastDateKey}`} className="flex items-center gap-3 my-2 self-stretch">
-                                            <div className="flex-1 h-px bg-glass-border" />
-                                            <span className="text-[10px] font-bold text-text-muted tracking-widest uppercase">
+                                            <div className="flex-1 h-px bg-gray-200" />
+                                            <span className="text-[10px] font-bold text-gray-400 tracking-widest uppercase">
                                                 {getDateLabel(interactions[interactions.length - 1].interaction_date)}
                                             </span>
-                                            <div className="flex-1 h-px bg-glass-border" />
+                                            <div className="flex-1 h-px bg-gray-200" />
                                         </div>
                                     )
                                 }
@@ -1028,10 +1028,10 @@ const SalesInboxPage = () => {
                         </div>
 
                         {/* Input Area */}
-                        <div className="p-4 border-t border-glass-border bg-black/20">
+                        <div className="p-4 border-t border-gray-200 bg-gray-50">
                             <div className="relative">
                                 <textarea
-                                    className="w-full bg-black/40 border border-glass-border rounded-xl pl-4 pr-12 py-3 text-white placeholder-text-muted focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition-all resize-none text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                                    className="w-full bg-white border border-gray-200 rounded-xl pl-4 pr-12 py-3 text-gray-800 placeholder-gray-400 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition-all resize-none text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                                     rows="1"
                                     placeholder={isSending ? 'Enviando...' : 'Digite sua resposta... (Ctrl+Enter para enviar)'}
                                     value={newMessage}
@@ -1055,26 +1055,26 @@ const SalesInboxPage = () => {
                         </div>
                     </div>
                 ) : (
-                    <div className="flex-1 flex flex-col items-center justify-center bg-charcoal rounded-2xl border border-glass-border text-text-muted gap-4">
+                    <div className="flex-1 flex flex-col items-center justify-center bg-white rounded-2xl border border-gray-200 text-gray-400 gap-4 shadow-sm">
                         <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center">
                             <Zap size={32} className="text-primary/50" />
                         </div>
-                        <p className="text-sm text-text-muted">Selecione um lead para iniciar o atendimento.</p>
+                        <p className="text-sm text-gray-400">Selecione um lead para iniciar o atendimento.</p>
                     </div>
                 )}
 
                 {/* RIGHT: Context & AI — Tabbed Sidebar */}
                 <div className="hidden xl:flex w-80 flex-col shrink-0 overflow-hidden">
                     {activeLead ? (
-                        <div className="flex flex-col h-full bg-charcoal rounded-2xl border border-glass-border overflow-hidden">
+                        <div className="flex flex-col h-full bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
                             {/* Tab Switcher */}
-                            <div className="p-2 border-b border-glass-border bg-black/20 shrink-0">
-                                <div className="flex bg-black/30 rounded-lg p-0.5 gap-0.5">
+                            <div className="p-2 border-b border-gray-200 bg-gray-50 shrink-0">
+                                <div className="flex bg-gray-100 rounded-lg p-0.5 gap-0.5">
                                     <button
                                         onClick={() => setRightTab('detalhes')}
                                         className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-md text-xs font-bold uppercase tracking-wider transition-all ${rightTab === 'detalhes'
                                             ? 'bg-primary text-white shadow-lg shadow-primary/20'
-                                            : 'text-gray-400 hover:text-white hover:bg-white/5'
+                                            : 'text-gray-500 hover:text-gray-800 hover:bg-gray-200'
                                             }`}
                                     >
                                         <ClipboardList size={13} /> Detalhes
@@ -1083,7 +1083,7 @@ const SalesInboxPage = () => {
                                         onClick={() => setRightTab('copiloto')}
                                         className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-md text-xs font-bold uppercase tracking-wider transition-all ${rightTab === 'copiloto'
                                             ? 'bg-primary text-white shadow-lg shadow-primary/20'
-                                            : 'text-gray-400 hover:text-white hover:bg-white/5'
+                                            : 'text-gray-500 hover:text-gray-800 hover:bg-gray-200'
                                             }`}
                                     >
                                         <Sparkles size={13} /> Copiloto IA
@@ -1098,11 +1098,11 @@ const SalesInboxPage = () => {
                                     <div>
                                         <h4 className="text-xs font-bold text-primary uppercase tracking-wider mb-3">Dados do Lead</h4>
                                         <div className="flex items-center justify-between gap-3">
-                                            <div className={`flex-1 text-center py-2 px-3 rounded-lg border ${activeLead.icp_score === 'A' ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400' : activeLead.icp_score === 'B' ? 'bg-amber-500/20 border-amber-500/50 text-amber-400' : 'bg-slate-500/20 border-slate-500/50 text-text-muted'}`}>
+                                            <div className={`flex-1 text-center py-2 px-3 rounded-lg border ${activeLead.icp_score === 'A' ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : activeLead.icp_score === 'B' ? 'bg-amber-50 border-amber-200 text-amber-700' : 'bg-gray-50 border-gray-200 text-gray-500'}`}>
                                                 <div className="text-[10px] uppercase tracking-wider opacity-70 mb-1">ICP</div>
                                                 <div className="text-lg font-bold">{activeLead.icp_score || 'C'}</div>
                                             </div>
-                                            <div className="flex-1 text-center py-2 px-3 rounded-lg bg-blue-500/20 border border-blue-500/50 text-blue-400">
+                                            <div className="flex-1 text-center py-2 px-3 rounded-lg bg-blue-50 border border-blue-200 text-blue-700">
                                                 <div className="text-[10px] uppercase tracking-wider opacity-70 mb-1">Interações</div>
                                                 <div className="text-lg font-bold">{activeLead.total_interactions_count || activeLead.total_interactions || 0}</div>
                                             </div>
@@ -1110,10 +1110,10 @@ const SalesInboxPage = () => {
                                                 const stage = activeLead.cadence_stage || ''
                                                 const match = stage?.toString().match(/(\d+)/)
                                                 const level = match ? parseInt(match[1], 10) : 0
-                                                const cStyle = level >= 5 ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400'
-                                                    : level >= 3 ? 'bg-amber-500/20 border-amber-500/50 text-amber-400'
-                                                        : level >= 1 ? 'bg-blue-500/20 border-blue-500/50 text-blue-400'
-                                                            : 'bg-slate-500/20 border-slate-500/50 text-text-muted'
+                                                const cStyle = level >= 5 ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                                                    : level >= 3 ? 'bg-amber-50 border-amber-200 text-amber-700'
+                                                        : level >= 1 ? 'bg-blue-50 border-blue-200 text-blue-700'
+                                                            : 'bg-gray-50 border-gray-200 text-gray-500'
                                                 return (
                                                     <div className={`flex-1 text-center py-2 px-3 rounded-lg border ${cStyle}`}>
                                                         <div className="text-[10px] uppercase tracking-wider opacity-70 mb-1">Cadência</div>
@@ -1139,7 +1139,7 @@ const SalesInboxPage = () => {
                                                 <div className="w-12 h-12 rounded-full bg-primary/10 border border-primary/30 flex items-center justify-center">
                                                     <Sparkles size={20} className="text-primary/60" />
                                                 </div>
-                                                <p className="text-xs text-text-muted max-w-[200px] leading-relaxed">
+                                                <p className="text-xs text-gray-400 max-w-[200px] leading-relaxed">
                                                     Peça para a IA gerar, reescrever ou ajustar mensagens para este lead.
                                                 </p>
                                                 {/* Quick start button */}
@@ -1158,8 +1158,8 @@ const SalesInboxPage = () => {
                                             aiChatHistory.map((msg, idx) => (
                                                 <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                                                     <div className={`max-w-[90%] rounded-xl px-3.5 py-2.5 text-xs leading-relaxed ${msg.role === 'user'
-                                                        ? 'bg-primary/20 border border-primary/30 text-text-heading'
-                                                        : 'bg-white/5 border border-glass-border text-text-heading'
+                                                        ? 'bg-orange-50 border border-orange-200 text-gray-800'
+                                                        : 'bg-gray-50 border border-gray-200 text-gray-700'
                                                         }`}>
                                                         <p className="whitespace-pre-wrap">{msg.content}</p>
                                                         {msg.role === 'assistant' && msg.content !== 'Erro ao gerar resposta.' && (
@@ -1179,7 +1179,7 @@ const SalesInboxPage = () => {
                                         )}
                                         {aiLoading && (
                                             <div className="flex justify-start">
-                                                <div className="px-4 py-3 rounded-xl bg-white/5 border border-glass-border text-text-muted text-xs flex items-center gap-2">
+                                                <div className="px-4 py-3 rounded-xl bg-gray-50 border border-gray-200 text-gray-500 text-xs flex items-center gap-2">
                                                     <Loader2 size={12} className="animate-spin text-primary" /> Gerando...
                                                 </div>
                                             </div>
@@ -1187,7 +1187,7 @@ const SalesInboxPage = () => {
                                     </div>
 
                                     {/* Input Bar */}
-                                    <div className="p-3 border-t border-glass-border bg-black/20 shrink-0">
+                                    <div className="p-3 border-t border-gray-200 bg-gray-50 shrink-0">
                                         <div className="relative">
                                             <input
                                                 type="text"
@@ -1196,7 +1196,7 @@ const SalesInboxPage = () => {
                                                 onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey && aiInput.trim()) { e.preventDefault(); handleAiChat() } }}
                                                 disabled={aiLoading}
                                                 placeholder="Ex: Refaça mais amigável..."
-                                                className="w-full bg-black/40 border border-glass-border rounded-xl pl-3.5 pr-10 py-2.5 text-xs text-white placeholder-text-muted focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30 transition-all disabled:opacity-50"
+                                                className="w-full bg-white border border-gray-200 rounded-xl pl-3.5 pr-10 py-2.5 text-xs text-gray-800 placeholder-gray-400 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30 transition-all disabled:opacity-50"
                                             />
                                             <button
                                                 onClick={handleAiChat}
@@ -1211,7 +1211,7 @@ const SalesInboxPage = () => {
                             )}
                         </div>
                     ) : (
-                        <div className="bg-charcoal rounded-2xl border border-glass-border p-8 text-center text-text-muted text-sm h-40 flex items-center justify-center">
+                        <div className="bg-white rounded-2xl border border-gray-200 p-8 text-center text-gray-400 text-sm h-40 flex items-center justify-center shadow-sm">
                             Contexto do lead aparecerá aqui.
                         </div>
                     )}

@@ -3,11 +3,11 @@ import { ShieldAlert, Brain, Radio, Target, TrendingUp, Loader2, Sparkles } from
 
 // Cadence level configurations
 const CADENCE_LEVELS = {
-    G1: { label: 'Frio', desc: 'Lead acabou de ser abordado. Sem conexão emocional ainda.', color: 'from-slate-400 to-slate-500', bg: 'bg-slate-500/15', border: 'border-slate-500/40', text: 'text-slate-300', percent: 20 },
-    G2: { label: 'Receptivo', desc: 'Lead reconhece você e está aberto a ouvir.', color: 'from-blue-400 to-blue-500', bg: 'bg-blue-500/15', border: 'border-blue-500/40', text: 'text-blue-300', percent: 40 },
-    G3: { label: 'Contextualizado', desc: 'Lead entende sua proposta e está avaliando.', color: 'from-amber-400 to-amber-500', bg: 'bg-amber-500/15', border: 'border-amber-500/40', text: 'text-amber-300', percent: 60 },
-    G4: { label: 'Interessado', desc: 'Lead demonstra interesse ativo. Engajamento crescente.', color: 'from-orange-400 to-orange-500', bg: 'bg-orange-500/15', border: 'border-orange-500/40', text: 'text-orange-300', percent: 80 },
-    G5: { label: 'Quente', desc: 'Lead confia em você. Pronto para ação de conversão.', color: 'from-emerald-400 to-emerald-500', bg: 'bg-emerald-500/15', border: 'border-emerald-500/40', text: 'text-emerald-300', percent: 100 },
+    G1: { label: 'Frio', desc: 'Lead acabou de ser abordado. Sem conexão emocional ainda.', color: 'from-slate-400 to-slate-500', bg: 'bg-slate-50', border: 'border-slate-200', text: 'text-slate-600', percent: 20 },
+    G2: { label: 'Receptivo', desc: 'Lead reconhece você e está aberto a ouvir.', color: 'from-blue-400 to-blue-500', bg: 'bg-blue-50', border: 'border-blue-200', text: 'text-blue-600', percent: 40 },
+    G3: { label: 'Contextualizado', desc: 'Lead entende sua proposta e está avaliando.', color: 'from-amber-400 to-amber-500', bg: 'bg-amber-50', border: 'border-amber-200', text: 'text-amber-700', percent: 60 },
+    G4: { label: 'Interessado', desc: 'Lead demonstra interesse ativo. Engajamento crescente.', color: 'from-orange-400 to-orange-500', bg: 'bg-orange-50', border: 'border-orange-200', text: 'text-orange-600', percent: 80 },
+    G5: { label: 'Quente', desc: 'Lead confia em você. Pronto para ação de conversão.', color: 'from-emerald-400 to-emerald-500', bg: 'bg-emerald-50', border: 'border-emerald-200', text: 'text-emerald-700', percent: 100 },
 }
 
 const getCadenceConfig = (level) => {
@@ -32,7 +32,7 @@ const StrategicContextCard = ({ lead, isIcebreaker = false }) => {
 
     if (!hasAnyData) {
         return (
-            <div className="bg-[#0d0d0d] rounded-2xl border border-white/10 p-5">
+            <div className="bg-white rounded-2xl border border-gray-200 p-5">
                 <div className="flex items-center gap-2 mb-4">
                     <div className="w-6 h-6 rounded-lg bg-primary/20 flex items-center justify-center">
                         <TrendingUp size={14} className="text-primary" />
@@ -64,7 +64,7 @@ const StrategicContextCard = ({ lead, isIcebreaker = false }) => {
     const config = getCadenceConfig(cadenceLevel)
 
     return (
-        <div className="bg-[#0d0d0d] rounded-2xl border border-white/10 p-5 space-y-4">
+        <div className="bg-white rounded-2xl border border-gray-200 p-5 space-y-4">
             {/* Header */}
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
@@ -106,7 +106,7 @@ const StrategicContextCard = ({ lead, isIcebreaker = false }) => {
                                                     key={i}
                                                     className={`h-1 w-4 rounded-full transition-colors ${i <= levelNum
                                                         ? `bg-gradient-to-r ${config.color}`
-                                                        : 'bg-white/10'
+                                                        : 'bg-gray-200'
                                                         }`}
                                                 />
                                             )
@@ -119,9 +119,9 @@ const StrategicContextCard = ({ lead, isIcebreaker = false }) => {
 
                     {/* Tooltip */}
                     {showTooltip && (
-                        <div className="absolute z-50 -top-2 left-1/2 -translate-x-1/2 -translate-y-full bg-gray-900 border border-white/20 rounded-lg px-3 py-2 shadow-xl max-w-[220px]">
-                            <p className="text-[11px] text-gray-200 leading-relaxed">{config.desc}</p>
-                            <div className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 rotate-45 w-2 h-2 bg-gray-900 border-r border-b border-white/20" />
+                        <div className="absolute z-50 -top-2 left-1/2 -translate-x-1/2 -translate-y-full bg-white border border-gray-200 rounded-lg px-3 py-2 shadow-xl max-w-[220px]">
+                            <p className="text-[11px] text-gray-600 leading-relaxed">{config.desc}</p>
+                            <div className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 rotate-45 w-2 h-2 bg-white border-r border-b border-gray-200" />
                         </div>
                     )}
                 </div>
@@ -129,12 +129,12 @@ const StrategicContextCard = ({ lead, isIcebreaker = false }) => {
 
             {/* B. Forbidden Action - DANGER ZONE */}
             {forbidden && (
-                <div className="rounded-xl bg-red-500/10 border border-red-500/30 p-3 space-y-1.5">
+                <div className="rounded-xl bg-red-50 border border-red-200 p-3 space-y-1.5">
                     <div className="flex items-center gap-2">
-                        <ShieldAlert size={14} className="text-red-400 shrink-0" />
-                        <span className="text-[10px] font-bold uppercase tracking-widest text-red-400">Zona de Perigo</span>
+                        <ShieldAlert size={14} className="text-red-500 shrink-0" />
+                        <span className="text-[10px] font-bold uppercase tracking-widest text-red-500">Zona de Perigo</span>
                     </div>
-                    <p className="text-xs text-red-300/90 leading-relaxed font-medium pl-[22px]">
+                    <p className="text-xs text-red-600 leading-relaxed font-medium pl-[22px]">
                         {forbidden}
                     </p>
                 </div>
@@ -142,25 +142,25 @@ const StrategicContextCard = ({ lead, isIcebreaker = false }) => {
 
             {/* C. Lead Analysis (Signal + Psychological) */}
             {(signal || psychological) && (
-                <div className="rounded-xl bg-white/[0.03] border border-white/10 p-3 space-y-2.5">
-                    <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Análise do Lead</span>
+                <div className="rounded-xl bg-gray-50 border border-gray-200 p-3 space-y-2.5">
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Análise do Lead</span>
 
                     {signal && (
                         <div className="flex items-start gap-2">
-                            <Radio size={13} className="text-cyan-400 mt-0.5 shrink-0" />
+                            <Radio size={13} className="text-cyan-600 mt-0.5 shrink-0" />
                             <div>
-                                <span className="text-[9px] uppercase tracking-widest text-cyan-400/70 font-bold">Sinal Detectado</span>
-                                <p className="text-xs text-gray-300 leading-relaxed">{signal}</p>
+                                <span className="text-[9px] uppercase tracking-widest text-cyan-600 font-bold">Sinal Detectado</span>
+                                <p className="text-xs text-gray-600 leading-relaxed">{signal}</p>
                             </div>
                         </div>
                     )}
 
                     {psychological && (
                         <div className="flex items-start gap-2">
-                            <Brain size={13} className="text-purple-400 mt-0.5 shrink-0" />
+                            <Brain size={13} className="text-fuchsia-600 mt-0.5 shrink-0" />
                             <div>
-                                <span className="text-[9px] uppercase tracking-widest text-purple-400/70 font-bold">Fator Psicológico</span>
-                                <p className="text-xs text-gray-300 leading-relaxed">{psychological}</p>
+                                <span className="text-[9px] uppercase tracking-widest text-fuchsia-600 font-bold">Fator Psicológico</span>
+                                <p className="text-xs text-gray-600 leading-relaxed">{psychological}</p>
                             </div>
                         </div>
                     )}
@@ -169,12 +169,12 @@ const StrategicContextCard = ({ lead, isIcebreaker = false }) => {
 
             {/* D. Recommended Tactic */}
             {strategy && (
-                <div className="rounded-xl bg-primary/10 border border-primary/30 p-3 space-y-1.5">
+                <div className="rounded-xl bg-orange-50 border border-orange-200 p-3 space-y-1.5">
                     <div className="flex items-center gap-2">
                         <Target size={14} className="text-primary shrink-0" />
                         <span className="text-[10px] font-bold uppercase tracking-widest text-primary/80">Tática Recomendada</span>
                     </div>
-                    <p className="text-xs text-gray-200 leading-relaxed pl-[22px]">
+                    <p className="text-xs text-gray-700 leading-relaxed pl-[22px]">
                         {strategy}
                     </p>
                 </div>
