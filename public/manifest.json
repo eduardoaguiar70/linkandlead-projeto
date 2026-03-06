@@ -1,0 +1,24 @@
+{
+    "name": "Link&Lead System",
+    "short_name": "Link&Lead",
+    "description": "Sistema inteligente de gestão de leads e vendas",
+    "start_url": "/",
+    "display": "standalone",
+    "background_color": "#ffffff",
+    "theme_color": "#f97316",
+    "orientation": "any",
+    "icons": [
+        {
+            "src": "/favicon.png",
+            "sizes": "192x192",
+            "type": "image/png",
+            "purpose": "any maskable"
+        },
+        {
+            "src": "/logo-linklead.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "any"
+        }
+    ]
+}

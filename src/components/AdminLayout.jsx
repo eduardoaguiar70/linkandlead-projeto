@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Outlet, Link, useLocation } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import {
@@ -25,6 +25,9 @@ import ClientSelector from './ClientSelector'
 import '../pages/AdminPanel.css'
 
 import { useLanguage } from '../contexts/LanguageContext'
+import { useNotifications } from '../hooks/useNotifications'
+import { useClientSelection } from '../contexts/ClientSelectionContext'
+import { supabase } from '../services/supabaseClient'
 
 const AdminLayout = () => {
     const { signOut } = useAuth()
@@ -37,6 +40,34 @@ const AdminLayout = () => {
     const toggleSidebar = () => setSidebarOpen(!isSidebarOpen)
 
     const [showCreative, setShowCreative] = useState(false)
+
+    // ── Notification System: listen for unread_count increases ──
+    const { selectedClientId, activeLeadId } = useClientSelection()
+    const { notify } = useNotifications()
+
+    useEffect(() => {
+        if (!selectedClientId) return
+
+        const channel = supabase.channel('leads-unread-notifications')
+            .on('postgres_changes', {
+                event: 'UPDATE',
+                schema: 'public',
+                table: 'leads',
+                filter: `client_id=eq.${selectedClientId}`
+            }, (payload) => {
+                const oldCount = payload.old?.unread_count || 0
+                const newCount = payload.new?.unread_count || 0
+                const leadId = payload.new?.id
+
+                // Only notify if unread INCREASED and it's not the currently open lead
+                if (newCount > oldCount && String(leadId) !== String(activeLeadId)) {
+                    notify(payload.new?.nome || 'Lead', leadId)
+                }
+            })
+            .subscribe()
+
+        return () => supabase.removeChannel(channel)
+    }, [selectedClientId, activeLeadId, notify])
 
     return (
         <div className="dashboard-layout">

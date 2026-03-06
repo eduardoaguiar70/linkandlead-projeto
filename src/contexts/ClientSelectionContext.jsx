@@ -13,6 +13,9 @@ export const ClientSelectionProvider = ({ children }) => {
         return saved ? JSON.parse(saved) : null
     })
 
+    // Track which lead is currently open in the Inbox (used by notification system)
+    const [activeLeadId, setActiveLeadId] = useState(null)
+
     const setClient = (clientId) => {
         setSelectedClientId(clientId)
         if (clientId) {
@@ -24,7 +27,9 @@ export const ClientSelectionProvider = ({ children }) => {
 
     const value = {
         selectedClientId,
-        setSelectedClientId: setClient
+        setSelectedClientId: setClient,
+        activeLeadId,
+        setActiveLeadId
     }
 
     return (
