@@ -18,7 +18,8 @@ import {
     ThumbsUp,
     Library,
     Kanban,
-    ShieldBan
+    ShieldBan,
+    Link2
 } from 'lucide-react'
 import CreatePostModal from './CreatePostModal'
 import ClientSelector from './ClientSelector'
@@ -103,6 +104,9 @@ const AdminLayout = () => {
                         </Link>
                         <Link to="/network" className={isActive('/network')}>
                             <Users size={18} /> Minha Rede
+                        </Link>
+                        <Link to="/connections" className={isActive('/connections')}>
+                            <Link2 size={18} /> Solicitações de Conexão
                         </Link>
                         <Link to="/missions" className={isActive('/missions')}>
                             <Flame size={18} /> Cockpit de Vendas
@@ -192,7 +196,7 @@ const AdminLayout = () => {
             {/* MAIN CONTENT */}
             <main className="main-content">
                 {/* Client Context Header for sales-related pages */}
-                {(location.pathname === '/' || location.pathname.startsWith('/sales') || location.pathname.startsWith('/leads') || location.pathname.startsWith('/campaigns') || location.pathname.startsWith('/network') || location.pathname.startsWith('/engagement') || location.pathname.startsWith('/missions') || location.pathname.startsWith('/content-library') || location.pathname.startsWith('/pipeline') || location.pathname.startsWith('/blacklist')) && (
+                {(location.pathname === '/' || location.pathname.startsWith('/sales') || location.pathname.startsWith('/leads') || location.pathname.startsWith('/campaigns') || location.pathname.startsWith('/network') || location.pathname.startsWith('/connections') || location.pathname.startsWith('/engagement') || location.pathname.startsWith('/missions') || location.pathname.startsWith('/content-library') || location.pathname.startsWith('/pipeline') || location.pathname.startsWith('/blacklist')) && (
                     <div className="px-6 py-3 bg-white/5 border-b border-white/10 flex items-center justify-between backdrop-blur-md">
                         <div className="flex items-center gap-4">
                             <span className="text-sm text-text-muted font-medium">Contexto:</span>

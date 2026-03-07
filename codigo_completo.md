@@ -1,4 +1,4 @@
-﻿# Sistema LinkLead - Código Completo
+﻿# Sistema LinkLead - Código Completo (Atualizado)
 
 
 ## File: C:\Users\mcdud\OneDrive\Ambiente de Trabalho\01_Sistema_linklead_DEFINITIVO\src\components\kanban\KanbanColumn.jsx
@@ -1331,7 +1331,7 @@ export default AddLeadsModal
 ## File: C:\Users\mcdud\OneDrive\Ambiente de Trabalho\01_Sistema_linklead_DEFINITIVO\src\components\AdminLayout.jsx
 
 ```jsx
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Outlet, Link, useLocation } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import {
@@ -1358,6 +1358,9 @@ import ClientSelector from './ClientSelector'
 import '../pages/AdminPanel.css'
 
 import { useLanguage } from '../contexts/LanguageContext'
+import { useNotifications } from '../hooks/useNotifications'
+import { useClientSelection } from '../contexts/ClientSelectionContext'
+import { supabase } from '../services/supabaseClient'
 
 const AdminLayout = () => {
     const { signOut } = useAuth()
@@ -1370,6 +1373,34 @@ const AdminLayout = () => {
     const toggleSidebar = () => setSidebarOpen(!isSidebarOpen)
 
     const [showCreative, setShowCreative] = useState(false)
+
+    // ── Notification System: listen for unread_count increases ──
+    const { selectedClientId, activeLeadId } = useClientSelection()
+    const { notify } = useNotifications()
+
+    useEffect(() => {
+        if (!selectedClientId) return
+
+        const channel = supabase.channel('leads-unread-notifications')
+            .on('postgres_changes', {
+                event: 'UPDATE',
+                schema: 'public',
+                table: 'leads',
+                filter: `client_id=eq.${selectedClientId}`
+            }, (payload) => {
+                const oldCount = payload.old?.unread_count || 0
+                const newCount = payload.new?.unread_count || 0
+                const leadId = payload.new?.id
+
+                // Only notify if unread INCREASED and it's not the currently open lead
+                if (newCount > oldCount && String(leadId) !== String(activeLeadId)) {
+                    notify(payload.new?.nome || 'Lead', leadId)
+                }
+            })
+            .subscribe()
+
+        return () => supabase.removeChannel(channel)
+    }, [selectedClientId, activeLeadId, notify])
 
     return (
         <div className="dashboard-layout">
@@ -5281,6 +5312,9 @@ export const ClientSelectionProvider = ({ children }) => {
         return saved ? JSON.parse(saved) : null
     })
 
+    // Track which lead is currently open in the Inbox (used by notification system)
+    const [activeLeadId, setActiveLeadId] = useState(null)
+
     const setClient = (clientId) => {
         setSelectedClientId(clientId)
         if (clientId) {
@@ -5292,7 +5326,9 @@ export const ClientSelectionProvider = ({ children }) => {
 
     const value = {
         selectedClientId,
-        setSelectedClientId: setClient
+        setSelectedClientId: setClient,
+        activeLeadId,
+        setActiveLeadId
     }
 
     return (
@@ -5388,6 +5424,81 @@ export const LanguageProvider = ({ children }) => {
 }
 
 export const useLanguage = () => useContext(LanguageContext)
+
+```
+
+
+## File: C:\Users\mcdud\OneDrive\Ambiente de Trabalho\01_Sistema_linklead_DEFINITIVO\src\hooks\useNotifications.js
+
+```js
+import { useRef, useCallback, useEffect } from 'react'
+
+// Minimal "ping" notification sound as base64 WAV (200ms soft chime)
+// Generated from a sine wave: 880Hz, 200ms, with fade-out envelope
+const NOTIFICATION_SOUND = 'data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YVYGAACAgoSGiIqMjo+RkpOUlJSUk5KRj46MioiGhIKAf317eXd1c3FwbnxtbGtqa2prbGxubm9xcnR2eHp8foCChIaIioyOj5GSlJWWl5eXl5aVlJKRj46MioiGhIKAf31beXd1c3FwbnxtbGtraWlpamtsbm9xc3V3eXt9f4GDhYeJi42PkZOUlpeYmJiYl5aVk5KQjo2LiYeEgoB+fHp4dnRycG9tbGtqaWhoaGlqa2xtb3Fyc3V3eXt9f4GDhYeJi42PkJKTlJWWlpaWlZSTkpCOjYuJh4WDgX99e3l3dXNxcG5tbGtqaWhoaGlqa2xtb3FydHZ4ent9f4GDhYeJi42PkJKTlZaWl5eXlpWUk5GQjo2LiYeFg4F/fXt5d3VzcXBubWxramloZ2doaWprbG5vcXN1d3l7fX+Bg4WHiYuNj5GTlJWXmJiZmZiXlpWTkpCOjYuJh4WDgX99e3l3dXNxcG5tbGtqaWhoaGlqa2xub3Fyc3V3eXt9f4GDhYeJi42PkJKTlZaXmJiYmJeWlZOSkI6Ni4mHhYOBf317eXd1c3FwbnxtbGtraWlpamtsbm9xc3V3eXt9f4GDhYeJi42PkZOUlpeYmJiYl5aVk5KQjo2LiYeEgn99e3l3dXNxcG5tbGtqaGdnaGlqa2xub3FzdXd5e31/gYOFh4mLjY+RkpSVl5iZmZmYl5aUk5GQjouKiIaDgX99e3l3dnRycW9ubWxramlpaWprbG1vcHJ0dnh6fH6AgYOFh4mLjY+RkpSVlpeXl5eWlZSTkZCOjIqIhoSCgH58enl3dXRycW9ubWxramlpaWprbG5vcXJ0dnd5e31/gYOFh4mLjY+RkpSVlpeXl5eWlZSTkZCOjIqIhoSCgH58enl3dXRycW9ubWxramlpaWlqamxub3FzdXd5fH6AgYSGiImLjY+QkpSVlpeXl5eWlZSTkZCOjIqIhoSCgH58enl3dXRycW9ubWxramlpaWlqamxub3FzdXd5fH6AgYSGiImLjY+QkZOUlZeYmJiYl5aVk5KQj42LiYeFg4GAfnx6eHZ0cnFvbm1sa2ppaGhpaWprbG5vcXN1d3l7fYCBg4WHiYuNj5CSkpSVlpeXlpaVlJOSkI+NjIqIhoSDgYB+fHp5d3V0cnFvbm1sa2tqa2trbG1ub3Fyc3V3eXp8fn+BgoSGiImLjI6PkJKTlJWWlpaWlZSTkpGPjoyLiYeGhIKBf358enl3dnRzcXBvbm1sa2trbGxtbm9wcnN1dnd5ent9fn+BgoSFh4iKi42Oj5GSk5SUlZWVlJSTkpGQjo2LioiHhYSDgYB/fXx7eXh3dnV0c3JxcHBwcHFxcnN0dXZ3eHl7fH1+f4CBgoOEhYaHiImKi4yNjo+QkJGRkZGRkZCQj46NjYyLioqJiIeGhYSEg4KBgYCAf39/f39/f4CAgIGBgoKDg4SEhYWGhoeHiIiJiYqKioqKioqKiYmIiIeHhoaFhISEg4OCgoGBgYCAgICAgICAgIGBgYKCgoODhISEhYWFhoaGhoaGhoaGhoWFhYSEhIODg4KCgoGBgYCAgIB/f39/f4CAgICBgYGCgoKDg4ODhISEhISEhISEhISEhIODg4KCgoGBgYCAgH9/f39/f39/f4CAgIGBgYKCgoODg4SEhISEhYWFhQAA'
+
+const DEBOUNCE_TTL_MS = 5000
+
+export function useNotifications() {
+    const audioRef = useRef(null)
+    const recentlyNotified = useRef(new Set())
+
+    useEffect(() => {
+        // Pre-load audio once
+        try {
+            audioRef.current = new Audio(NOTIFICATION_SOUND)
+            audioRef.current.volume = 0.5
+        } catch (e) {
+            console.warn('[Notifications] Audio not supported:', e)
+        }
+
+        // Request permission on mount
+        if ('Notification' in window && Notification.permission === 'default') {
+            Notification.requestPermission().catch(() => { })
+        }
+    }, [])
+
+    const playSound = useCallback(() => {
+        if (!audioRef.current) return
+        // Clone to allow overlapping plays
+        const sound = audioRef.current.cloneNode()
+        sound.volume = 0.5
+        sound.play().catch(() => { })
+    }, [])
+
+    const notify = useCallback((leadName, leadId) => {
+        // Debounce: skip if this lead was notified in the last 5 seconds
+        if (recentlyNotified.current.has(leadId)) return
+        recentlyNotified.current.add(leadId)
+        setTimeout(() => recentlyNotified.current.delete(leadId), DEBOUNCE_TTL_MS)
+
+        // Play sound
+        playSound()
+
+        // Native browser notification
+        if ('Notification' in window && Notification.permission === 'granted') {
+            try {
+                const n = new Notification('💬 Nova mensagem de ' + leadName, {
+                    body: 'Clique para abrir a conversa no Inbox',
+                    icon: '/favicon.png',
+                    tag: 'lead-' + leadId, // OS groups notifications with same tag
+                    renotify: true
+                })
+                n.onclick = () => {
+                    window.focus()
+                    window.location.href = '/sales/inbox?leadId=' + leadId
+                    n.close()
+                }
+                // Auto-close after 8 seconds
+                setTimeout(() => n.close(), 8000)
+            } catch (e) {
+                console.warn('[Notifications] Native notification failed:', e)
+            }
+        }
+    }, [playSound])
+
+    return { notify, playSound }
+}
 
 ```
 
@@ -16522,11 +16633,17 @@ const isLeadTask = (lead) => {
 }
 
 const SalesInboxPage = () => {
-    const { selectedClientId } = useClientSelection()
+    const { selectedClientId, setActiveLeadId } = useClientSelection()
     const [searchParams, setSearchParams] = useSearchParams()
     const [leads, setLeads] = useState([])
     const [loadingLeads, setLoadingLeads] = useState(false)
     const [activeLead, setActiveLead] = useState(null)
+
+    // Sync activeLeadId to context for global notification listener
+    useEffect(() => {
+        setActiveLeadId(activeLead?.id ? String(activeLead.id) : null)
+        return () => setActiveLeadId(null)
+    }, [activeLead?.id, setActiveLeadId])
 
     // View Mode
     const [searchTerm, setSearchTerm] = useState('')
@@ -16718,6 +16835,11 @@ const SalesInboxPage = () => {
                     // is_sender=true → I sent last msg | is_sender=false → lead sent last msg
                     _lastMsgIsSender: lead.id in lastSenderMap ? lastSenderMap[lead.id] : null
                 })).sort((a, b) => {
+                    // Unread leads always first
+                    const aUnread = (a.unread_count || 0) > 0 ? 1 : 0
+                    const bUnread = (b.unread_count || 0) > 0 ? 1 : 0
+                    if (bUnread !== aUnread) return bUnread - aUnread
+                    // Then by last interaction date DESC
                     const dateA = a.last_interaction_date ? new Date(a.last_interaction_date).getTime() : 0
                     const dateB = b.last_interaction_date ? new Date(b.last_interaction_date).getTime() : 0
                     return dateB - dateA
@@ -16751,6 +16873,7 @@ const SalesInboxPage = () => {
                     if (targetLead) {
                         setActiveLead(targetLead)
                         setCockpitLeadId(String(targetLeadId)) // mark as cockpit-originated
+                        if ((targetLead.unread_count || 0) > 0) markLeadAsRead(targetLead.id)
                     }
 
                     // Store taskId for auto-complete after sending message
@@ -17018,6 +17141,7 @@ const SalesInboxPage = () => {
             setActiveLead(lead)
             setCockpitLeadId(String(lead.id)) // mark as task-originated → show CRM action buttons
             setPendingTaskId(task.id)
+            if ((lead.unread_count || 0) > 0) markLeadAsRead(lead.id)
         }
     }
 
@@ -17025,6 +17149,14 @@ const SalesInboxPage = () => {
         setToast({ message, type })
         setTimeout(() => setToast(null), 3500)
     }
+
+    // Mark a lead as read: optimistic local update + persist to Supabase
+    const markLeadAsRead = useCallback(async (leadId) => {
+        setLeads(prev => prev.map(l => l.id === leadId ? { ...l, unread_count: 0 } : l))
+        setActiveLead(prev => prev?.id === leadId ? { ...prev, unread_count: 0 } : prev)
+        supabase.from('leads').update({ unread_count: 0 }).eq('id', leadId)
+            .then(({ error }) => { if (error) console.error('[markLeadAsRead]', error) })
+    }, [])
 
     const completeTaskIfPending = async () => {
         if (!pendingTaskId) return
@@ -17071,6 +17203,9 @@ const SalesInboxPage = () => {
 
         const messageText = newMessage.trim()
         setIsSending(true)
+
+        // Moment 2: Ensure unread is cleared when user sends a message
+        if ((activeLead.unread_count || 0) > 0) markLeadAsRead(activeLead.id)
 
         try {
             await sendToWebhook(messageText)
@@ -17263,21 +17398,36 @@ const SalesInboxPage = () => {
                                 ) : filteredLeads.map(lead => (
                                     <div
                                         key={lead.id}
-                                        onClick={() => setActiveLead(lead)}
+                                        onClick={() => {
+                                            setActiveLead(lead)
+                                            // Moment 1: mark as read when user opens the conversation
+                                            if ((lead.unread_count || 0) > 0) markLeadAsRead(lead.id)
+                                        }}
                                         className={`p-3 rounded-xl border cursor-pointer transition-all ${activeLead?.id === lead.id
                                             ? 'bg-orange-50 border-orange-300 shadow-sm'
-                                            : 'border-transparent hover:bg-gray-50 hover:border-gray-200'
+                                            : (lead.unread_count || 0) > 0
+                                                ? 'border-blue-200 bg-blue-50/40 hover:bg-blue-50 hover:border-blue-300'
+                                                : 'border-transparent hover:bg-gray-50 hover:border-gray-200'
                                             }`}
                                     >
                                         <div className="flex justify-between items-start mb-1">
-                                            <span className={`font-semibold text-sm truncate max-w-[140px] lg:max-w-[160px] text-gray-900`}>
+                                            <span className={`text-sm truncate max-w-[120px] lg:max-w-[140px] ${(lead.unread_count || 0) > 0 ? 'font-bold text-gray-900' : 'font-semibold text-gray-700'
+                                                }`}>
                                                 {lead.nome || 'Sem Nome'}
                                             </span>
-                                            <span className="text-[10px] text-gray-400">
-                                                {lead.last_interaction ? new Date(lead.last_interaction).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : ''}
-                                            </span>
+                                            <div className="flex items-center gap-1.5 shrink-0">
+                                                {(lead.unread_count || 0) > 0 && (
+                                                    <span className="min-w-[18px] h-[18px] bg-blue-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1">
+                                                        {lead.unread_count}
+                                                    </span>
+                                                )}
+                                                <span className="text-[10px] text-gray-400">
+                                                    {lead.last_interaction ? new Date(lead.last_interaction).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : ''}
+                                                </span>
+                                            </div>
                                         </div>
-                                        <div className="text-xs text-gray-500 mb-2 truncate">
+                                        <div className={`text-xs mb-2 truncate ${(lead.unread_count || 0) > 0 ? 'text-gray-700 font-medium' : 'text-gray-500'
+                                            }`}>
                                             {lead.headline || 'Lead qualificado'}
                                         </div>
                                         <div className="flex items-center gap-2 text-[10px]">
@@ -18415,6 +18565,8 @@ createRoot(document.getElementById('root')).render(
   <meta charset="UTF-8" />
   <link rel="icon" type="image/png" href="/favicon.png" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#f97316" />
+  <link rel="manifest" href="/manifest.json" />
   <title>Link&Lead System</title>
 </head>
 
@@ -18509,6 +18661,36 @@ export default {
     ],
 }
 
+```
+
+
+## File: public\manifest.json
+
+```json
+{
+    "name": "Link&Lead System",
+    "short_name": "Link&Lead",
+    "description": "Sistema inteligente de gestão de leads e vendas",
+    "start_url": "/",
+    "display": "standalone",
+    "background_color": "#ffffff",
+    "theme_color": "#f97316",
+    "orientation": "any",
+    "icons": [
+        {
+            "src": "/favicon.png",
+            "sizes": "192x192",
+            "type": "image/png",
+            "purpose": "any maskable"
+        },
+        {
+            "src": "/logo-linklead.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "any"
+        }
+    ]
+}
 ```
 
 

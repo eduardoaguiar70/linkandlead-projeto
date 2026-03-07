@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { supabase } from './services/supabaseClient'
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
+import { Toaster } from 'sonner'
 import './App.css'
 
 // Pages & Components
@@ -22,6 +23,7 @@ import LinkedInEngagementPage from './pages/LinkedInEngagementPage'
 import MissionsPage from './pages/MissionsPage'
 import ContentLibraryPage from './pages/ContentLibraryPage'
 import BlacklistPage from './pages/BlacklistPage'
+import ConnectionRequestsPage from './pages/ConnectionRequestsPage'
 import AdminLayout from './components/AdminLayout'
 
 // Client Portal New (Ideas/Insights)
@@ -132,68 +134,72 @@ function App() {
   // AuthProvider will handle its own loading state for protected routes.
 
   return (
-    <Router>
-      <Routes>
-        {/* === CLIENT PORTAL ROUTES (Decoupled from Global AuthProvider) === */}
+    <>
+      <Toaster position="top-center" richColors duration={4000} />
+      <Router>
+        <Routes>
+          {/* === CLIENT PORTAL ROUTES (Decoupled from Global AuthProvider) === */}
 
-        {/* 1. Magic Link Route (Public - handled by ClientInsightsPage logic) */}
-        <Route path="/portal/:token" element={
-          <ClientAuthProvider>
-            <ClientInsightsPage />
-          </ClientAuthProvider>
-        } />
-
-        {/* 2. Login Page (Public) */}
-        <Route path="/portal/login" element={<ClientLoginPage />} />
-
-        {/* 3. Insights Page (Protected by Layout check logic) */}
-        <Route path="/portal/insights" element={
-          <ClientAuthProvider>
-            <ClientDashboardLayout>
+          {/* 1. Magic Link Route (Public - handled by ClientInsightsPage logic) */}
+          <Route path="/portal/:token" element={
+            <ClientAuthProvider>
               <ClientInsightsPage />
-            </ClientDashboardLayout>
-          </ClientAuthProvider>
-        } />
+            </ClientAuthProvider>
+          } />
 
-        {/* === MAIN APP ROUTES (Wrapped in AuthProvider) === */}
-        <Route path="/*" element={
-          <AuthProvider>
-            <Routes>
-              {/* Public App Routes */}
-              <Route path="/login" element={<Login />} />
-              <Route path="/aprovacao" element={<ClientPortal />} />
-              <Route path="/post-feedback/:id" element={<PostFeedbackPage />} />
+          {/* 2. Login Page (Public) */}
+          <Route path="/portal/login" element={<ClientLoginPage />} />
 
-              {/* Admin Protected Routes */}
-              <Route element={
-                <ProtectedRoute allowedRoles={['admin']}>
-                  <ClientSelectionProvider>
-                    <AdminLayout />
-                  </ClientSelectionProvider>
-                </ProtectedRoute>
-              }>
-                <Route path="/" element={<AdminPanel />} />
-                <Route path="/posts" element={<PostsPage />} />
-                <Route path="/clients" element={<ClientsPage />} />
-                <Route path="/ideas" element={<IdeasPage />} />
-                <Route path="/sales" element={<SalesHubPage />} />
-                <Route path="/network" element={<NetworkDashboard />} />
-                <Route path="/sales/inbox" element={<SalesInboxPage />} />
-                <Route path="/pipeline" element={<PipelinePage />} />
-                <Route path="/system-info" element={<SystemInfoPage />} />
-                <Route path="/engagement" element={<LinkedInEngagementPage />} />
-                <Route path="/missions" element={<MissionsPage />} />
-                <Route path="/content-library" element={<ContentLibraryPage />} />
-                <Route path="/blacklist" element={<BlacklistPage />} />
-              </Route>
+          {/* 3. Insights Page (Protected by Layout check logic) */}
+          <Route path="/portal/insights" element={
+            <ClientAuthProvider>
+              <ClientDashboardLayout>
+                <ClientInsightsPage />
+              </ClientDashboardLayout>
+            </ClientAuthProvider>
+          } />
 
-              {/* Fallback */}
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
-          </AuthProvider>
-        } />
-      </Routes>
-    </Router>
+          {/* === MAIN APP ROUTES (Wrapped in AuthProvider) === */}
+          <Route path="/*" element={
+            <AuthProvider>
+              <Routes>
+                {/* Public App Routes */}
+                <Route path="/login" element={<Login />} />
+                <Route path="/aprovacao" element={<ClientPortal />} />
+                <Route path="/post-feedback/:id" element={<PostFeedbackPage />} />
+
+                {/* Admin Protected Routes */}
+                <Route element={
+                  <ProtectedRoute allowedRoles={['admin']}>
+                    <ClientSelectionProvider>
+                      <AdminLayout />
+                    </ClientSelectionProvider>
+                  </ProtectedRoute>
+                }>
+                  <Route path="/" element={<AdminPanel />} />
+                  <Route path="/posts" element={<PostsPage />} />
+                  <Route path="/clients" element={<ClientsPage />} />
+                  <Route path="/ideas" element={<IdeasPage />} />
+                  <Route path="/sales" element={<SalesHubPage />} />
+                  <Route path="/network" element={<NetworkDashboard />} />
+                  <Route path="/connections" element={<ConnectionRequestsPage />} />
+                  <Route path="/sales/inbox" element={<SalesInboxPage />} />
+                  <Route path="/pipeline" element={<PipelinePage />} />
+                  <Route path="/system-info" element={<SystemInfoPage />} />
+                  <Route path="/engagement" element={<LinkedInEngagementPage />} />
+                  <Route path="/missions" element={<MissionsPage />} />
+                  <Route path="/content-library" element={<ContentLibraryPage />} />
+                  <Route path="/blacklist" element={<BlacklistPage />} />
+                </Route>
+
+                {/* Fallback */}
+                <Route path="*" element={<Navigate to="/" replace />} />
+              </Routes>
+            </AuthProvider>
+          } />
+        </Routes>
+      </Router>
+    </>
   )
 }
 
