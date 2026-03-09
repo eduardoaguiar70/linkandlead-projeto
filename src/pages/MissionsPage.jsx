@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../services/supabaseClient'
 import { useClientSelection } from '../contexts/ClientSelectionContext'
+import SafeImage from '../components/SafeImage'
 import {
     Crosshair, Flame, TrendingUp, Snowflake,
     Loader2, RefreshCw, AlertTriangle, Trophy, PartyPopper,
@@ -111,7 +112,13 @@ const LeadCard = ({ lead, themeKey, completing, blacklisting, onComplete, onBlac
                 {/* Row 1: Avatar + Lead Info */}
                 <div className="flex items-start gap-3 mb-3">
                     {lead.avatar_url ? (
-                        <img src={lead.avatar_url} alt={lead.nome || 'Lead'} className="w-10 h-10 rounded-lg shrink-0 object-cover border border-gray-200 shadow-sm" />
+                        <SafeImage
+                            src={lead.avatar_url}
+                            alt={lead.nome || 'Lead'}
+                            className="w-10 h-10 rounded-lg shrink-0 object-cover border border-gray-200 shadow-sm"
+                            fallbackText={initial}
+                            containerClassName="w-10 h-10 rounded-lg shrink-0 bg-gray-100 border border-gray-200 shadow-sm"
+                        />
                     ) : (
                         <div className="w-10 h-10 rounded-lg shrink-0 bg-gray-100 border border-gray-200 flex items-center justify-center shadow-sm">
                             <span className="text-sm font-bold text-gray-600">{initial}</span>
@@ -183,7 +190,7 @@ const MissionsPage = () => {
     const navigate = useNavigate()
     const { selectedClientId } = useClientSelection()
 
-    const [leads, setLeads] = useState([])
+    const [tasks, setTasks] = useState([])
     const [loading, setLoading] = useState(true)
     const [refreshing, setRefreshing] = useState(false)
     const [error, setError] = useState(null)
@@ -191,37 +198,45 @@ const MissionsPage = () => {
     const [showAllCold, setShowAllCold] = useState(false)
     const [doneToday, setDoneToday] = useState(0)
 
-    const sevenDaysAgo = new Date(Date.now() - SEVEN_DAYS_MS).toISOString()
-    const todayStart = new Date(new Date().setHours(0, 0, 0, 0)).toISOString()
-
-    const fetchLeads = useCallback(async (isRefresh = false) => {
+    const fetchTasks = useCallback(async (isRefresh = false) => {
         if (!selectedClientId) { setLoading(false); return }
         if (isRefresh) setRefreshing(true)
         else setLoading(true)
         setError(null)
 
         try {
-            // Fetch pending leads
-            const { data, error: fetchError } = await supabase
-                .from('leads')
-                .select('id, nome, empresa, headline, avatar_url, icp_score, cadence_stage, has_engaged, last_task_completed_at, total_interactions_count, linkedin_profile_url, crm_stage')
-                .eq('client_id', selectedClientId)
-                .neq('is_blacklisted', true)
-                .neq('crm_stage', 'Ganho')
-                .or(`last_task_completed_at.is.null,and(last_task_completed_at.lt.${sevenDaysAgo},has_engaged.eq.false)`)
-                .order('icp_score', { ascending: true, nullsFirst: false })
+            const todayStart = new Date()
+            todayStart.setHours(0, 0, 0, 0)
 
-            if (fetchError) throw fetchError
+            const [pendingResult, doneResult] = await Promise.all([
+                supabase
+                    .from('tasks')
+                    .select('*, lead:leads!inner(id, client_id, nome, empresa, headline, avatar_url, icp_score, cadence_stage, has_engaged, last_task_completed_at, total_interactions_count, linkedin_profile_url, crm_stage)')
+                    .eq('leads.client_id', selectedClientId)
+                    .eq('status', 'PENDING')
+                    .gte('created_at', todayStart.toISOString())
+                    .order('created_at', { ascending: true })
+                    .limit(30),
+                supabase
+                    .from('tasks')
+                    .select('id, leads!inner(client_id)', { count: 'exact' })
+                    .eq('leads.client_id', selectedClientId)
+                    .eq('status', 'COMPLETED')
+                    .gte('completed_at', `${new Date().toISOString().split('T')[0]}T00:00:00`)
+                    .limit(1)
+            ])
 
-            // Fetch done today count
-            const { count: todayCount } = await supabase
-                .from('leads')
-                .select('id', { count: 'exact', head: true })
-                .eq('client_id', selectedClientId)
-                .gte('last_task_completed_at', todayStart)
+            if (pendingResult.error) throw pendingResult.error
 
-            setLeads(data || [])
-            setDoneToday(todayCount || 0)
+            // Active tasks need sort applying the existing ICP metric priority on the inner lead object
+            const activeTasks = (pendingResult.data || []).sort((a, b) => {
+                const aIcp = ICP_PRIORITY[a.lead?.icp_score] ?? 3
+                const bIcp = ICP_PRIORITY[b.lead?.icp_score] ?? 3
+                return aIcp - bIcp
+            })
+
+            setTasks(activeTasks)
+            setDoneToday(doneResult.count || 0)
         } catch (err) {
             console.error('[Cockpit] fetch error:', err)
             setError('Falha ao carregar tarefas. Tente novamente.')
@@ -229,60 +244,68 @@ const MissionsPage = () => {
             setLoading(false)
             setRefreshing(false)
         }
-    }, [selectedClientId]) // eslint-disable-line react-hooks/exhaustive-deps
+    }, [selectedClientId])
 
-    useEffect(() => { fetchLeads() }, [fetchLeads])
+    useEffect(() => { fetchTasks() }, [fetchTasks])
 
-    const removeOptimistically = (id) => setLeads(prev => prev.filter(l => l.id !== id))
+    const removeOptimistically = (taskId) => setTasks(prev => prev.filter(t => t.id !== taskId))
 
-    const handleComplete = async (id) => {
-        setActionState(prev => ({ ...prev, [id]: 'completing' }))
+    const handleComplete = async (taskId) => {
+        setActionState(prev => ({ ...prev, [taskId]: 'completing' }))
+
+        const taskObj = tasks.find(t => t.id === taskId)
+
         setTimeout(() => {
-            removeOptimistically(id)
+            removeOptimistically(taskId)
             setDoneToday(d => d + 1)
         }, 300)
+
         try {
-            await supabase.from('leads').update({ last_task_completed_at: new Date().toISOString() }).eq('id', id)
+            await supabase.from('tasks').update({ status: 'COMPLETED', completed_at: new Date().toISOString() }).eq('id', taskId)
+            if (taskObj?.lead?.id) {
+                await supabase.from('leads').update({ last_task_completed_at: new Date().toISOString() }).eq('id', taskObj.lead.id)
+            }
         } catch (err) {
             console.error('[Cockpit] complete error:', err)
-            fetchLeads(true)
+            fetchTasks(true)
         } finally {
-            setActionState(prev => { const n = { ...prev }; delete n[id]; return n })
+            setActionState(prev => { const n = { ...prev }; delete n[taskId]; return n })
         }
     }
 
-    const handleBlacklist = async (id) => {
-        setActionState(prev => ({ ...prev, [id]: 'blacklisting' }))
-        setTimeout(() => removeOptimistically(id), 300)
+    const handleBlacklist = async (taskId) => {
+        setActionState(prev => ({ ...prev, [taskId]: 'blacklisting' }))
+
+        const taskObj = tasks.find(t => t.id === taskId)
+
+        setTimeout(() => removeOptimistically(taskId), 300)
         try {
-            await supabase.from('leads').update({ is_blacklisted: true }).eq('id', id)
+            await supabase.from('tasks').update({ status: 'CANCELLED', completed_at: new Date().toISOString() }).eq('id', taskId)
+            if (taskObj?.lead?.id) {
+                await supabase.from('leads').update({ is_blacklisted: true }).eq('id', taskObj.lead.id)
+            }
         } catch (err) {
             console.error('[Cockpit] blacklist error:', err)
-            fetchLeads(true)
+            fetchTasks(true)
         } finally {
-            setActionState(prev => { const n = { ...prev }; delete n[id]; return n })
+            setActionState(prev => { const n = { ...prev }; delete n[taskId]; return n })
         }
     }
 
-    const handleInbox = (id) => navigate(`/sales/inbox?leadId=${id}`)
+    const handleInbox = (leadId) => navigate(`/sales/inbox?leadId=${leadId}`)
 
-    // Sort + split into columns
-    const { hotLeads, warmLeads, coldLeads } = useMemo(() => {
-        const sorted = [...leads].sort((a, b) => {
-            const aIcp = ICP_PRIORITY[a.icp_score] ?? 3
-            const bIcp = ICP_PRIORITY[b.icp_score] ?? 3
-            return aIcp - bIcp
-        })
+    // Split valid tasks into columns by getting the cadence_stage from the inner lead object
+    const { hotTasks, warmTasks, coldTasks } = useMemo(() => {
         return {
-            hotLeads: sorted.filter(l => l.cadence_stage === 'G4' || l.cadence_stage === 'G5'),
-            warmLeads: sorted.filter(l => l.cadence_stage === 'G2' || l.cadence_stage === 'G3'),
-            coldLeads: sorted.filter(l => l.cadence_stage === 'G1' || !l.cadence_stage),
+            hotTasks: tasks.filter(t => t.lead?.cadence_stage === 'G4' || t.lead?.cadence_stage === 'G5'),
+            warmTasks: tasks.filter(t => t.lead?.cadence_stage === 'G2' || t.lead?.cadence_stage === 'G3'),
+            coldTasks: tasks.filter(t => t.lead?.cadence_stage === 'G1' || !t.lead?.cadence_stage),
         }
-    }, [leads])
+    }, [tasks])
 
-    const visibleColdLeads = showAllCold ? coldLeads : coldLeads.slice(0, VISIBLE_COLD_CARDS)
-    const hiddenColdCount = coldLeads.length - VISIBLE_COLD_CARDS
-    const allDone = leads.length === 0 && !loading
+    const visibleColdTasks = showAllCold ? coldTasks : coldTasks.slice(0, VISIBLE_COLD_CARDS)
+    const hiddenColdCount = coldTasks.length - VISIBLE_COLD_CARDS
+    const allDone = tasks.length === 0 && !loading
 
     const getGreeting = () => {
         const h = new Date().getHours()
@@ -291,7 +314,7 @@ const MissionsPage = () => {
         return 'Boa noite'
     }
 
-    const totalMissions = leads.length + doneToday
+    const totalMissions = tasks.length + doneToday
     const progressPercent = totalMissions > 0 ? Math.round((doneToday / totalMissions) * 100) : 0
 
     if (loading) return (
@@ -319,17 +342,17 @@ const MissionsPage = () => {
                                     {getGreeting()}! Faça suas tarefas diárias e cumpra suas metas! 🎯
                                 </h1>
                                 <p className="text-sm text-gray-500">
-                                    {hotLeads.length > 0
-                                        ? <><span className="text-orange-500 font-semibold">{hotLeads.length} quente(s)</span> · {warmLeads.length} em nutrição · {coldLeads.length} novos contatos</>
-                                        : leads.length > 0
-                                            ? <>{leads.length} tarefas aguardando execução.</>
+                                    {hotTasks.length > 0
+                                        ? <><span className="text-orange-500 font-semibold">{hotTasks.length} quente(s)</span> · {warmTasks.length} em nutrição · {coldTasks.length} novos contatos</>
+                                        : tasks.length > 0
+                                            ? <>{tasks.length} tarefas aguardando execução.</>
                                             : 'Nenhuma tarefa pendente!'
                                     }
                                 </p>
                             </div>
                         </div>
                         <button
-                            onClick={() => fetchLeads(true)}
+                            onClick={() => fetchTasks(true)}
                             disabled={refreshing}
                             className="p-2 rounded-lg hover:bg-gray-100 transition-colors text-gray-400 hover:text-gray-700"
                             title="Atualizar"
@@ -364,7 +387,7 @@ const MissionsPage = () => {
                         <div className="flex flex-col items-center justify-center py-8 gap-4 text-center">
                             <AlertTriangle size={28} className="text-red-500" />
                             <p className="text-sm text-gray-600">{error}</p>
-                            <button onClick={() => fetchLeads()} className="px-4 py-2 rounded-lg bg-gray-50 hover:bg-gray-100 text-gray-700 text-sm font-medium border border-gray-200 transition-all">
+                            <button onClick={() => fetchTasks()} className="px-4 py-2 rounded-lg bg-gray-50 hover:bg-gray-100 text-gray-700 text-sm font-medium border border-gray-200 transition-all">
                                 Tentar novamente
                             </button>
                         </div>
@@ -396,22 +419,22 @@ const MissionsPage = () => {
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
                         {/* HOT G4/G5 */}
-                        <FeedSection title="HOT (G4/G5)" icon={<Flame size={15} />} count={hotLeads.length} themeKey="hot" emptyText="Nenhum lead quente para hoje.">
-                            {hotLeads.map(lead => (
-                                <LeadCard key={lead.id} lead={lead} themeKey="hot"
-                                    completing={actionState[lead.id] === 'completing'}
-                                    blacklisting={actionState[lead.id] === 'blacklisting'}
-                                    onComplete={handleComplete} onBlacklist={handleBlacklist} onInbox={handleInbox} />
+                        <FeedSection title="HOT (G4/G5)" icon={<Flame size={15} />} count={hotTasks.length} themeKey="hot" emptyText="Nenhum lead quente para hoje.">
+                            {hotTasks.map(task => (
+                                <LeadCard key={task.id} lead={task.lead} themeKey="hot"
+                                    completing={actionState[task.id] === 'completing'}
+                                    blacklisting={actionState[task.id] === 'blacklisting'}
+                                    onComplete={() => handleComplete(task.id)} onBlacklist={() => handleBlacklist(task.id)} onInbox={() => handleInbox(task.lead.id)} />
                             ))}
                         </FeedSection>
 
                         {/* MORNOS G2/G3 */}
-                        <FeedSection title="MORNOS (G2/G3)" icon={<TrendingUp size={15} />} count={warmLeads.length} themeKey="warm" emptyText="Nenhuma tarefa de nutrição.">
-                            {warmLeads.map(lead => (
-                                <LeadCard key={lead.id} lead={lead} themeKey="warm"
-                                    completing={actionState[lead.id] === 'completing'}
-                                    blacklisting={actionState[lead.id] === 'blacklisting'}
-                                    onComplete={handleComplete} onBlacklist={handleBlacklist} onInbox={handleInbox} />
+                        <FeedSection title="MORNOS (G2/G3)" icon={<TrendingUp size={15} />} count={warmTasks.length} themeKey="warm" emptyText="Nenhuma tarefa de nutrição.">
+                            {warmTasks.map(task => (
+                                <LeadCard key={task.id} lead={task.lead} themeKey="warm"
+                                    completing={actionState[task.id] === 'completing'}
+                                    blacklisting={actionState[task.id] === 'blacklisting'}
+                                    onComplete={() => handleComplete(task.id)} onBlacklist={() => handleBlacklist(task.id)} onInbox={() => handleInbox(task.lead.id)} />
                             ))}
                         </FeedSection>
 
@@ -419,7 +442,7 @@ const MissionsPage = () => {
                         <FeedSection
                             title="FRIOS (G1)"
                             icon={<Snowflake size={15} />}
-                            count={coldLeads.length}
+                            count={coldTasks.length}
                             themeKey="cold"
                             emptyText="Nenhuma prospecção pendente."
                             footer={
@@ -427,18 +450,18 @@ const MissionsPage = () => {
                                     <button onClick={() => setShowAllCold(true)} className="w-full py-3 text-center text-xs font-semibold text-blue-500 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 border-t border-blue-200 transition-colors rounded-b-2xl">
                                         Mostrar mais {hiddenColdCount} tarefas
                                     </button>
-                                ) : showAllCold && coldLeads.length > VISIBLE_COLD_CARDS ? (
+                                ) : showAllCold && coldTasks.length > VISIBLE_COLD_CARDS ? (
                                     <button onClick={() => setShowAllCold(false)} className="w-full py-3 text-center text-xs font-semibold text-gray-500 hover:text-gray-700 bg-gray-50 hover:bg-gray-100 border-t border-gray-200 transition-colors rounded-b-2xl">
                                         Mostrar menos
                                     </button>
                                 ) : null
                             }
                         >
-                            {visibleColdLeads.map(lead => (
-                                <LeadCard key={lead.id} lead={lead} themeKey="cold"
-                                    completing={actionState[lead.id] === 'completing'}
-                                    blacklisting={actionState[lead.id] === 'blacklisting'}
-                                    onComplete={handleComplete} onBlacklist={handleBlacklist} onInbox={handleInbox} />
+                            {visibleColdTasks.map(task => (
+                                <LeadCard key={task.id} lead={task.lead} themeKey="cold"
+                                    completing={actionState[task.id] === 'completing'}
+                                    blacklisting={actionState[task.id] === 'blacklisting'}
+                                    onComplete={() => handleComplete(task.id)} onBlacklist={() => handleBlacklist(task.id)} onInbox={() => handleInbox(task.lead.id)} />
                             ))}
                         </FeedSection>
 

@@ -45,6 +45,7 @@ const AdminLayout = () => {
     // ── Notification System: listen for unread_count increases ──
     const { selectedClientId, activeLeadId } = useClientSelection()
     const { notify } = useNotifications()
+    const [inAppNotification, setInAppNotification] = useState(null) // { leadId, leadName }
 
     useEffect(() => {
         if (!selectedClientId) return
@@ -62,7 +63,19 @@ const AdminLayout = () => {
 
                 // Only notify if unread INCREASED and it's not the currently open lead
                 if (newCount > oldCount && String(leadId) !== String(activeLeadId)) {
-                    notify(payload.new?.nome || 'Lead', leadId)
+                    const leadName = payload.new?.nome || 'Lead'
+                    notify(leadName, leadId)
+
+                    // Trigger visual in-app toast
+                    setInAppNotification({ leadId, leadName })
+
+                    // Auto-dismiss after 5 seconds
+                    setTimeout(() => {
+                        setInAppNotification(current => {
+                            if (current && current.leadId === leadId) return null
+                            return current
+                        })
+                    }, 5000)
                 }
             })
             .subscribe()
@@ -72,6 +85,43 @@ const AdminLayout = () => {
 
     return (
         <div className="dashboard-layout">
+            {/* IN-APP VISUAL NOTIFICATION TOAST */}
+            {inAppNotification && (
+                <div className="fixed top-6 right-6 z-[9999] animate-slide-in-right">
+                    <div
+                        onClick={() => {
+                            window.location.href = `/sales/inbox?leadId=${inAppNotification.leadId}`
+                            setInAppNotification(null)
+                        }}
+                        className="bg-white rounded-xl shadow-2xl border-2 border-primary/20 p-4 pr-12 cursor-pointer hover:bg-gray-50 hover:border-primary/50 hover:shadow-primary/10 transition-all flex items-start gap-4"
+                        style={{ minWidth: '320px' }}
+                    >
+                        <div className="w-10 h-10 rounded-full bg-primary/10 border border-primary/30 flex items-center justify-center shrink-0 mt-0.5">
+                            <MessageCircle size={20} className="text-primary" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                            <h4 className="text-sm font-bold text-gray-900 mb-1">Nova mensagem</h4>
+                            <p className="text-xs text-gray-500 truncate block">
+                                {inAppNotification.leadName} enviou uma mensagem.
+                            </p>
+                            <span className="text-[10px] font-bold text-primary mt-2 flex items-center gap-1">
+                                Clique para abrir o Inbox <ChevronRight size={10} />
+                            </span>
+                        </div>
+
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation()
+                                setInAppNotification(null)
+                            }}
+                            className="absolute top-3 right-3 p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+                        >
+                            <X size={14} />
+                        </button>
+                    </div>
+                </div>
+            )}
+
             {/* MOBILE HEADER */}
             <div className="mobile-header">
                 <button onClick={toggleSidebar} className="menu-btn">

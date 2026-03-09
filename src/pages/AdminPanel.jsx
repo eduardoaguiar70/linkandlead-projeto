@@ -4,6 +4,7 @@ import { supabase } from '../services/supabaseClient'
 import { useAuth } from '../contexts/AuthContext'
 import { useClientSelection } from '../contexts/ClientSelectionContext'
 import { KpiCardSkeleton, HeroTaskCardSkeleton, Skeleton } from '../components/Skeleton'
+import SafeImage from '../components/SafeImage'
 import {
     Crosshair,
     Flame,
@@ -64,35 +65,32 @@ const AdminPanel = () => {
         else setLoading(true)
 
         try {
-            const today = new Date().toISOString().split('T')[0]
+            const todayStart = new Date()
+            todayStart.setHours(0, 0, 0, 0)
+            const todayStr = todayStart.toISOString()
+            const dateStr = new Date().toISOString().split('T')[0]
 
             // 1. Stats: Done Today
             let doneQuery = supabase
                 .from('tasks')
                 .select('id, leads!inner(client_id)', { count: 'exact', head: true })
                 .eq('status', 'COMPLETED')
-                .gte('completed_at', `${today}T00:00:00`)
+                .gte('completed_at', `${dateStr}T00:00:00`)
 
             if (selectedClientId) doneQuery = doneQuery.eq('leads.client_id', selectedClientId)
 
-            // 2. Stats: Pending Total
-            let pendingStatsQuery = supabase
-                .from('tasks')
-                .select('id, leads!inner(client_id)', { count: 'exact', head: true })
-                .eq('status', 'PENDING')
-
-            if (selectedClientId) pendingStatsQuery = pendingStatsQuery.eq('leads.client_id', selectedClientId)
-
-            // 3. Critical Tasks (Focus) - G4/G5
+            // 2. Pending Tasks (Top 30 for today, same as Cockpit)
             let pendingQuery = supabase
                 .from('tasks')
-                .select('*, leads!inner(id, client_id, nome, empresa, headline, linkedin_profile_url, cadence_stage, total_interactions_count, avatar_url)')
+                .select('*, leads!inner(id, client_id, nome, empresa, headline, linkedin_profile_url, cadence_stage, total_interactions_count, avatar_url, icp_score)')
                 .eq('status', 'PENDING')
+                .gte('created_at', todayStr)
                 .order('created_at', { ascending: true })
+                .limit(30)
 
             if (selectedClientId) pendingQuery = pendingQuery.eq('leads.client_id', selectedClientId)
 
-            // 4. Radar Leads (Responding/Hot)
+            // 3. Radar Leads (Responding/Hot)
             let radarQuery = supabase
                 .from('leads')
                 .select('id, nome, empresa, headline, cadence_stage, total_interactions_count, updated_at, linkedin_profile_url, avatar_url')
@@ -103,9 +101,8 @@ const AdminPanel = () => {
             if (selectedClientId) radarQuery = radarQuery.eq('client_id', selectedClientId)
 
             // Execute all
-            const [doneRes, pendingStatsRes, tasksRes, radarRes] = await Promise.all([
+            const [doneRes, tasksRes, radarRes] = await Promise.all([
                 doneQuery,
-                pendingStatsQuery,
                 pendingQuery,
                 radarQuery
             ])
@@ -115,34 +112,29 @@ const AdminPanel = () => {
 
             const allPending = tasksRes.data || []
 
-            // 5. Filter for Foco Total
-            // Rule: priority === 'HIGH' OR (ICP === 'A' AND Stage in ['G4', 'G5'])
-            const focusCandidates = allPending.filter(t => {
-                const isHighPriority = t.priority === 'HIGH'
-                const isIcpHot = t.leads?.icp_score === 'A' && HOT_STAGES.includes(t.leads?.cadence_stage)
-                return isHighPriority || isIcpHot
-            })
-
-            // Sort: HOT (G4/G5) > MORNOS (G2/G3) > FRIOS (G1), then HIGH priority, then oldest first
+            // Sort: highest Cadence first (G5 -> G1), then ICP score. Foco Total will pick the top 3.
             const STAGE_PRIORITY = { G5: 0, G4: 1, G3: 2, G2: 3, G1: 4 }
-            const sortedPriority = focusCandidates.sort((a, b) => {
+            const ICP_PRIORITY = { A: 1, B: 2, C: 3 }
+
+            const sortedPriority = [...allPending].sort((a, b) => {
                 const sa = STAGE_PRIORITY[a.leads?.cadence_stage] ?? 5
                 const sb = STAGE_PRIORITY[b.leads?.cadence_stage] ?? 5
                 if (sa !== sb) return sa - sb
 
-                if (a.priority === 'HIGH' && b.priority !== 'HIGH') return -1;
-                if (b.priority === 'HIGH' && a.priority !== 'HIGH') return 1;
+                const ia = ICP_PRIORITY[a.leads?.icp_score] ?? 4
+                const ib = ICP_PRIORITY[b.leads?.icp_score] ?? 4
+                if (ia !== ib) return ia - ib
 
                 return new Date(a.created_at) - new Date(b.created_at)
             })
 
-            const focusTasks = sortedPriority.slice(0, 3);
+            const focusTasks = sortedPriority.slice(0, 3)
 
             const g4g5 = allPending.filter(t => HOT_STAGES.includes(t.leads?.cadence_stage))
 
             setStats({
                 doneToday: doneRes.count || 0,
-                pendingTotal: pendingStatsRes.count || 0,
+                pendingTotal: allPending.length,
                 hotLeads: g4g5.length
             })
 
@@ -464,10 +456,12 @@ const HeroTaskCard = ({ task, index, completing, onComplete, onExecute }) => {
                 {/* Lead Info */}
                 <div className="flex items-center gap-3 flex-1 min-w-0">
                     {lead.avatar_url ? (
-                        <img
+                        <SafeImage
                             src={lead.avatar_url}
                             alt={lead.nome}
                             className="w-11 h-11 rounded-xl shrink-0 object-cover border border-gray-200"
+                            fallbackText={initial}
+                            containerClassName="w-11 h-11 rounded-xl shrink-0 bg-gray-100 border border-gray-200"
                         />
                     ) : (
                         <div className="w-11 h-11 rounded-xl shrink-0 bg-gray-100 border border-gray-200 flex items-center justify-center">
@@ -570,10 +564,12 @@ const RadarLeadCard = ({ lead }) => {
         <div className="bg-white rounded-xl border border-gray-200 p-4 min-w-[200px] max-w-[240px] shrink-0 snap-center hover:shadow-md hover:border-gray-300 transition-all duration-300 cursor-default">
             <div className="flex items-center gap-3 mb-3">
                 {lead.avatar_url ? (
-                    <img
+                    <SafeImage
                         src={lead.avatar_url}
                         alt={lead.nome}
                         className="w-9 h-9 rounded-lg shrink-0 object-cover border border-gray-200"
+                        fallbackText={initial}
+                        containerClassName="w-9 h-9 rounded-lg shrink-0 bg-gray-100 border border-gray-200"
                     />
                 ) : (
                     <div className="w-9 h-9 rounded-lg shrink-0 bg-gray-100 border border-gray-200 flex items-center justify-center shrink-0">

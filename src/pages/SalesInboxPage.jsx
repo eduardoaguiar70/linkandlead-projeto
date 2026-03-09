@@ -4,7 +4,7 @@ import { supabase } from '../services/supabaseClient'
 import { useClientSelection } from '../contexts/ClientSelectionContext'
 import { Search, Send, MoreVertical, Phone, Mail, MapPin, Briefcase, Zap, Star, Sparkles, MessageSquare, Check, LayoutGrid, List, Loader2, X, ClipboardList, CheckCircle2, Ban } from 'lucide-react'
 import SafeImage from '../components/SafeImage'
-const N8N_GENERATE_REPLY_URL = 'https://n8n-n8n-start.kfocge.easypanel.host/webhook-test/generate-reply'
+const N8N_GENERATE_REPLY_URL = 'https://n8n-n8n-start.kfocge.easypanel.host/webhook/generate-reply'
 const N8N_SEND_MESSAGE_URL = 'https://n8n-n8n-start.kfocge.easypanel.host/webhook/send-linkedin-message'
 import StrategicContextCard from '../components/StrategicContextCard'
 
@@ -80,6 +80,14 @@ const SalesInboxPage = () => {
             await supabase.from('tasks').update({ status: 'COMPLETED', completed_at: new Date().toISOString() })
                 .eq('lead_id', activeLead.id).eq('status', 'PENDING')
 
+            setActiveTaskLeadIds(prev => {
+                const n = new Set(prev)
+                n.delete(String(activeLead.id))
+                return n
+            })
+            setPendingTaskCount(p => Math.max(0, p - 1))
+            setSidebarTasks(prev => prev.filter(t => t.leads?.id !== activeLead.id))
+
             showCrmToast('✅ Tarefa concluída!')
         } catch (err) {
             console.error('[Inbox] markDone error:', err)
@@ -95,6 +103,14 @@ const SalesInboxPage = () => {
             // Remove pending tasks for blacklisted lead
             await supabase.from('tasks').update({ status: 'CANCELLED', completed_at: new Date().toISOString() })
                 .eq('lead_id', activeLead.id).eq('status', 'PENDING')
+
+            setActiveTaskLeadIds(prev => {
+                const n = new Set(prev)
+                n.delete(String(activeLead.id))
+                return n
+            })
+            setPendingTaskCount(p => Math.max(0, p - 1))
+            setSidebarTasks(prev => prev.filter(t => t.leads?.id !== activeLead.id))
 
             showCrmToast('🚫 Lead adicionado à lista negra.')
         } catch (err) {
@@ -156,23 +172,28 @@ const SalesInboxPage = () => {
     const [sidebarTasks, setSidebarTasks] = useState([])
     const [loadingTasks, setLoadingTasks] = useState(false)
     const [pendingTaskCount, setPendingTaskCount] = useState(0)
+    const [activeTaskLeadIds, setActiveTaskLeadIds] = useState(new Set())
 
     // Eager fetch: task count badge (always visible, regardless of active tab)
     useEffect(() => {
         if (!selectedClientId) return
         const fetchCount = async () => {
-            const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
-            const { data } = await supabase
-                .from('leads')
-                .select('id, is_blacklisted, crm_stage, last_task_completed_at, has_engaged')
-                .eq('client_id', selectedClientId)
-                .neq('is_blacklisted', true)
-                .neq('crm_stage', 'Ganho')
-                .or(`last_task_completed_at.is.null,and(last_task_completed_at.lt.${sevenDaysAgo},has_engaged.eq.false)`)
+            const todayStart = new Date()
+            todayStart.setHours(0, 0, 0, 0)
+
+            const { data, count } = await supabase
+                .from('tasks')
+                .select('id, leads!inner(client_id, id)', { count: 'exact' })
+                .eq('leads.client_id', selectedClientId)
+                .eq('status', 'PENDING')
+                .gte('created_at', todayStart.toISOString())
                 .limit(30)
 
+            if (count !== null) {
+                setPendingTaskCount(count)
+            }
             if (data) {
-                setPendingTaskCount(data.length)
+                setActiveTaskLeadIds(new Set(data.filter(t => t.leads?.id).map(t => String(t.leads.id))))
             }
         }
         fetchCount()
@@ -223,11 +244,7 @@ const SalesInboxPage = () => {
                     // is_sender=true → I sent last msg | is_sender=false → lead sent last msg
                     _lastMsgIsSender: lead.id in lastSenderMap ? lastSenderMap[lead.id] : null
                 })).sort((a, b) => {
-                    // Unread leads always first
-                    const aUnread = (a.unread_count || 0) > 0 ? 1 : 0
-                    const bUnread = (b.unread_count || 0) > 0 ? 1 : 0
-                    if (bUnread !== aUnread) return bUnread - aUnread
-                    // Then by last interaction date DESC
+                    // Sort purely by last interaction date DESC
                     const dateA = a.last_interaction_date ? new Date(a.last_interaction_date).getTime() : 0
                     const dateB = b.last_interaction_date ? new Date(b.last_interaction_date).getTime() : 0
                     return dateB - dateA
@@ -411,33 +428,19 @@ const SalesInboxPage = () => {
         if (!selectedClientId) return
         setLoadingTasks(true)
         try {
-            const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
-            // Unification of task query directly from leads table
+            const todayStart = new Date()
+            todayStart.setHours(0, 0, 0, 0)
+
             const { data } = await supabase
-                .from('leads')
-                .select('id, client_id, nome, empresa, headline, cadence_stage, avatar_url, linkedin_profile_url, total_interactions_count, is_blacklisted, crm_stage, last_task_completed_at, has_engaged, last_interaction_date')
-                .eq('client_id', selectedClientId)
-                .neq('is_blacklisted', true)
-                .neq('crm_stage', 'Ganho')
-                .or(`last_task_completed_at.is.null,and(last_task_completed_at.lt.${sevenDaysAgo},has_engaged.eq.false)`)
-                .order('last_interaction_date', { ascending: false, nullsFirst: false })
+                .from('tasks')
+                .select('id, instruction, leads!inner(id, client_id, nome, empresa, headline, cadence_stage, avatar_url, linkedin_profile_url, total_interactions_count, is_blacklisted, crm_stage, last_task_completed_at, has_engaged, last_interaction_date)')
+                .eq('leads.client_id', selectedClientId)
+                .eq('status', 'PENDING')
+                .gte('created_at', todayStart.toISOString())
+                .order('created_at', { ascending: true })
                 .limit(30)
 
-            const candidates = data || []
-
-            // Convert to the shape expected by sidebar rendering UI { id: lead.id, leads: lead }
-            const processedTasks = candidates.map(lead => ({
-                id: lead.id,
-                leads: lead
-            }))
-
-            // Sort by last interaction date DESC (newest interactions / message first)
-            const sorted = processedTasks.sort((a, b) => {
-                const timeA = a.leads?.last_interaction_date ? new Date(a.leads.last_interaction_date).getTime() : 0
-                const timeB = b.leads?.last_interaction_date ? new Date(b.leads.last_interaction_date).getTime() : 0
-                return timeB - timeA
-            })
-            setSidebarTasks(sorted)
+            setSidebarTasks(data || [])
         } catch (err) {
             console.error('Error fetching sidebar tasks:', err)
         } finally {
@@ -939,9 +942,9 @@ const SalesInboxPage = () => {
                                 </div>
                             </div>
 
-                            {/* CRM Quick Actions — only for Cockpit-originated leads or overdue follow-ups */}
+                            {/* CRM Quick Actions — only for pending tasks */}
                             <div className="flex items-center gap-1.5 shrink-0 ml-2">
-                                {(cockpitLeadId === String(activeLead?.id) || isLeadTask(activeLead)) && (
+                                {activeTaskLeadIds.has(String(activeLead?.id)) && (
                                     <>
                                         <button
                                             onClick={handleMarkDone}

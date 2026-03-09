@@ -62,7 +62,6 @@ const PipelinePage = () => {
         }
     }, [selectedClientId])
 
-    // Fetch only FUNNEL leads for Kanban
     const fetchFunnelLeads = useCallback(async () => {
         if (!selectedClientId) return
         try {
@@ -72,6 +71,7 @@ const PipelinePage = () => {
                 .eq('client_id', selectedClientId)
                 .neq('is_blacklisted', true)
                 .not('crm_stage', 'is', null)
+                .neq('crm_stage', '')
                 .order('last_interaction_date', { ascending: false, nullsFirst: false })
             if (error) throw error
             setFunnelLeads(data || [])
@@ -101,7 +101,7 @@ const PipelinePage = () => {
         setAllLeads(prev => prev.map(l => l.id === updatedLead.id ? { ...l, ...updatedLead } : l))
         setFunnelLeads(prev => {
             const exists = prev.find(l => l.id === updatedLead.id)
-            if (updatedLead.crm_stage) {
+            if (updatedLead.crm_stage && updatedLead.crm_stage !== '') {
                 return exists ? prev.map(l => l.id === updatedLead.id ? { ...l, ...updatedLead } : l) : [...prev, updatedLead]
             } else {
                 return prev.filter(l => l.id !== updatedLead.id)
