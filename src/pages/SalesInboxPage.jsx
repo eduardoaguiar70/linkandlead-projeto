@@ -245,8 +245,8 @@ const SalesInboxPage = () => {
                     _lastMsgIsSender: lead.id in lastSenderMap ? lastSenderMap[lead.id] : null
                 })).sort((a, b) => {
                     // Sort purely by last interaction date DESC
-                    const dateA = a.last_interaction_date ? new Date(a.last_interaction_date).getTime() : 0
-                    const dateB = b.last_interaction_date ? new Date(b.last_interaction_date).getTime() : 0
+                    const dateA = new Date(a.last_interaction_date || 0).getTime()
+                    const dateB = new Date(b.last_interaction_date || 0).getTime()
                     return dateB - dateA
                 })
 
@@ -391,8 +391,8 @@ const SalesInboxPage = () => {
                         last_interaction_date: lastDateMap[lead.id] || lead.last_interaction_date || null,
                         _lastMsgIsSender: lead.id in lastSenderMap ? lastSenderMap[lead.id] : null
                     })).sort((a, b) => {
-                        const dateA = a.last_interaction_date ? new Date(a.last_interaction_date).getTime() : 0
-                        const dateB = b.last_interaction_date ? new Date(b.last_interaction_date).getTime() : 0
+                        const dateA = new Date(a.last_interaction_date || 0).getTime()
+                        const dateB = new Date(b.last_interaction_date || 0).getTime()
                         return dateB - dateA
                     })
 
@@ -1013,30 +1013,11 @@ const SalesInboxPage = () => {
 
                                 // interactions are sorted desc (newest first), rendered with flex-col-reverse
                                 const elements = []
-                                let lastDateKey = null
 
                                 interactions.forEach((msg, idx) => {
                                     const dateKey = getDateKey(msg.interaction_date)
 
-                                    // When date changes, insert divider BEFORE the message bubble
-                                    // (in reversed layout, this renders ABOVE the group)
-                                    if (dateKey !== lastDateKey) {
-                                        // Look at next message — if it's a different day, the divider goes here
-                                        // For the first message (newest), always show divider
-                                        if (lastDateKey !== null) {
-                                            elements.push(
-                                                <div key={`divider-${lastDateKey}`} className="flex items-center gap-3 my-2 self-stretch">
-                                                    <div className="flex-1 h-px bg-gray-200" />
-                                                    <span className="text-[10px] font-bold text-gray-400 tracking-widest uppercase">
-                                                        {getDateLabel(interactions[idx - 1].interaction_date)}
-                                                    </span>
-                                                    <div className="flex-1 h-px bg-gray-200" />
-                                                </div>
-                                            )
-                                        }
-                                        lastDateKey = dateKey
-                                    }
-
+                                    // Render the message first
                                     elements.push(
                                         <div key={msg.id} className={`flex flex-col max-w-[85%] lg:max-w-[80%] ${msg.is_sender === true ? 'self-end items-end' : 'self-start items-start'}`}>
                                             <div className={`px-4 py-3 rounded-2xl text-sm leading-relaxed ${msg.is_sender === true
@@ -1050,20 +1031,25 @@ const SalesInboxPage = () => {
                                             </span>
                                         </div>
                                     )
-                                })
 
-                                // Add divider for the last (oldest) group
-                                if (lastDateKey !== null) {
-                                    elements.push(
-                                        <div key={`divider-${lastDateKey}`} className="flex items-center gap-3 my-2 self-stretch">
-                                            <div className="flex-1 h-px bg-gray-200" />
-                                            <span className="text-[10px] font-bold text-gray-400 tracking-widest uppercase">
-                                                {getDateLabel(interactions[interactions.length - 1].interaction_date)}
-                                            </span>
-                                            <div className="flex-1 h-px bg-gray-200" />
-                                        </div>
-                                    )
-                                }
+                                    // Check if the NEXT message (older one) is on a different day.
+                                    // If so (or if there is no next message), we insert a divider ABOVE the current message
+                                    // Because it's flex-col-reverse, this divider will appear visually above this day's block
+                                    const nextMsg = interactions[idx + 1]
+                                    const nextDateKey = nextMsg ? getDateKey(nextMsg.interaction_date) : null
+
+                                    if (dateKey !== nextDateKey) {
+                                        elements.push(
+                                            <div key={`divider-${dateKey}`} className="flex items-center gap-3 my-2 self-stretch">
+                                                <div className="flex-1 h-px bg-gray-200" />
+                                                <span className="text-[10px] font-bold text-gray-400 tracking-widest uppercase">
+                                                    {getDateLabel(msg.interaction_date)}
+                                                </span>
+                                                <div className="flex-1 h-px bg-gray-200" />
+                                            </div>
+                                        )
+                                    }
+                                })
 
                                 return elements
                             })()}
@@ -1095,6 +1081,16 @@ const SalesInboxPage = () => {
                                 </button>
                             </div>
                         </div>
+
+                        {/* Toast Notification */}
+                        {toast && (
+                            <div className={`absolute bottom-[80px] left-1/2 -translate-x-1/2 px-4 py-2.5 rounded-xl text-sm font-medium shadow-xl backdrop-blur-md border transition-all animate-fade-in z-50 ${toast.type === 'error'
+                                ? 'bg-red-50 border-red-200 text-red-600'
+                                : 'bg-emerald-50 border-emerald-200 text-emerald-600'
+                                }`}>
+                                {toast.type === 'error' ? '❌' : '✅'} {toast.message}
+                            </div>
+                        )}
                     </div>
                 ) : (
                     <div className="flex-1 flex flex-col items-center justify-center bg-white rounded-2xl border border-gray-200 text-gray-400 gap-4 shadow-sm">
