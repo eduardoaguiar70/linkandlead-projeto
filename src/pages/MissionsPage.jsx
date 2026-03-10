@@ -65,7 +65,7 @@ const needsFollowup = (lead) => {
     return new Date(lead.last_task_completed_at) < new Date(Date.now() - SEVEN_DAYS_MS) && !lead.has_engaged
 }
 
-const isNewLead = (lead) => !lead.last_task_completed_at
+const isNewLead = (lead) => !lead.total_interactions_count || parseInt(lead.total_interactions_count, 10) === 0
 
 // ═══════════════════════════════════════════════
 // SUB-COMPONENTS
@@ -153,26 +153,26 @@ const LeadCard = ({ lead, themeKey, completing, blacklisting, onComplete, onBlac
                     <button
                         onClick={() => onInbox(lead.id)}
                         className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-lg text-[12px] font-semibold transition-all duration-200 shadow-sm bg-orange-50 text-orange-600 border border-orange-200 hover:bg-orange-500 hover:text-white hover:border-orange-500 hover:shadow-md"
-                        title={isNewLead(lead) ? 'Enviar primeiro contato' : 'Continuar conversa'}
+                        title={isNewLead(lead) ? 'Send first contact' : 'Continue chat'}
                     >
-                        {isNewLead(lead) ? <><HandMetal size={14} /><span>Icebreaker</span></> : <><MessageCircle size={14} /><span>Continuar Conversa</span></>}
+                        {isNewLead(lead) ? <><HandMetal size={14} /><span>Icebreaker</span></> : <><MessageCircle size={14} /><span>Continue Chat</span></>}
                     </button>
 
                     <button
                         onClick={() => onComplete(lead.id)}
                         disabled={isRemoving}
                         className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-lg text-[12px] font-semibold bg-green-50 text-green-700 border border-green-200 hover:bg-green-500 hover:text-white hover:border-green-500 hover:shadow-md transition-all duration-200 shadow-sm disabled:opacity-50"
-                        title="Marcar como Concluído"
+                        title="Mark as Completed"
                     >
                         {completing ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
-                        <span>Concluir</span>
+                        <span>Complete</span>
                     </button>
 
                     <button
                         onClick={() => onBlacklist(lead.id)}
                         disabled={isRemoving}
                         className="flex items-center justify-center w-9 h-9 rounded-lg text-gray-400 bg-white border border-gray-200 hover:bg-red-50 hover:text-red-500 hover:border-red-200 transition-all duration-200 shadow-sm disabled:opacity-50"
-                        title="Lista Negra"
+                        title="Blacklist"
                     >
                         {blacklisting ? <Loader2 size={13} className="animate-spin" /> : <Ban size={14} />}
                     </button>
@@ -239,7 +239,7 @@ const MissionsPage = () => {
             setDoneToday(doneResult.count || 0)
         } catch (err) {
             console.error('[Cockpit] fetch error:', err)
-            setError('Falha ao carregar tarefas. Tente novamente.')
+            setError('Failed to load tasks. Please try again.')
         } finally {
             setLoading(false)
             setRefreshing(false)
@@ -309,9 +309,9 @@ const MissionsPage = () => {
 
     const getGreeting = () => {
         const h = new Date().getHours()
-        if (h < 12) return 'Bom dia'
-        if (h < 18) return 'Boa tarde'
-        return 'Boa noite'
+        if (h < 12) return 'Good morning'
+        if (h < 18) return 'Good afternoon'
+        return 'Good evening'
     }
 
     const totalMissions = tasks.length + doneToday
@@ -321,7 +321,7 @@ const MissionsPage = () => {
         <div className="min-h-screen bg-gray-50 flex items-center justify-center">
             <div className="flex flex-col items-center gap-4">
                 <Loader2 className="w-8 h-8 animate-spin text-orange-500" />
-                <span className="tracking-wide uppercase text-xs font-bold text-gray-400">Carregando cockpit...</span>
+                <span className="tracking-wide uppercase text-xs font-bold text-gray-400">Loading cockpit...</span>
             </div>
         </div>
     )
@@ -339,14 +339,14 @@ const MissionsPage = () => {
                             </div>
                             <div>
                                 <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-gray-900 mb-1 leading-tight">
-                                    {getGreeting()}! Faça suas tarefas diárias e cumpra suas metas! 🎯
+                                    {getGreeting()}! Complete your daily tasks and hit your goals! 🎯
                                 </h1>
                                 <p className="text-sm text-gray-500">
                                     {hotTasks.length > 0
-                                        ? <><span className="text-orange-500 font-semibold">{hotTasks.length} quente(s)</span> · {warmTasks.length} em nutrição · {coldTasks.length} novos contatos</>
+                                        ? <><span className="text-orange-500 font-semibold">{hotTasks.length} hot</span> · {warmTasks.length} nurturing · {coldTasks.length} new contacts</>
                                         : tasks.length > 0
-                                            ? <>{tasks.length} tarefas aguardando execução.</>
-                                            : 'Nenhuma tarefa pendente!'
+                                            ? <>{tasks.length} tasks waiting execution.</>
+                                            : 'No pending tasks!'
                                     }
                                 </p>
                             </div>
@@ -355,7 +355,7 @@ const MissionsPage = () => {
                             onClick={() => fetchTasks(true)}
                             disabled={refreshing}
                             className="p-2 rounded-lg hover:bg-gray-100 transition-colors text-gray-400 hover:text-gray-700"
-                            title="Atualizar"
+                            title="Refresh"
                         >
                             <RefreshCw size={16} className={refreshing ? 'animate-spin' : ''} />
                         </button>
@@ -364,8 +364,8 @@ const MissionsPage = () => {
                     {/* Progress */}
                     <div className="space-y-2">
                         <div className="flex items-center justify-between">
-                            <span className="text-xs font-medium text-gray-400 uppercase tracking-wider">Progresso do dia</span>
-                            <span className="text-sm font-bold text-gray-700">{doneToday}/{totalMissions} concluídas</span>
+                            <span className="text-xs font-medium text-gray-400 uppercase tracking-wider">Today's Progress</span>
+                            <span className="text-sm font-bold text-gray-700">{doneToday}/{totalMissions} completed</span>
                         </div>
                         <div className="h-3 bg-gray-100 rounded-full overflow-hidden border border-gray-200">
                             <div
@@ -388,7 +388,7 @@ const MissionsPage = () => {
                             <AlertTriangle size={28} className="text-red-500" />
                             <p className="text-sm text-gray-600">{error}</p>
                             <button onClick={() => fetchTasks()} className="px-4 py-2 rounded-lg bg-gray-50 hover:bg-gray-100 text-gray-700 text-sm font-medium border border-gray-200 transition-all">
-                                Tentar novamente
+                                Try again
                             </button>
                         </div>
                     </div>
@@ -403,12 +403,12 @@ const MissionsPage = () => {
                             </div>
                         </div>
                         <h2 className="text-xl font-bold text-gray-900 mb-2">
-                            {doneToday > 0 ? 'Cockpit Limpo! 🏆' : 'Tudo em dia! 🎉'}
+                            {doneToday > 0 ? 'Empty Cockpit! 🏆' : 'All caught up! 🎉'}
                         </h2>
                         <p className="text-sm text-gray-500 max-w-sm mx-auto">
                             {doneToday > 0
-                                ? `Você completou ${doneToday} tarefas hoje. Excelente trabalho!`
-                                : 'Nenhuma tarefa pendente. Quando houver leads para abordar, eles aparecerão aqui.'
+                                ? `You completed ${doneToday} tasks today. Excellent work!`
+                                : 'No pending tasks. When there are leads to reach out to, they will appear here.'
                             }
                         </p>
                     </div>
@@ -419,7 +419,7 @@ const MissionsPage = () => {
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
                         {/* HOT G4/G5 */}
-                        <FeedSection title="HOT (G4/G5)" icon={<Flame size={15} />} count={hotTasks.length} themeKey="hot" emptyText="Nenhum lead quente para hoje.">
+                        <FeedSection title="HOT (G4/G5)" icon={<Flame size={15} />} count={hotTasks.length} themeKey="hot" emptyText="No hot leads for today.">
                             {hotTasks.map(task => (
                                 <LeadCard key={task.id} lead={task.lead} themeKey="hot"
                                     completing={actionState[task.id] === 'completing'}
@@ -429,7 +429,7 @@ const MissionsPage = () => {
                         </FeedSection>
 
                         {/* MORNOS G2/G3 */}
-                        <FeedSection title="MORNOS (G2/G3)" icon={<TrendingUp size={15} />} count={warmTasks.length} themeKey="warm" emptyText="Nenhuma tarefa de nutrição.">
+                        <FeedSection title="MORNOS (G2/G3)" icon={<TrendingUp size={15} />} count={warmTasks.length} themeKey="warm" emptyText="No nurturing tasks.">
                             {warmTasks.map(task => (
                                 <LeadCard key={task.id} lead={task.lead} themeKey="warm"
                                     completing={actionState[task.id] === 'completing'}
@@ -444,15 +444,15 @@ const MissionsPage = () => {
                             icon={<Snowflake size={15} />}
                             count={coldTasks.length}
                             themeKey="cold"
-                            emptyText="Nenhuma prospecção pendente."
+                            emptyText="No pending prospecting."
                             footer={
                                 hiddenColdCount > 0 && !showAllCold ? (
                                     <button onClick={() => setShowAllCold(true)} className="w-full py-3 text-center text-xs font-semibold text-blue-500 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 border-t border-blue-200 transition-colors rounded-b-2xl">
-                                        Mostrar mais {hiddenColdCount} tarefas
+                                        Show {hiddenColdCount} more tasks
                                     </button>
                                 ) : showAllCold && coldTasks.length > VISIBLE_COLD_CARDS ? (
                                     <button onClick={() => setShowAllCold(false)} className="w-full py-3 text-center text-xs font-semibold text-gray-500 hover:text-gray-700 bg-gray-50 hover:bg-gray-100 border-t border-gray-200 transition-colors rounded-b-2xl">
-                                        Mostrar menos
+                                        Show less
                                     </button>
                                 ) : null
                             }

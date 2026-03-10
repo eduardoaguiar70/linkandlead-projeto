@@ -17,6 +17,7 @@ const SafeImage = ({ src, alt, fallbackText, className, style, containerClassNam
             alt={alt}
             className={className}
             style={style}
+            referrerPolicy="no-referrer"
             onError={() => setHasError(true)}
         />
     )

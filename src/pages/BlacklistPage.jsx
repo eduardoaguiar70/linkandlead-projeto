@@ -90,10 +90,10 @@ const BlacklistPage = () => {
             if (error) throw error
 
             setLeads(prev => prev.filter(l => l.id !== id))
-            showToast('Lead restaurado com sucesso!')
+            showToast('Lead restored successfully!')
         } catch (err) {
             console.error('[Blacklist] restore error:', err)
-            showToast('Erro ao restaurar lead.', 'error')
+            showToast('Error restoring lead.', 'error')
         } finally {
             setRestoringIds(prev => {
                 const next = new Set(prev)
@@ -152,10 +152,10 @@ const BlacklistPage = () => {
             // Remove from add results, add to main list
             setAddResults(prev => prev.filter(l => l.id !== lead.id))
             setLeads(prev => [...prev, { ...lead, is_blacklisted: true }].sort((a, b) => (a.nome || '').localeCompare(b.nome || '')))
-            showToast(`${lead.nome} adicionado à lista negra.`)
+            showToast(`${lead.nome} added to blacklist.`)
         } catch (err) {
             console.error('[Blacklist] add error:', err)
-            showToast('Erro ao adicionar à lista negra.', 'error')
+            showToast('Error adding to blacklist.', 'error')
         } finally {
             setAddingIds(prev => {
                 const next = new Set(prev)
@@ -192,9 +192,9 @@ const BlacklistPage = () => {
                         <ShieldBan size={22} style={{ color: '#dc2626' }} />
                     </div>
                     <div>
-                        <h1 style={{ fontSize: '22px', fontWeight: 800, color: '#111827', margin: 0 }}>Lista Negra</h1>
+                        <h1 style={{ fontSize: '22px', fontWeight: 800, color: '#111827', margin: 0 }}>Blacklist</h1>
                         <p style={{ fontSize: '13px', color: '#9ca3af', margin: '2px 0 0' }}>
-                            Leads ocultos do sistema — {leads.length} lead{leads.length !== 1 ? 's' : ''}
+                            Hidden leads — {leads.length} lead{leads.length !== 1 ? 's' : ''}
                         </p>
                     </div>
                 </div>
@@ -210,7 +210,7 @@ const BlacklistPage = () => {
                     onMouseEnter={e => { e.currentTarget.style.background = '#b91c1c' }}
                     onMouseLeave={e => { e.currentTarget.style.background = '#dc2626' }}
                 >
-                    <Plus size={15} /> Adicionar à Lista Negra
+                    <Plus size={15} /> Add to Blacklist
                 </button>
             </div>
 
@@ -223,7 +223,7 @@ const BlacklistPage = () => {
                 <Search size={18} style={{ color: '#9ca3af', flexShrink: 0 }} />
                 <input
                     type="text"
-                    placeholder="Buscar na lista negra por nome ou empresa..."
+                    placeholder="Search blacklist by name or company..."
                     value={searchTerm}
                     onChange={e => setSearchTerm(e.target.value)}
                     style={{
@@ -241,12 +241,12 @@ const BlacklistPage = () => {
             {/* Content */}
             {!selectedClientId ? (
                 <div style={{ textAlign: 'center', padding: '60px', color: '#9ca3af', fontSize: '14px' }}>
-                    Selecione um cliente para ver a lista negra.
+                    Select a client to view the blacklist.
                 </div>
             ) : loading ? (
                 <div style={{ textAlign: 'center', padding: '60px', color: '#9ca3af' }}>
                     <Loader2 size={24} style={{ animation: 'spin 1s linear infinite', margin: '0 auto 8px', display: 'block' }} />
-                    <span style={{ fontSize: '13px' }}>Carregando lista negra...</span>
+                    <span style={{ fontSize: '13px' }}>Loading blacklist...</span>
                 </div>
             ) : leads.length === 0 ? (
                 <div style={{
@@ -255,10 +255,10 @@ const BlacklistPage = () => {
                 }}>
                     <ShieldBan size={40} style={{ color: '#d1d5db', margin: '0 auto 12px', display: 'block' }} />
                     <p style={{ fontSize: '15px', fontWeight: 600, color: '#6b7280', margin: '0 0 4px' }}>
-                        {debouncedSearch ? 'Nenhum resultado encontrado.' : 'Lista negra vazia.'}
+                        {debouncedSearch ? 'No results found.' : 'Empty blacklist.'}
                     </p>
                     <p style={{ fontSize: '13px', color: '#9ca3af', margin: 0 }}>
-                        {debouncedSearch ? 'Tente outro termo de busca.' : 'Leads adicionados à lista negra aparecerão aqui.'}
+                        {debouncedSearch ? 'Try another search term.' : 'Leads added to the blacklist will appear here.'}
                     </p>
                 </div>
             ) : (
@@ -274,9 +274,9 @@ const BlacklistPage = () => {
                         textTransform: 'uppercase', letterSpacing: '0.05em'
                     }}>
                         <span>Lead</span>
-                        <span>Empresa</span>
-                        <span>Localização</span>
-                        <span style={{ textAlign: 'right' }}>Ações</span>
+                        <span>Company</span>
+                        <span>Location</span>
+                        <span style={{ textAlign: 'right' }}>Actions</span>
                     </div>
 
                     {/* Rows */}
@@ -309,7 +309,7 @@ const BlacklistPage = () => {
                                 </div>
                                 <div style={{ minWidth: 0 }}>
                                     <div style={{ fontSize: '14px', fontWeight: 600, color: '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                        {lead.nome || 'Sem Nome'}
+                                        {lead.nome || 'No Name'}
                                     </div>
                                     <div style={{ fontSize: '12px', color: '#9ca3af', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                         {lead.headline || '—'}
@@ -332,7 +332,7 @@ const BlacklistPage = () => {
                                 <button
                                     onClick={() => handleRestore(lead.id)}
                                     disabled={restoringIds.has(lead.id)}
-                                    title="Restaurar lead (remover da lista negra)"
+                                    title="Restore lead (remove from blacklist)"
                                     style={{
                                         display: 'flex', alignItems: 'center', gap: '5px',
                                         padding: '6px 12px', borderRadius: '8px', fontSize: '12px', fontWeight: 600,
@@ -344,7 +344,7 @@ const BlacklistPage = () => {
                                     onMouseEnter={e => { if (!restoringIds.has(lead.id)) { e.currentTarget.style.background = '#f0fdf4'; e.currentTarget.style.borderColor = '#86efac' } }}
                                     onMouseLeave={e => { e.currentTarget.style.background = '#fff'; e.currentTarget.style.borderColor = '#e5e7eb' }}
                                 >
-                                    <RotateCcw size={13} /> Restaurar
+                                    <RotateCcw size={13} /> Restore
                                 </button>
                             </div>
                         </div>
@@ -386,10 +386,10 @@ const BlacklistPage = () => {
                                 </div>
                                 <div>
                                     <h3 style={{ fontSize: '16px', fontWeight: 700, color: '#111827', margin: 0 }}>
-                                        Adicionar à Lista Negra
+                                        Add to Blacklist
                                     </h3>
                                     <p style={{ fontSize: '12px', color: '#9ca3af', margin: 0 }}>
-                                        Busque um lead ativo para ocultar do sistema
+                                        Search for an active lead to hide from the system
                                     </p>
                                 </div>
                             </div>
@@ -411,7 +411,7 @@ const BlacklistPage = () => {
                                 <Search size={16} style={{ color: '#9ca3af', flexShrink: 0 }} />
                                 <input
                                     type="text"
-                                    placeholder="Digitar nome ou empresa do lead..."
+                                    placeholder="Type lead name or company..."
                                     value={addSearch}
                                     onChange={e => setAddSearch(e.target.value)}
                                     autoFocus
@@ -428,16 +428,16 @@ const BlacklistPage = () => {
                             {!addSearch.trim() ? (
                                 <div style={{ textAlign: 'center', padding: '40px 20px', color: '#9ca3af' }}>
                                     <Users size={28} style={{ margin: '0 auto 8px', display: 'block', opacity: 0.4 }} />
-                                    <p style={{ fontSize: '13px', margin: 0 }}>Digite para buscar leads ativos</p>
+                                    <p style={{ fontSize: '13px', margin: 0 }}>Type to search active leads</p>
                                 </div>
                             ) : addLoading ? (
                                 <div style={{ textAlign: 'center', padding: '30px', color: '#9ca3af' }}>
                                     <Loader2 size={20} style={{ animation: 'spin 1s linear infinite', margin: '0 auto 6px', display: 'block' }} />
-                                    <span style={{ fontSize: '12px' }}>Buscando...</span>
+                                    <span style={{ fontSize: '12px' }}>Searching...</span>
                                 </div>
                             ) : addResults.length === 0 ? (
                                 <div style={{ textAlign: 'center', padding: '30px', color: '#9ca3af' }}>
-                                    <p style={{ fontSize: '13px', margin: 0 }}>Nenhum lead ativo encontrado.</p>
+                                    <p style={{ fontSize: '13px', margin: 0 }}>No active lead found.</p>
                                 </div>
                             ) : (
                                 addResults.map(lead => (
@@ -487,7 +487,7 @@ const BlacklistPage = () => {
                                             onMouseEnter={e => { if (!addingIds.has(lead.id)) { e.currentTarget.style.background = '#dc2626'; e.currentTarget.style.color = '#fff' } }}
                                             onMouseLeave={e => { e.currentTarget.style.background = '#fef2f2'; e.currentTarget.style.color = '#dc2626' }}
                                         >
-                                            <ShieldBan size={11} /> Bloquear
+                                            <ShieldBan size={11} /> Block
                                         </button>
                                     </div>
                                 ))

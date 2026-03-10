@@ -67,7 +67,7 @@ const KanbanLeadCard = ({ lead, onClick }) => {
                 {/* Avatar */}
                 <div className="w-10 h-10 rounded-full bg-gradient-to-br from-gray-200 to-gray-300 flex items-center justify-center overflow-hidden shrink-0 border border-gray-200">
                     {avatarUrl ? (
-                        <img src={avatarUrl} alt={nome} className="w-full h-full object-cover" />
+                        <img src={avatarUrl} alt={nome} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                     ) : (
                         <span className="text-sm font-bold text-gray-500">{nome?.charAt(0) || '?'}</span>
                     )}

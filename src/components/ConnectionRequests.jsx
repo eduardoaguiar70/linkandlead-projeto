@@ -41,7 +41,7 @@ const ConnectionRequests = () => {
     }, [selectedClientId])
 
     const handleIgnore = async (req) => {
-        const toastId = toast.loading('Processando...')
+        const toastId = toast.loading('Processing...')
         try {
             const response = await fetch(ACCEPT_AND_SEND_URL, {
                 method: 'POST',
@@ -65,10 +65,10 @@ const ConnectionRequests = () => {
             if (error) throw error
 
             setRequests((prev) => prev.filter((r) => r.invitation_id !== req.invitation_id))
-            toast.success('Convite recusado.', { id: toastId })
+            toast.success('Invitation ignored.', { id: toastId })
         } catch (error) {
             console.error(error)
-            toast.error('Ocorreu um erro. Tente novamente.', { id: toastId })
+            toast.error('An error occurred. Please try again.', { id: toastId })
         }
     }
 
@@ -86,17 +86,17 @@ const ConnectionRequests = () => {
                 body: JSON.stringify({ name: req.name, headline: req.headline })
             })
             const data = await response.json()
-            setMessage(data.icebreaker || 'Olá! Gostaria de me conectar.')
+            setMessage(data.icebreaker || 'Hi! I would like to connect.')
         } catch (error) {
             console.error(error)
-            setMessage('Olá! Gostaria de me conectar.')
+            setMessage('Hi! I would like to connect.')
         } finally {
             setIsGenerating(false)
         }
     }
 
     const handleConfirmAcceptAndSend = async (req) => {
-        const toastId = toast.loading('Processando...')
+        const toastId = toast.loading('Processing...')
         try {
             const response = await fetch(ACCEPT_AND_SEND_URL, {
                 method: 'POST',
@@ -123,15 +123,15 @@ const ConnectionRequests = () => {
             setSelectedRequest(null)
 
             if (message && message.trim()) {
-                toast.success('Conexão aceita e icebreaker enviado com sucesso! 🚀', { id: toastId })
+                toast.success('Connection accepted and icebreaker sent successfully! 🚀', { id: toastId })
             } else {
-                toast.success('Conexão aceita com sucesso! ✅', { id: toastId })
+                toast.success('Connection accepted successfully! ✅', { id: toastId })
             }
 
             setMessage('')
         } catch (error) {
             console.error(error)
-            toast.error('Ocorreu um erro. Tente novamente.', { id: toastId })
+            toast.error('An error occurred. Please try again.', { id: toastId })
         }
     }
 
@@ -143,7 +143,7 @@ const ConnectionRequests = () => {
     return (
         <div className="w-full max-w-2xl mx-auto p-4 flex flex-col gap-4">
             {requests.length === 0 && (
-                <div className="text-center text-gray-500 py-8">Nenhuma solicitação pendente.</div>
+                <div className="text-center text-gray-500 py-8">No pending requests.</div>
             )}
 
             {requests.map((req) => {
@@ -159,12 +159,29 @@ const ConnectionRequests = () => {
                                 src={req.avatar_url || 'https://via.placeholder.com/150'}
                                 alt={req.name || '?'}
                                 className="w-14 h-14 rounded-full object-cover border border-gray-200 shrink-0"
+                                referrerPolicy="no-referrer"
                             />
                             <div className="flex flex-col flex-1 min-w-0">
-                                <span className="font-semibold text-gray-900 truncate">
-                                    {req.name || 'Desconhecido'}
-                                </span>
-                                <span className="text-sm text-gray-500 truncate mt-0.5">
+                                <div className="flex items-center gap-2">
+                                    <span className="font-semibold text-gray-900 truncate">
+                                        {req.name || 'Unknown'}
+                                    </span>
+                                    <a
+                                        href={req.profile_url || `https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(req.name || '')}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-gray-400 hover:text-blue-600 transition-colors"
+                                        title="View LinkedIn Profile"
+                                        onClick={(e) => e.stopPropagation()} // Prevent any parent click handlers
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                            <path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"></path>
+                                            <rect x="2" y="9" width="4" height="12"></rect>
+                                            <circle cx="4" cy="4" r="2"></circle>
+                                        </svg>
+                                    </a>
+                                </div>
+                                <span className="text-sm text-gray-500 truncate mt-0.5" title={req.headline}>
                                     {req.headline || ''}
                                 </span>
                             </div>
@@ -175,13 +192,13 @@ const ConnectionRequests = () => {
                                         onClick={() => handleIgnore(req)}
                                         className="px-4 py-2 font-medium text-gray-500 hover:text-red-600 transition-colors rounded-full hover:bg-red-50"
                                     >
-                                        Ignorar
+                                        Ignore
                                     </button>
                                     <button
                                         onClick={() => handleAcceptClick(req.invitation_id)}
                                         className="px-5 py-2 font-medium text-blue-600 border border-blue-600 rounded-full hover:bg-blue-50 transition-colors"
                                     >
-                                        Aceitar
+                                        Accept
                                     </button>
                                 </div>
                             )}
@@ -192,7 +209,7 @@ const ConnectionRequests = () => {
                                 <textarea
                                     value={message}
                                     onChange={(e) => setMessage(e.target.value)}
-                                    placeholder="Escreva sua primeira mensagem..."
+                                    placeholder="Write your first message..."
                                     className="w-full flex-1 min-h-[100px] p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-y text-sm text-gray-800"
                                 />
 
@@ -202,7 +219,7 @@ const ConnectionRequests = () => {
                                         disabled={isGenerating}
                                         className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                                     >
-                                        {isGenerating ? 'Gerando...' : 'Gerar Icebreaker 🤖'}
+                                        {isGenerating ? 'Generating...' : 'Generate Icebreaker 🤖'}
                                     </button>
 
                                     <div className="flex items-center gap-2">
@@ -210,13 +227,13 @@ const ConnectionRequests = () => {
                                             onClick={handleCancel}
                                             className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors"
                                         >
-                                            Cancelar
+                                            Cancel
                                         </button>
                                         <button
                                             onClick={() => handleConfirmAcceptAndSend(req)}
                                             className="px-6 py-2 text-sm font-medium text-white bg-green-600 rounded-full hover:bg-green-700 transition-colors shadow-sm"
                                         >
-                                            Enviar e Aceitar
+                                            Accept and Send
                                         </button>
                                     </div>
                                 </div>

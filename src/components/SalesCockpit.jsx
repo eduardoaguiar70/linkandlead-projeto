@@ -147,12 +147,12 @@ const SalesCockpit = () => {
             if (pendingResult.error) throw pendingResult.error
 
             const activeTasks = pendingResult.data || []
-            console.log('Tarefas carregadas:', activeTasks)
+            console.log('Tasks loaded:', activeTasks)
             setTasks(activeTasks)
             setDoneCount(doneResult.count || 0)
         } catch (err) {
             console.error('Error fetching cockpit tasks:', err)
-            setError('Falha ao carregar tarefas. Tente novamente.')
+            setError('Failed to load tasks. Please try again.')
         } finally {
             setLoading(false)
             setRefreshing(false)
@@ -240,7 +240,7 @@ const SalesCockpit = () => {
                 <div className="flex flex-col items-center justify-center py-12 gap-4">
                     <Loader2 className="w-8 h-8 animate-spin text-primary" />
                     <span className="tracking-wide uppercase text-xs font-bold text-gray-400">
-                        Carregando cockpit...
+                        Loading cockpit...
                     </span>
                 </div>
             </div>
@@ -260,7 +260,7 @@ const SalesCockpit = () => {
                         onClick={() => fetchTasks()}
                         className="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-gray-300 text-sm font-medium border border-glass-border transition-all"
                     >
-                        Tentar novamente
+                        Try again
                     </button>
                 </div>
             </div>
@@ -273,7 +273,7 @@ const SalesCockpit = () => {
             <div className="glass-panel rounded-2xl p-8 mb-8 animate-fade-in-up">
                 <div className="flex flex-col items-center justify-center py-8 gap-3 text-center">
                     <Target size={32} className="text-gray-600" />
-                    <p className="text-sm text-gray-400">Selecione um cliente para ver o Cockpit.</p>
+                    <p className="text-sm text-gray-400">Select a client to view the Cockpit.</p>
                 </div>
             </div>
         )
@@ -296,10 +296,10 @@ const SalesCockpit = () => {
                             </h2>
                             <p className="text-sm text-gray-500">
                                 {hotTasks.length > 0
-                                    ? <><span className="text-red-400 font-semibold">{hotTasks.length} quente(s)</span> · {warmTasks.length} em nutrição · {coldTasks.length} novos contatos</>
+                                    ? <><span className="text-red-400 font-semibold">{hotTasks.length} hot</span> · {warmTasks.length} nurturing · {coldTasks.length} new contacts</>
                                     : tasks.length > 0
-                                        ? <>{tasks.length} tarefa(s) pendente(s)</>
-                                        : 'Nenhuma tarefa pendente!'
+                                        ? <>{tasks.length} pending task(s)</>
+                                        : 'No pending tasks!'
                                 }
                             </p>
                         </div>
@@ -308,7 +308,7 @@ const SalesCockpit = () => {
                         onClick={() => fetchTasks(true)}
                         disabled={refreshing}
                         className="p-2 rounded-lg hover:bg-gray-100 transition-colors text-gray-400 hover:text-gray-700"
-                        title="Atualizar"
+                        title="Refresh"
                     >
                         <RefreshCw size={16} className={refreshing ? 'animate-spin' : ''} />
                     </button>
@@ -317,8 +317,8 @@ const SalesCockpit = () => {
                 {/* Progress */}
                 <div className="space-y-2">
                     <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Progresso do dia</span>
-                        <span className="text-sm font-bold text-gray-700">{doneCount}/{totalMissions} concluídas</span>
+                        <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Today's Progress</span>
+                        <span className="text-sm font-bold text-gray-700">{doneCount}/{totalMissions} completed</span>
                     </div>
                     <div className="h-3 bg-gray-100 rounded-full overflow-hidden border border-gray-200">
                         <div
@@ -348,12 +348,12 @@ const SalesCockpit = () => {
                         </div>
                     </div>
                     <h2 className="text-xl font-bold text-gray-900 mb-2">
-                        {doneCount > 0 ? 'Todas concluídas! 🏆' : 'Zero Inbox! 🎉'}
+                        {doneCount > 0 ? 'All completed! 🏆' : 'Zero Inbox! 🎉'}
                     </h2>
                     <p className="text-sm text-gray-500 max-w-sm mx-auto">
                         {doneCount > 0
-                            ? `Você completou ${doneCount} tarefas hoje. Excelente trabalho!`
-                            : 'Nenhuma tarefa gerada. Quando a IA identificar oportunidades, elas aparecerão aqui.'
+                            ? `You completed ${doneCount} tasks today. Excellent work!`
+                            : 'No tasks generated. When AI identifies opportunities, they will appear here.'
                         }
                     </p>
                 </div>
@@ -371,7 +371,7 @@ const SalesCockpit = () => {
                         icon={<Flame size={15} />}
                         count={hotTasks.length}
                         themeKey="hot"
-                        emptyText="Nenhum lead quente para hoje."
+                        emptyText="No hot leads for today."
                     >
                         {hotTasks.map(task => (
                             <TaskCard
@@ -391,7 +391,7 @@ const SalesCockpit = () => {
                         icon={<TrendingUp size={15} />}
                         count={warmTasks.length}
                         themeKey="warm"
-                        emptyText="Nenhuma tarefa de nutrição."
+                        emptyText="No nurturing tasks."
                     >
                         {warmTasks.map(task => (
                             <TaskCard
@@ -411,21 +411,21 @@ const SalesCockpit = () => {
                         icon={<Snowflake size={15} />}
                         count={coldTasks.length}
                         themeKey="cold"
-                        emptyText="Nenhuma prospecção pendente."
+                        emptyText="No pending prospecting."
                         footer={
                             hiddenColdCount > 0 && !showAllCold ? (
                                 <button
                                     onClick={() => setShowAllCold(true)}
                                     className="w-full py-3 text-center text-xs font-semibold text-blue-500 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 border-t border-blue-200 transition-colors rounded-b-2xl"
                                 >
-                                    Mostrar mais {hiddenColdCount} tarefas
+                                    Show {hiddenColdCount} more tasks
                                 </button>
                             ) : showAllCold && coldTasks.length > VISIBLE_COLD_CARDS ? (
                                 <button
                                     onClick={() => setShowAllCold(false)}
                                     className="w-full py-3 text-center text-xs font-semibold text-gray-500 hover:text-gray-700 bg-gray-50 hover:bg-gray-100 border-t border-gray-200 transition-colors rounded-b-2xl"
                                 >
-                                    Mostrar menos
+                                    Show less
                                 </button>
                             ) : null
                         }
@@ -573,17 +573,17 @@ const TaskCard = ({ task, themeKey, completing, onComplete, onExecute }) => {
                                 : 'bg-orange-500 text-white border border-orange-500 hover:bg-orange-600 hover:shadow-md'
                             }
                         `}
-                        title={isFirstContact ? 'Enviar primeiro contato' : 'Continuar conversa'}
+                        title={isFirstContact ? 'Send first contact' : 'Continue chat'}
                     >
                         {isFirstContact ? (
                             <>
                                 <HandMetal size={13} />
-                                <span>Enviar Icebreaker</span>
+                                <span>Send Icebreaker</span>
                             </>
                         ) : (
                             <>
                                 <MessageCircle size={13} />
-                                <span>Continuar Conversa</span>
+                                <span>Continue Chat</span>
                             </>
                         )}
                     </button>
@@ -600,14 +600,14 @@ const TaskCard = ({ task, themeKey, completing, onComplete, onExecute }) => {
                         transition-all duration-200 shadow-sm
                         disabled:opacity-50 disabled:cursor-not-allowed
                     "
-                    title="Marcar como concluída"
+                    title="Mark as completed"
                 >
                     {completing ? (
                         <Loader2 size={15} className="animate-spin" />
                     ) : (
                         <>
                             <CheckCircle2 size={15} />
-                            <span>Concluir</span>
+                            <span>Complete</span>
                         </>
                     )}
                 </button>

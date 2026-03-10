@@ -11,10 +11,10 @@ const ConnectionRequestsPage = () => {
                     <div>
                         <div className="flex items-center gap-2 text-primary mb-1">
                             <Link2 size={24} strokeWidth={2.5} />
-                            <h1 className="text-2xl font-black tracking-tight text-gray-900">Solicitações de Conexão</h1>
+                            <h1 className="text-2xl font-black tracking-tight text-gray-900">Connection Requests</h1>
                         </div>
                         <p className="text-sm text-gray-500 font-medium">
-                            Gerencie solicitações de conexão do LinkedIn e envie icebreakers personalizados.
+                            Manage LinkedIn connection requests and send personalized icebreakers.
                         </p>
                     </div>
                 </div>
