@@ -96,7 +96,7 @@ const ListDetailsPage = () => {
     }
 
     const handleDeleteSelected = async () => {
-        if (!selectedLeads.length || !window.confirm(`Tem certeza que deseja remover ${selectedLeads.length} leads desta lista?`)) return
+        if (!selectedLeads.length || !window.confirm(`Are you sure you want to remove ${selectedLeads.length} leads from this list?`)) return
 
         try {
             const { error } = await supabase
@@ -110,7 +110,7 @@ const ListDetailsPage = () => {
             setSelectedLeads([])
         } catch (error) {
             console.error('Error deleting leads:', error)
-            alert('Erro ao remover leads.')
+            alert('Error removing leads.')
         }
     }
 
@@ -122,22 +122,22 @@ const ListDetailsPage = () => {
                     onClick={() => navigate('/lists')}
                     className="flex items-center gap-2 text-slate-500 hover:text-indigo-600 transition-colors text-sm font-semibold mb-4"
                 >
-                    <ArrowLeft size={16} /> Voltar para Listas
+                    <ArrowLeft size={16} /> Back to Lists
                 </button>
 
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
                     <div>
                         <h1 className="text-3xl font-bold text-slate-900 tracking-tight mb-2">
-                            {list ? list.name : 'Carregando...'}
+                            {list ? list.name : 'Loading...'}
                         </h1>
-                        <p className="text-slate-500 text-lg">Detalhes e leads da lista de contatos.</p>
+                        <p className="text-slate-500 text-lg">Contact list details and leads.</p>
                     </div>
                     <div className="flex gap-3">
                         <button
                             onClick={() => setIsImportModalOpen(true)}
                             className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 text-white font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100"
                         >
-                            <Download size={20} /> Importar Contatos
+                            <Download size={20} /> Import Contacts
                         </button>
                     </div>
 
@@ -150,10 +150,10 @@ const ListDetailsPage = () => {
                             <div>
                                 <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
                                     <Loader2 className="animate-spin text-blue-600" size={20} />
-                                    Importando Contatos...
+                                    Importing Contacts...
                                 </h3>
                                 <p className="text-sm text-slate-500">
-                                    Isso pode levar alguns minutos. Estamos capturando dados do LinkedIn.
+                                    This may take a few minutes. We are fetching data from LinkedIn.
                                 </p>
                             </div>
                             <div className="text-right">
@@ -170,7 +170,7 @@ const ListDetailsPage = () => {
                         </div>
                         {leads.length > 0 && (
                             <p className="text-xs text-slate-400 mt-2 text-right">
-                                {leads.length} de {list.total_leads_expected || '?'} leads processados
+                                {leads.length} out of {list.total_leads_expected || '?'} leads processed
                             </p>
                         )}
                     </div>
@@ -182,7 +182,7 @@ const ListDetailsPage = () => {
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                         <input
                             type="text"
-                            placeholder="Buscar leads na lista..."
+                            placeholder="Search leads in list..."
                             value={searchTerm}
                             onChange={e => setSearchTerm(e.target.value)}
                             className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all font-medium placeholder:text-slate-400"
@@ -193,7 +193,7 @@ const ListDetailsPage = () => {
                             onClick={handleDeleteSelected}
                             className="flex items-center gap-2 px-4 py-2 rounded-lg bg-red-50 text-red-600 font-bold hover:bg-red-100 transition-colors border border-red-200"
                         >
-                            <Trash2 size={16} /> Deletar ({selectedLeads.length})
+                            <Trash2 size={16} /> Delete ({selectedLeads.length})
                         </button>
                     )}
                 </div>
@@ -216,16 +216,16 @@ const ListDetailsPage = () => {
                                             className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                                         />
                                     </th>
-                                    <th className="py-4 px-6">Nome</th>
-                                    <th className="py-4 px-6">Cargo & Empresa</th>
-                                    <th className="py-4 px-6">Status na Lista</th>
-                                    <th className="py-4 px-6 text-right">Adicionado em</th>
+                                    <th className="py-4 px-6">Name</th>
+                                    <th className="py-4 px-6">Role & Company</th>
+                                    <th className="py-4 px-6">List Status</th>
+                                    <th className="py-4 px-6 text-right">Added on</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100">
                                 {filteredLeads.length === 0 ? (
                                     <tr>
-                                        <td colSpan="5" className="py-12 text-center text-gray-400">Nenhum lead encontrado nesta lista.</td>
+                                        <td colSpan="5" className="py-12 text-center text-gray-400">No leads found in this list.</td>
                                     </tr>
                                 ) : (
                                     filteredLeads.map(item => (
@@ -239,7 +239,7 @@ const ListDetailsPage = () => {
                                                 />
                                             </td>
                                             <td className="py-4 px-6">
-                                                <div className="font-bold text-slate-900">{item.lead_data?.nome || 'Sem Nome'}</div>
+                                                <div className="font-bold text-slate-900">{item.lead_data?.nome || 'No Name'}</div>
                                             </td>
                                             <td className="py-4 px-6">
                                                 <div className="text-sm font-medium text-slate-900">{item.lead_data?.headline}</div>
@@ -248,7 +248,7 @@ const ListDetailsPage = () => {
                                             <td className="py-4 px-6">
                                                 <span className={`px-2 py-0.5 rounded text-xs font-bold border ${item.status === 'ENRICHED' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-gray-100 text-gray-600 border-gray-200'
                                                     }`}>
-                                                    {item.status || 'Pendente'}
+                                                    {item.status || 'Pending'}
                                                 </span>
                                             </td>
                                             <td className="py-4 px-6 text-right text-sm text-slate-500">

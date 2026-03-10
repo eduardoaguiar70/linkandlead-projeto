@@ -420,7 +420,7 @@ const PostFeedbackPage = () => {
     if (newStatus === 'APPROVED') {
       if (post.data_agendamento) {
         finalStatus = 'AGENDADO'
-        const date = new Date(post.data_agendamento).toLocaleString('pt-BR')
+        const date = new Date(post.data_agendamento).toLocaleString('en-US')
         successMessage = `Post aprovado e agendado automaticamente para ${date}! 📅`
       } else {
         successMessage = 'Post aprovado! Aguardando definição de data pela agência. ✅'
@@ -499,7 +499,7 @@ const PostFeedbackPage = () => {
               <h3>{post.nome_cliente || 'Nome do Cliente'}</h3>
               <p className="preview-subtext">
                 {post.data_agendamento
-                  ? `Post Agendado para ${new Date(post.data_agendamento).toLocaleDateString('pt-BR')}`
+                  ? `Post Agendado para ${new Date(post.data_agendamento).toLocaleDateString('en-US')}`
                   : 'Post ainda não agendado'
                 }
               </p>

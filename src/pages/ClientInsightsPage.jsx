@@ -645,7 +645,7 @@ const ClientInsightsPage = () => {
                                     <h3 className="font-semibold text-gray-800 text-lg mb-1 line-clamp-1">{post.tema || 'Sem Título'}</h3>
                                     <p className="text-sm text-gray-500 flex items-center gap-2">
                                         <Clock size={14} />
-                                        {post.data_criacao ? new Date(post.data_criacao).toLocaleDateString('pt-BR') : 'Data N/A'}
+                                        {post.data_criacao ? new Date(post.data_criacao).toLocaleDateString('en-US') : 'Data N/A'}
                                         <span className="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full font-medium ml-2">
                                             {getStatusStyle(post.status).label}
                                         </span>
@@ -682,7 +682,7 @@ const ClientInsightsPage = () => {
                                     <h3 className="font-semibold text-gray-800 text-lg mb-1 line-clamp-1">{post.tema || 'Sem Título'}</h3>
                                     <p className="text-sm text-gray-500 flex items-center gap-2">
                                         <CalendarClock size={14} />
-                                        {post.data_agendamento ? new Date(post.data_agendamento).toLocaleDateString('pt-BR') : 'Agendamento N/A'}
+                                        {post.data_agendamento ? new Date(post.data_agendamento).toLocaleDateString('en-US') : 'Agendamento N/A'}
                                         <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium ml-2">
                                             {getStatusStyle(post.status).label}
                                         </span>

@@ -20,7 +20,7 @@ const Login = () => {
             await signIn(email, password);
             navigate('/');
         } catch (err) {
-            setError('Falha ao entrar. Verifique suas credenciais.');
+            setError('Failed to sign in. Check your credentials.');
             console.error(err);
         } finally {
             setLoading(false);
@@ -75,25 +75,25 @@ const Login = () => {
                         className="text-5xl font-black text-white leading-[1.1] mb-6 tracking-tight"
                         style={{ fontFamily: "'Inter', sans-serif" }}
                     >
-                        Outbound com
+                        Outbound with
                         <br />
-                        <span className="text-orange-500">Inteligência.</span>
+                        <span className="text-orange-500">Intelligence.</span>
                     </h2>
 
                     <p className="text-white/40 text-base leading-relaxed max-w-sm mb-10">
-                        Automatize sua prospecção, gerencie leads e feche mais negócios com IA integrada ao seu fluxo de vendas.
+                        Automate your prospecting, manage leads and close more deals with AI integrated into your sales workflow.
                     </p>
 
                     {/* Trust indicators */}
                     <div className="flex items-center gap-6">
                         <div className="flex items-center gap-2">
                             <div className="w-2 h-2 rounded-full bg-emerald-500" style={{ animation: 'pulse 2s ease-in-out infinite' }} />
-                            <span className="text-white/30 text-xs font-medium">Sistema online</span>
+                            <span className="text-white/30 text-xs font-medium">Online system</span>
                         </div>
                         <div className="w-px h-3 bg-white/10" />
                         <span className="text-white/30 text-xs font-medium">256-bit SSL</span>
                         <div className="w-px h-3 bg-white/10" />
-                        <span className="text-white/30 text-xs font-medium">LGPD Compliance</span>
+                        <span className="text-white/30 text-xs font-medium">Data Privacy Compliance</span>
                     </div>
                 </div>
             </div>
@@ -125,10 +125,10 @@ const Login = () => {
                             className="text-3xl font-black text-gray-900 tracking-tight mb-2"
                             style={{ fontFamily: "'Inter', sans-serif" }}
                         >
-                            Acesse sua conta
+                            Access your account
                         </h1>
                         <p className="text-gray-400 text-sm">
-                            Entre para gerenciar seus leads e tarefas diárias.
+                            Sign in to manage your leads and daily tasks.
                         </p>
                     </div>
 
@@ -144,7 +144,7 @@ const Login = () => {
                                     type="email"
                                     value={email}
                                     onChange={(e) => setEmail(e.target.value)}
-                                    placeholder="seu@email.com"
+                                    placeholder="your@email.com"
                                     className="w-full bg-white border-2 border-gray-100 rounded-xl pl-11 pr-4 py-3.5 text-gray-900 placeholder-gray-300 text-sm font-medium focus:outline-none focus:border-orange-500 focus:ring-0 transition-all duration-200 shadow-sm hover:border-gray-200"
                                     required
                                     autoComplete="email"
@@ -153,7 +153,7 @@ const Login = () => {
                         </div>
 
                         <div className="space-y-1.5">
-                            <label className="text-[11px] font-bold text-gray-500 uppercase tracking-[0.1em] ml-0.5">Senha</label>
+                            <label className="text-[11px] font-bold text-gray-500 uppercase tracking-[0.1em] ml-0.5">Password</label>
                             <div className="relative group">
                                 <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300 group-focus-within:text-orange-500 transition-colors duration-200">
                                     <Lock size={17} />
@@ -190,7 +190,7 @@ const Login = () => {
                             {loading ? (
                                 <Loader2 className="animate-spin" size={19} />
                             ) : (
-                                <>Entrar na Plataforma <ArrowRight size={17} /></>
+                                <>Sign in to Platform <ArrowRight size={17} /></>
                             )}
                         </button>
                     </form>
@@ -199,7 +199,7 @@ const Login = () => {
                     <div className="mt-10 pt-6 border-t border-gray-100 text-center">
                         <div className="flex items-center justify-center gap-2 text-xs text-gray-300 font-medium">
                             <ShieldCheck size={13} className="text-orange-400/60" />
-                            Protegido por Link&Lead Security
+                            Protected by Link&Lead Security
                         </div>
                     </div>
                 </div>

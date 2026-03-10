@@ -26,14 +26,14 @@ const PipelineTableFilters = ({ filters, setFilters }) => {
                 <Search size={13} style={{ color: '#9ca3af', flexShrink: 0 }} />
                 <input
                     type="text"
-                    placeholder="Buscar por nome..."
+                    placeholder="Search by name..."
                     value={filters.search || ''}
                     onChange={e => setFilters(p => ({ ...p, search: e.target.value }))}
                     style={{ border: 'none', background: 'transparent', outline: 'none', fontSize: '13px', color: '#111827', width: '100%', fontFamily: 'inherit' }}
                 />
             </div>
             <div style={sep()} />
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#9ca3af' }}><Filter size={13} /><span style={label}>Filtros</span></div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#9ca3af' }}><Filter size={13} /><span style={label}>Filters</span></div>
             <div style={sep()} />
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                 <span style={label}>ICP:</span>
@@ -41,27 +41,27 @@ const PipelineTableFilters = ({ filters, setFilters }) => {
             </div>
             <div style={sep()} />
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <span style={label}>Cadência:</span>
+                <span style={label}>Cadence:</span>
                 {['G1', 'G2', 'G3', 'G4', 'G5'].map(v => <button key={v} onClick={() => toggle('cadence', v)} style={btn(filters.cadence?.includes(v))}>{v}</button>)}
             </div>
             <div style={sep()} />
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <span style={label}>Engajamento:</span>
-                {[{ v: 'all', l: 'Todos' }, { v: 'engaged', l: 'Respondeu' }, { v: 'ignored', l: 'Ignorou' }].map(o => <button key={o.v} onClick={() => setFilters(p => ({ ...p, engagement: o.v }))} style={btn(filters.engagement === o.v)}>{o.l}</button>)}
+                <span style={label}>Engagement:</span>
+                {[{ v: 'all', l: 'All' }, { v: 'engaged', l: 'Replied' }, { v: 'ignored', l: 'Ignored' }].map(o => <button key={o.v} onClick={() => setFilters(p => ({ ...p, engagement: o.v }))} style={btn(filters.engagement === o.v)}>{o.l}</button>)}
             </div>
             <div style={sep()} />
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <span style={label}>Proposta:</span>
-                {[{ v: 'all', l: 'Todas' }, { v: 'with', l: 'Com' }, { v: 'without', l: 'Sem' }].map(o => <button key={o.v} onClick={() => setFilters(p => ({ ...p, hasProposal: o.v }))} style={btn(filters.hasProposal === o.v)}>{o.l}</button>)}
+                <span style={label}>Proposal:</span>
+                {[{ v: 'all', l: 'All' }, { v: 'with', l: 'With' }, { v: 'without', l: 'Without' }].map(o => <button key={o.v} onClick={() => setFilters(p => ({ ...p, hasProposal: o.v }))} style={btn(filters.hasProposal === o.v)}>{o.l}</button>)}
             </div>
             <div style={sep()} />
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <span style={label}>Interações:</span>
+                <span style={label}>Interactions:</span>
                 <input type="number" min="0" placeholder="Min" value={filters.minInteractions === 0 ? '' : filters.minInteractions} onChange={e => setFilters(p => ({ ...p, minInteractions: parseInt(e.target.value) || 0 }))} style={inp} />
                 <span style={{ color: '#d1d5db', fontSize: '12px' }}>—</span>
                 <input type="number" min="0" placeholder="Max" value={filters.maxInteractions >= 9999 ? '' : filters.maxInteractions} onChange={e => setFilters(p => ({ ...p, maxInteractions: parseInt(e.target.value) || 9999 }))} style={inp} />
             </div>
-            {hasActive && (<><div style={sep()} /><button onClick={clear} style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '5px 11px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, background: '#fff1f2', border: '1px solid #fecaca', color: '#ef4444', cursor: 'pointer' }}><X size={12} /> Limpar</button></>)}
+            {hasActive && (<><div style={sep()} /><button onClick={clear} style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '5px 11px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, background: '#fff1f2', border: '1px solid #fecaca', color: '#ef4444', cursor: 'pointer' }}><X size={12} /> Clear</button></>)}
         </div>
     )
 }

@@ -133,7 +133,7 @@ const ContentLibraryPage = () => {
     }
 
     const handleDelete = async (id) => {
-        if (!window.confirm('Tem certeza que deseja remover este conteúdo da biblioteca?')) return
+        if (!window.confirm('Are you sure you want to remove this content from the library?')) return
 
         try {
             const { error } = await supabase
@@ -165,8 +165,8 @@ const ContentLibraryPage = () => {
                             <Library className="text-orange-500" size={24} />
                         </div>
                         <div>
-                            <h1 className="text-2xl font-bold tracking-tight text-gray-900">Biblioteca de Conteúdos</h1>
-                            <p className="text-sm text-gray-500">Gerencie links, materiais e templates para usar em abordagens.</p>
+                            <h1 className="text-2xl font-bold tracking-tight text-gray-900">Content Library</h1>
+                            <p className="text-sm text-gray-500">Manage links, materials, and templates for approaches.</p>
                         </div>
                     </div>
                     <button
@@ -174,7 +174,7 @@ const ContentLibraryPage = () => {
                         className="flex items-center gap-2 px-5 py-2.5 bg-gray-900 text-white font-medium rounded-xl hover:bg-gray-800 transition-all shadow-sm shrink-0"
                     >
                         <Plus size={18} />
-                        Adicionar Material
+                        Add Material
                     </button>
                 </div>
 
@@ -184,9 +184,9 @@ const ContentLibraryPage = () => {
                         <div className="w-16 h-16 bg-gray-50 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-gray-100">
                             <Library className="text-gray-400" size={28} />
                         </div>
-                        <h3 className="text-gray-900 font-bold text-lg mb-2">Selecione um cliente</h3>
+                        <h3 className="text-gray-900 font-bold text-lg mb-2">Select a client</h3>
                         <p className="text-sm text-gray-500 max-w-sm mx-auto">
-                            Selecione um cliente no seletor acima para ver e gerenciar a biblioteca de conteúdos.
+                            Select a client from the selector above to view and manage the content library.
                         </p>
                     </div>
                 ) : (
@@ -198,7 +198,7 @@ const ContentLibraryPage = () => {
                                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
                                 <input
                                     type="text"
-                                    placeholder="Buscar conteúdo por nome ou contexto..."
+                                    placeholder="Search content by name or context..."
                                     value={searchQuery}
                                     onChange={(e) => setSearchQuery(e.target.value)}
                                     className="w-full pl-10 pr-4 py-2 border border-gray-200 font-medium rounded-xl text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
@@ -216,9 +216,9 @@ const ContentLibraryPage = () => {
                                 <div className="w-16 h-16 bg-gray-50 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-gray-100">
                                     <Library className="text-gray-400" size={28} />
                                 </div>
-                                <h3 className="text-gray-900 font-bold text-lg mb-2">Acervo vazio</h3>
+                                <h3 className="text-gray-900 font-bold text-lg mb-2">Empty library</h3>
                                 <p className="text-sm text-gray-500 mb-6 max-w-sm mx-auto">
-                                    {searchQuery ? 'Sua busca não encontrou resultados.' : 'Ainda não há materiais na sua biblioteca de vendas. Adicione links, PDFs, posts ou vídeos.'}
+                                    {searchQuery ? 'Your search returned no results.' : 'There are no materials in your sales library yet. Add links, PDFs, posts, or videos.'}
                                 </p>
                                 {!searchQuery && (
                                     <button
@@ -226,7 +226,7 @@ const ContentLibraryPage = () => {
                                         className="px-6 py-2 bg-orange-50 text-orange-600 font-semibold rounded-full hover:bg-orange-100 transition-colors inline-flex items-center gap-2"
                                     >
                                         <Plus size={18} />
-                                        Criar primeiro conteúdo
+                                        Create first content
                                     </button>
                                 )}
                             </div>
@@ -277,7 +277,7 @@ const ContentLibraryPage = () => {
                                                     rel="noreferrer"
                                                     className="text-xs font-semibold text-orange-500 hover:text-orange-600 flex items-center gap-1 hover:underline"
                                                 >
-                                                    Abrir link <LinkIcon size={12} />
+                                                    Open link <LinkIcon size={12} />
                                                 </a>
                                             </div>
                                         </div>
@@ -295,7 +295,7 @@ const ContentLibraryPage = () => {
                     <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl border border-gray-200 overflow-hidden" style={{ animation: 'slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1)' }}>
                         <div className="px-6 py-4 flex items-center justify-between border-b border-gray-100 bg-gray-50/50">
                             <h2 className="text-lg font-bold text-gray-900">
-                                {editingContent ? 'Editar Material' : 'Adicionar ao Acervo'}
+                                {editingContent ? 'Edit Material' : 'Add to Library'}
                             </h2>
                             <button onClick={handleCloseModal} className="text-gray-400 hover:text-gray-600 bg-white p-2 rounded-xl border border-gray-200 shadow-sm">
                                 <X size={18} />
@@ -304,23 +304,23 @@ const ContentLibraryPage = () => {
 
                         <form onSubmit={handleSave} className="p-6 space-y-5">
                             <div>
-                                <label className="block text-xs font-bold text-gray-700 uppercase tracking-widest mb-1">Título/Nome</label>
+                                <label className="block text-xs font-bold text-gray-700 uppercase tracking-widest mb-1">Title/Name</label>
                                 <input
                                     required
                                     type="text"
                                     value={formData.content_name}
                                     onChange={e => setFormData({ ...formData, content_name: e.target.value })}
-                                    placeholder="Ex: Vídeo de Demonstração V2"
+                                    placeholder="Ex: Demo Video V2"
                                     className="w-full px-4 py-2.5 font-medium border border-gray-200 rounded-xl text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all"
                                 />
                             </div>
 
                             <div>
-                                <label className="block text-xs font-bold text-gray-700 uppercase tracking-widest mb-1">Contexto de Uso</label>
+                                <label className="block text-xs font-bold text-gray-700 uppercase tracking-widest mb-1">Usage Context</label>
                                 <textarea
                                     value={formData.content_description}
                                     onChange={e => setFormData({ ...formData, content_description: e.target.value })}
-                                    placeholder="Ex: Use este vídeo caso o lead questione sobre concorrência..."
+                                    placeholder="Ex: Use this video if the lead asks about competitors..."
                                     rows={3}
                                     className="w-full px-4 py-2.5 font-medium border border-gray-200 rounded-xl text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all resize-none"
                                 />
@@ -328,20 +328,20 @@ const ContentLibraryPage = () => {
 
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-xs font-bold text-gray-700 uppercase tracking-widest mb-1">Tipo</label>
+                                    <label className="block text-xs font-bold text-gray-700 uppercase tracking-widest mb-1">Type</label>
                                     <select
                                         value={formData.content_type}
                                         onChange={e => setFormData({ ...formData, content_type: e.target.value })}
                                         className="w-full px-4 py-2.5 font-bold border border-gray-200 rounded-xl text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all appearance-none bg-gray-50"
                                     >
-                                        <option value="Video">Vídeo</option>
+                                        <option value="Video">Video</option>
                                         <option value="Post">Post (Social)</option>
-                                        <option value="Artigo">Artigo</option>
-                                        <option value="Outro">Outro (PDF, Link)</option>
+                                        <option value="Artigo">Article</option>
+                                        <option value="Outro">Other (PDF, Link)</option>
                                     </select>
                                 </div>
                                 <div className="col-span-2">
-                                    <label className="block text-xs font-bold text-gray-700 uppercase tracking-widest mb-1">URL (Link Público)</label>
+                                    <label className="block text-xs font-bold text-gray-700 uppercase tracking-widest mb-1">URL (Public Link)</label>
                                     <input
                                         required
                                         type="url"
@@ -359,7 +359,7 @@ const ContentLibraryPage = () => {
                                     onClick={handleCloseModal}
                                     className="px-5 py-2.5 text-sm font-semibold text-gray-600 hover:bg-gray-50 rounded-xl transition-all border border-transparent"
                                 >
-                                    Cancelar
+                                    Cancel
                                 </button>
                                 <button
                                     type="submit"
@@ -367,7 +367,7 @@ const ContentLibraryPage = () => {
                                     className="flex items-center gap-2 px-6 py-2.5 bg-gray-900 border border-transparent text-white text-sm font-bold rounded-xl hover:bg-gray-800 transition-all shadow-md disabled:opacity-70 disabled:cursor-not-allowed"
                                 >
                                     {saving && <Loader2 size={16} className="animate-spin" />}
-                                    {editingContent ? 'Salvar Alterações' : 'Salvar no Acervo'}
+                                    {editingContent ? 'Save Changes' : 'Save to Library'}
                                 </button>
                             </div>
                         </form>

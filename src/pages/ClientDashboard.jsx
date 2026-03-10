@@ -104,7 +104,7 @@ const ClientDashboard = () => {
                                     </h3>
                                     <p className="text-xs text-gray-500 font-medium mb-4 flex items-center gap-2">
                                         <span className="w-1 h-1 rounded-full bg-gray-600"></span>
-                                        {new Date(post.created_at).toLocaleDateString('pt-BR')}
+                                        {new Date(post.created_at).toLocaleDateString('en-US')}
                                     </p>
                                 </div>
 

@@ -53,7 +53,7 @@ const MagicLinkHandler = () => {
 
         const success = await loginWithToken(token)
         if (!success) {
-          setError('Link inválido ou expirado.')
+          setError('Invalid or expired link.')
         }
       }
       setAuthAttempted(true)
@@ -65,7 +65,7 @@ const MagicLinkHandler = () => {
     return (
       <div className="loading-screen" style={{ display: 'flex', flexDirection: 'column', gap: '1rem', alignItems: 'center', justifyContent: 'center', height: '100vh' }}>
         <div style={{ width: '40px', height: '40px', border: '3px solid #e2e8f0', borderTopColor: '#2563eb', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
-        <span>Validando acesso...</span>
+        <span>Validating access...</span>
         <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       </div>
     )
@@ -74,13 +74,13 @@ const MagicLinkHandler = () => {
   if (error) {
     return (
       <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '1rem', fontFamily: 'sans-serif' }}>
-        <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#ef4444' }}>Acesso Negado</h2>
+        <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#ef4444' }}>Access Denied</h2>
         <p style={{ color: '#64748b' }}>{error}</p>
         <button
           onClick={() => navigate('/portal/login')}
           style={{ padding: '0.75rem 1.5rem', background: '#2563eb', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer' }}
         >
-          Ir para Login
+          Go to Login
         </button>
       </div>
     )
@@ -105,7 +105,7 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
   const location = useLocation()
 
   // 1. Loading inicial de Auth (Sessão)
-  if (loading) return <div className="loading-screen">Carregando...</div>
+  if (loading) return <div className="loading-screen">Loading...</div>
 
   // 2. Sem usuário -> Login
   if (!user) {
@@ -115,7 +115,7 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
   // 3. Usuário existe, mas Perfil ainda carregando (Fetch em background)
   // Se a rota exige role, precisamos esperar o profile
   if (allowedRoles && !profile) {
-    return <div className="loading-screen">Verificando permissões...</div>
+    return <div className="loading-screen">Checking permissions...</div>
   }
 
   // 4. Checagem de Role

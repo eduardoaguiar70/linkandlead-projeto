@@ -3,7 +3,15 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../services/supabaseClient'
 import { X, Star, MessageCircle, Briefcase, MapPin, Target } from 'lucide-react'
 
-const STAGES = ['Frio', 'Engajado', 'Qualificado', 'Agendado', 'Proposta', 'Ganho', 'Perdido']
+const STAGES = [
+    { id: 'Frio', label: 'Cold' },
+    { id: 'Engajado', label: 'Engaged' },
+    { id: 'Qualificado', label: 'Qualified' },
+    { id: 'Agendado', label: 'Scheduled' },
+    { id: 'Proposta', label: 'Proposal' },
+    { id: 'Ganho', label: 'Won' },
+    { id: 'Perdido', label: 'Lost' }
+]
 
 // ICP color map
 const ICP_COLOR = { A: '#10b981', B: '#f59e0b', C: '#ef4444' }
@@ -11,7 +19,7 @@ const ICP_COLOR = { A: '#10b981', B: '#f59e0b', C: '#ef4444' }
 
 // Cadence color map
 const CAD_COLOR = { G1: '#3b82f6', G2: '#3b82f6', G3: '#f59e0b', G4: '#ef4444', G5: '#ef4444' }
-const CAD_LABEL = { G1: 'Primeiro Contato', G2: 'Segundo Toque', G3: 'Follow-up', G4: 'Urgência', G5: 'Último Contato' }
+const CAD_LABEL = { G1: 'First Contact', G2: 'Second Touch', G3: 'Follow-up', G4: 'Urgency', G5: 'Last Contact' }
 
 // SVG arc gauge — renders a partial arc from bottom-left to bottom-right (220° sweep)
 const ArcGauge = ({ color }) => {
@@ -121,7 +129,7 @@ const LeadDetailModal = ({ lead, onClose, onLeadUpdated }) => {
                         </div>
                         <div style={{ minWidth: 0 }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <h2 style={{ fontSize: '18px', fontWeight: 700, color: '#fff', margin: 0 }}>{lead.nome || 'Sem Nome'}</h2>
+                                <h2 style={{ fontSize: '18px', fontWeight: 700, color: '#fff', margin: 0 }}>{lead.nome || 'No Name'}</h2>
                                 {lead.linkedin_profile_url && (
                                     <a href={lead.linkedin_profile_url} target="_blank" rel="noopener noreferrer" style={{ color: '#60a5fa', flexShrink: 0 }}>
                                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /><polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" /></svg>
@@ -146,37 +154,37 @@ const LeadDetailModal = ({ lead, onClose, onLeadUpdated }) => {
                 <div style={{ background: '#fff' }}>
                     {/* 3-column metrics */}
                     <div style={{ display: 'flex', borderBottom: '1px solid #f3f4f6' }}>
-                        <MetricColumn label="Qualificação ICP" value={icpScore} color={icpColor} />
+                        <MetricColumn label="ICP Qualification" value={icpScore} color={icpColor} />
                         <div style={{ width: '1px', background: '#f3f4f6', margin: '16px 0' }} />
-                        <MetricColumn label="Interações" value={lead.total_interactions_count ?? 0} color={lead.total_interactions_count > 0 ? '#ff4d00' : '#ef4444'} />
+                        <MetricColumn label="Interactions" value={lead.total_interactions_count ?? 0} color={lead.total_interactions_count > 0 ? '#ff4d00' : '#ef4444'} />
                         <div style={{ width: '1px', background: '#f3f4f6', margin: '16px 0' }} />
-                        <MetricColumn label="Cadência" value={cadStage} color={cadColor} sub={cadSub} />
+                        <MetricColumn label="Cadence" value={cadStage} color={cadColor} sub={cadSub} />
                     </div>
 
                     {/* Reasoning rows */}
                     <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '10px', borderBottom: '1px solid #f3f4f6' }}>
-                        <ReasoningRow question={`Por que ICP ${icpScore}?`} text={lead.icp_reason} />
-                        <ReasoningRow question={`Nível de Cadência (${cadStage}):`} text={lead.stage_reasoning} />
+                        <ReasoningRow question={`Why ICP ${icpScore}?`} text={lead.icp_reason} />
+                        <ReasoningRow question={`Cadence Level (${cadStage}):`} text={lead.stage_reasoning} />
                     </div>
 
                     {/* CRM Actions */}
                     <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '18px' }}>
                         {/* Tier */}
                         <div>
-                            <label style={{ fontSize: '12px', fontWeight: 600, color: '#374151', display: 'block', marginBottom: '6px' }}>Prioridade (Tier)</label>
+                            <label style={{ fontSize: '12px', fontWeight: 600, color: '#374151', display: 'block', marginBottom: '6px' }}>Priority (Tier)</label>
                             <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
                                 {[1, 2, 3, 4, 5].map(i => (
                                     <button key={i} onClick={() => handleTier(i)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px' }}>
                                         <Star size={22} style={i <= tier ? { color: '#f59e0b', fill: '#f59e0b' } : { color: '#e5e7eb', fill: '#e5e7eb' }} />
                                     </button>
                                 ))}
-                                {tier > 0 && <button onClick={() => handleTier(0)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '11px', color: '#9ca3af', marginLeft: '6px' }}>Limpar</button>}
+                                {tier > 0 && <button onClick={() => handleTier(0)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '11px', color: '#9ca3af', marginLeft: '6px' }}>Clear</button>}
                             </div>
                         </div>
 
                         {/* Proposal */}
                         <div>
-                            <label style={{ fontSize: '12px', fontWeight: 600, color: '#374151', display: 'block', marginBottom: '6px' }}>Valor da Proposta (R$)</label>
+                            <label style={{ fontSize: '12px', fontWeight: 600, color: '#374151', display: 'block', marginBottom: '6px' }}>Proposal Value ($)</label>
                             <input
                                 type="number"
                                 step="0.01"
@@ -192,15 +200,15 @@ const LeadDetailModal = ({ lead, onClose, onLeadUpdated }) => {
                         <div>
                             <label style={{ fontSize: '12px', fontWeight: 600, color: '#374151', display: 'block', marginBottom: '6px' }}>
                                 <Target size={12} style={{ display: 'inline', verticalAlign: 'middle', marginRight: '4px' }} />
-                                Estágio no Funil
+                                Funnel Stage
                             </label>
                             <select
                                 value={crmStage}
                                 onChange={e => handleStage(e.target.value)}
                                 style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #d1d5db', fontSize: '14px', color: '#111827', background: '#fff', outline: 'none', fontFamily: 'inherit', cursor: 'pointer' }}
                             >
-                                <option value="">— Sem estágio —</option>
-                                {STAGES.map(s => <option key={s} value={s}>{s}</option>)}
+                                <option value="">— No stage —</option>
+                                {STAGES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
                             </select>
                         </div>
                     </div>
@@ -211,17 +219,17 @@ const LeadDetailModal = ({ lead, onClose, onLeadUpdated }) => {
                             onClick={goToInbox}
                             style={{ flex: 1, padding: '11px', borderRadius: '8px', fontSize: '14px', fontWeight: 700, background: '#ff4d00', color: '#fff', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
                         >
-                            <MessageCircle size={16} /> Ir para o Inbox
+                            <MessageCircle size={16} /> Go to Inbox
                         </button>
                         <button onClick={onClose} style={{ padding: '11px 20px', borderRadius: '8px', fontSize: '14px', fontWeight: 600, background: '#f9fafb', color: '#374151', border: '1px solid #e5e7eb', cursor: 'pointer' }}>
-                            Fechar
+                            Close
                         </button>
                     </div>
                 </div>
 
                 {saving && (
                     <div style={{ position: 'absolute', top: 14, left: '50%', transform: 'translateX(-50%)', fontSize: '11px', fontWeight: 600, color: '#ff4d00', background: '#fff3ee', padding: '4px 12px', borderRadius: '6px', border: '1px solid #ffd4c2', zIndex: 3 }}>
-                        Salvando...
+                        Saving...
                     </div>
                 )}
             </div>

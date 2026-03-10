@@ -197,9 +197,9 @@ const AdminPanel = () => {
 
     const getGreeting = () => {
         const hour = new Date().getHours()
-        if (hour < 12) return 'Bom dia'
-        if (hour < 18) return 'Boa tarde'
-        return 'Boa noite'
+        if (hour < 12) return 'Good morning'
+        if (hour < 18) return 'Good afternoon'
+        return 'Good evening'
     }
 
     const progressPercent = useMemo(() => {
@@ -260,9 +260,9 @@ const AdminPanel = () => {
                         </div>
                         <div>
                             <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-gray-900">
-                                {getGreeting()}, {profile?.name?.split(' ')[0] || 'Comandante'} 🎯
+                                {getGreeting()}, {profile?.name?.split(' ')[0] || 'Commander'} 🎯
                             </h1>
-                            <p className="text-sm text-gray-500">Command Center · Onde você ganha dinheiro agora</p>
+                            <p className="text-sm text-gray-500">Command Center · Where you make money right now</p>
                         </div>
                     </div>
                     <button
@@ -279,10 +279,10 @@ const AdminPanel = () => {
                     {/* Ring Chart */}
                     <div className="bg-white rounded-2xl border border-gray-200 p-6 flex items-center justify-between relative overflow-hidden">
                         <div className="relative z-10">
-                            <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-1">Meta Diária</h3>
+                            <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-1">Daily Goal</h3>
                             <div className="flex items-baseline gap-1">
                                 <span className="text-4xl font-bold text-gray-900">{progressPercent}%</span>
-                                <span className="text-sm text-gray-400">concluído</span>
+                                <span className="text-sm text-gray-400">completed</span>
                             </div>
                         </div>
                         <ProgressRing percent={progressPercent} size={80} stroke={6} />
@@ -292,19 +292,19 @@ const AdminPanel = () => {
                     <div className="col-span-2 grid grid-cols-3 gap-4">
                         <KpiCard
                             icon={<CheckCircle2 size={18} />}
-                            label="Concluídas Hoje"
+                            label="Completed Today"
                             value={stats.doneToday}
                             accent="text-green-600"
                         />
                         <KpiCard
                             icon={<Loader2 size={18} />}
-                            label="Pendentes"
+                            label="Pending"
                             value={stats.pendingTotal}
                             accent="text-gray-900"
                         />
                         <KpiCard
                             icon={<Flame size={18} />}
-                            label="Leads Quentes"
+                            label="Hot Leads"
                             value={stats.hotLeads}
                             accent="text-orange-500"
                         />
@@ -315,9 +315,9 @@ const AdminPanel = () => {
                 <div>
                     <div className="flex items-center gap-2 mb-4">
                         <Zap className="text-orange-500" size={20} />
-                        <h2 className="text-lg font-bold text-gray-900">Foco Total</h2>
+                        <h2 className="text-lg font-bold text-gray-900">Total Focus</h2>
                         <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-orange-100 text-orange-700 border border-orange-200">
-                            Prioridade Máxima
+                            Maximum Priority
                         </span>
                     </div>
 
@@ -339,8 +339,8 @@ const AdminPanel = () => {
                             <div className="w-12 h-12 bg-green-50 rounded-full flex items-center justify-center mb-3">
                                 <PartyPopper className="text-green-500" size={24} />
                             </div>
-                            <h3 className="text-gray-900 font-bold mb-1">Tudo limpo por aqui!</h3>
-                            <p className="text-gray-500 text-sm">Nenhuma tarefa crítica pendente no momento.</p>
+                            <h3 className="text-gray-900 font-bold mb-1">All clear here!</h3>
+                            <p className="text-gray-500 text-sm">No critical tasks pending at the moment.</p>
                         </div>
                     )}
                 </div>
@@ -350,7 +350,7 @@ const AdminPanel = () => {
                     <div className="flex items-center justify-between mb-4">
                         <div className="flex items-center gap-2">
                             <TrendingUp className="text-blue-500" size={20} />
-                            <h2 className="text-lg font-bold text-gray-900">Radar de Oportunidades</h2>
+                            <h2 className="text-lg font-bold text-gray-900">Opportunity Radar</h2>
                         </div>
                     </div>
 
@@ -360,7 +360,7 @@ const AdminPanel = () => {
                                 <RadarLeadCard key={lead.id} lead={lead} />
                             ))
                         ) : (
-                            <div className="text-sm text-gray-400 italic p-4">Nenhuma atividade recente no radar.</div>
+                            <div className="text-sm text-gray-400 italic p-4">No recent activity on the radar.</div>
                         )}
                     </div>
                 </div>
@@ -374,7 +374,7 @@ const AdminPanel = () => {
                     className="flex items-center gap-2 text-sm font-semibold text-gray-600 hover:text-orange-600 transition-colors"
                 >
                     <Users size={16} />
-                    Novo Lead Manual
+                    New Manual Lead
                 </button>
                 <div className="w-px h-4 bg-gray-300" />
                 <button
@@ -382,7 +382,7 @@ const AdminPanel = () => {
                     className="flex items-center gap-2 text-sm font-bold text-orange-600 hover:text-orange-700 transition-colors"
                 >
                     <Trophy size={16} />
-                    Abrir Cockpit Completo
+                    Open Full Cockpit
                 </button>
             </div>
         </div>
@@ -490,10 +490,10 @@ const HeroTaskCard = ({ task, index, completing, onComplete, onExecute }) => {
                         <div className="bg-gray-50 rounded-lg px-3 py-2 border border-gray-100">
                             <span className="mr-1 inline-block mb-1">💡</span>
                             <span className="text-[11px] font-bold text-gray-800 break-words mb-1 block">
-                                Ação: {task.instruction.split('. ')[0] + '.'}
+                                Action: {task.instruction.split('. ')[0] + '.'}
                             </span>
                             <span className="text-[10px] text-gray-500 leading-relaxed line-clamp-2 block break-words">
-                                Motivo: {task.instruction.split('. ').slice(1).join('. ')}
+                                Reason: {task.instruction.split('. ').slice(1).join('. ')}
                             </span>
                         </div>
                     </div>
@@ -512,14 +512,14 @@ const HeroTaskCard = ({ task, index, completing, onComplete, onExecute }) => {
                                 }
                             `}
                         >
-                            {isFirstContact ? <><HandMetal size={13} /> Icebreaker</> : <><MessageCircle size={13} /> Conversar</>}
+                            {isFirstContact ? <><HandMetal size={13} /> Icebreaker</> : <><MessageCircle size={13} /> Chat</>}
                         </button>
                     )}
                     <button
                         onClick={() => onComplete(task.id)}
                         disabled={completing}
                         className="p-2.5 rounded-xl bg-gray-50 text-gray-400 border border-gray-200 hover:bg-green-50 hover:text-green-600 hover:border-green-200 transition-all duration-200"
-                        title="Concluir tarefa"
+                        title="Complete task"
                     >
                         {completing ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
                     </button>
@@ -532,10 +532,10 @@ const HeroTaskCard = ({ task, index, completing, onComplete, onExecute }) => {
                     <div className="bg-gray-50 rounded-lg px-3 py-2 border border-gray-100">
                         <span className="mr-1 inline-block mb-1">💡</span>
                         <span className="text-[11px] font-bold text-gray-800 break-words mb-1 block">
-                            Ação: {task.instruction.split('. ')[0] + '.'}
+                            Action: {task.instruction.split('. ')[0] + '.'}
                         </span>
                         <span className="text-[10px] text-gray-500 leading-relaxed line-clamp-2 block break-words">
-                            Motivo: {task.instruction.split('. ').slice(1).join('. ')}
+                            Reason: {task.instruction.split('. ').slice(1).join('. ')}
                         </span>
                     </div>
                 </div>
@@ -584,7 +584,7 @@ const RadarLeadCard = ({ lead }) => {
 
             <div className="flex items-center justify-between mb-3">
                 <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${stageStyle}`}>
-                    {stage || 'Novo'}
+                    {stage || 'New'}
                 </span>
                 <span className="text-[9px] text-gray-400 flex items-center gap-1">
                     <MessageCircle size={10} /> {lead.total_interactions_count || 0}
@@ -592,7 +592,7 @@ const RadarLeadCard = ({ lead }) => {
             </div>
 
             <div className="flex items-center justify-between pt-3 border-t border-gray-100">
-                <span className="text-[10px] text-gray-400">{timeAgo(lead.updated_at)} atrás</span>
+                <span className="text-[10px] text-gray-400">{timeAgo(lead.updated_at)} ago</span>
                 {lead.linkedin_profile_url && (
                     <a
                         href={lead.linkedin_profile_url}
@@ -600,7 +600,7 @@ const RadarLeadCard = ({ lead }) => {
                         rel="noreferrer"
                         className="text-[10px] font-bold text-orange-600 hover:text-orange-700 hover:underline"
                     >
-                        Ver perfil
+                        View profile
                     </a>
                 )}
             </div>

@@ -22,18 +22,18 @@ const PostsPage = () => {
     // Dashboard States
     // Helper for Status Translation
     const getStatusLabel = (status) => {
-        if (!status) return 'Desconhecido'
+        if (!status) return 'Unknown'
 
         const map = {
-            'WAITING_APPROVAL': 'Aguardando Aprovação',
-            'CHANGES_REQUESTED': 'Alteração Solicitada',
-            'APPROVED': 'Aprovado',
-            'waiting_approval': 'Aguardando Aprovação',
-            'changes_requested': 'Alteração Solicitada',
-            'approved': 'Aprovado',
-            'postado': 'Postado',
-            'POSTADO': 'Postado',
-            'AGENDADO': 'Agendado'
+            'WAITING_APPROVAL': 'Waiting Approval',
+            'CHANGES_REQUESTED': 'Changes Requested',
+            'APPROVED': 'Approved',
+            'waiting_approval': 'Waiting Approval',
+            'changes_requested': 'Changes Requested',
+            'approved': 'Approved',
+            'postado': 'Posted',
+            'POSTADO': 'Posted',
+            'AGENDADO': 'Scheduled'
         }
 
         return map[status] || map[status.toUpperCase()] || map[status.toLowerCase()] || status
@@ -43,7 +43,7 @@ const PostsPage = () => {
     const navigate = useNavigate()
     const [posts, setPosts] = useState([])
     const [loadingPosts, setLoadingPosts] = useState(true)
-    const [statusFilter, setStatusFilter] = useState('Todos')
+    const [statusFilter, setStatusFilter] = useState('All')
     const [editingPost, setEditingPost] = useState(null)
     const [schedulingPost, setSchedulingPost] = useState(null)
     const [searchParams] = useSearchParams()
@@ -74,7 +74,7 @@ const PostsPage = () => {
                 if (profile.nome_empresa) {
                     query = query.eq('nome_cliente', profile.nome_empresa)
                 } else {
-                    console.warn('Cliente sem nome_empresa definido.')
+                    console.warn('Client without company_name defined.')
                     setPosts([])
                     return
                 }
@@ -98,7 +98,7 @@ const PostsPage = () => {
             setPosts(postsTratados);
 
         } catch (err) {
-            console.error("Erro CRÍTICO no fetch ou processamento:", err);
+            console.error("CRITICAL error fetching or processing:", err);
         } finally {
             setLoadingPosts(false); // FORÇAR REMOÇÃO DO SPINNER
         }
@@ -120,7 +120,7 @@ const PostsPage = () => {
             })
             setUnreadCounts(counts)
         } catch (err) {
-            console.error("Erro ao buscar notificações:", err)
+            console.error("Error fetching notifications:", err)
         }
     }, [])
 
@@ -150,7 +150,7 @@ const PostsPage = () => {
 
 
     const handleDelete = async (id) => {
-        if (!window.confirm('Tem certeza que deseja excluir este post?')) return
+        if (!window.confirm('Are you sure you want to delete this post?')) return
 
         try {
             const { error } = await supabase
@@ -161,14 +161,14 @@ const PostsPage = () => {
             if (error) throw error
             setPosts(posts.filter(post => post.id !== id))
         } catch (err) {
-            alert('Erro ao excluir: ' + err.message)
+            alert('Error deleting: ' + err.message)
         }
     }
 
     const copyLink = (id) => {
         const url = `${window.location.origin}/aprovacao?id=${id}`
         navigator.clipboard.writeText(url)
-        alert('Link copiado!')
+        alert('Link copied!')
     }
 
     const getStatusColor = (status) => {
@@ -186,12 +186,12 @@ const PostsPage = () => {
         if (clientFilter && clientFilter.trim() !== '' && post.nome_cliente !== clientFilter) return false
 
         // 2. Tab Filter
-        if (statusFilter === 'Todos') return true
+        if (statusFilter === 'All') return true
 
         const s = (post.status || 'WAITING_APPROVAL').toUpperCase()
-        if (statusFilter === 'Pendentes') return s === 'WAITING_APPROVAL' || s.includes('WAITING')
-        if (statusFilter === 'Aprovados') return s === 'APPROVED' || s.includes('APPROV')
-        if (statusFilter === 'Revisão') return s === 'CHANGES_REQUESTED' || s.includes('REVI')
+        if (statusFilter === 'Pending') return s === 'WAITING_APPROVAL' || s.includes('WAITING')
+        if (statusFilter === 'Approved') return s === 'APPROVED' || s.includes('APPROV')
+        if (statusFilter === 'Revision') return s === 'CHANGES_REQUESTED' || s.includes('REVI')
         return true
     })
 
@@ -199,22 +199,22 @@ const PostsPage = () => {
         <div style={{ padding: '0' }}>
             <header className="top-bar">
                 <div>
-                    <h1>Meus Posts</h1>
+                    <h1>My Posts</h1>
                     {clientFilter && (
                         <span style={{ color: '#64748b', display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.5rem' }}>
-                            <Filter size={16} /> Filtrando por cliente: <strong>{clientFilter}</strong>
-                            <Link to="/posts" style={{ color: '#2563eb', fontSize: '0.875rem', marginLeft: '0.5rem' }}>Limpar</Link>
+                            <Filter size={16} /> Filtering by client: <strong>{clientFilter}</strong>
+                            <Link to="/posts" style={{ color: '#2563eb', fontSize: '0.875rem', marginLeft: '0.5rem' }}>Clear</Link>
                         </span>
                     )}
                 </div>
                 <div className="user-profile">
-                    <span>Admin Agência</span>
+                    <span>Agency Admin</span>
                 </div>
             </header>
 
             <div className="filters-bar">
                 <div className="tabs">
-                    {['Todos', 'Pendentes', 'Aprovados', 'Revisão'].map(filter => (
+                    {['All', 'Pending', 'Approved', 'Revision'].map(filter => (
                         <button
                             key={filter}
                             className={`tab-btn ${statusFilter === filter ? 'active' : ''}`}
@@ -229,18 +229,18 @@ const PostsPage = () => {
             <div className="table-container">
                 {loadingPosts ? (
                     <div className="loading-state">
-                        <Loader2 className="spinner" /> Carregando posts...
+                        <Loader2 className="spinner" /> Loading posts...
                     </div>
                 ) : (
                     <table className="posts-table">
                         <thead>
                             <tr>
                                 <th>ID</th>
-                                <th>Cliente</th>
-                                <th>Tema</th>
-                                <th>Público Alvo</th>
+                                <th>Client</th>
+                                <th>Theme</th>
+                                <th>Target Audience</th>
                                 <th>Status</th>
-                                <th>Ações</th>
+                                <th>Actions</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -254,7 +254,7 @@ const PostsPage = () => {
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                                     {post.nome_cliente || 'N/A'}
                                                     {unreadCount > 0 && (
-                                                        <span title={`${unreadCount} novas mensagens`} style={{
+                                                        <span title={`${unreadCount} new messages`} style={{
                                                             background: '#ef4444',
                                                             color: 'white',
                                                             fontSize: '0.7rem',
@@ -270,7 +270,7 @@ const PostsPage = () => {
                                                     )}
                                                 </div>
                                             </td>
-                                            <td>{post.tema || 'Sem Tema'}</td>
+                                            <td>{post.tema || 'No Theme'}</td>
                                             <td>{post.publico || '-'}</td>
                                             <td>
                                                 <span className={`badge ${getStatusColor(post.status)}`}>
@@ -281,7 +281,7 @@ const PostsPage = () => {
                                                 <div className="actions-group">
                                                     <button
                                                         className="icon-btn"
-                                                        title="Abrir Sala de Guerra"
+                                                        title="Open War Room"
                                                         onClick={() => navigate(`/post-feedback/${post.id}`)}
                                                         style={{ position: 'relative' }}
                                                     >
@@ -290,28 +290,28 @@ const PostsPage = () => {
                                                     </button>
                                                     <button
                                                         className="icon-btn"
-                                                        title="Editar Post"
+                                                        title="Edit Post"
                                                         onClick={() => setEditingPost(post)}
                                                     >
                                                         <Pencil size={18} />
                                                     </button>
                                                     <button
                                                         className="icon-btn"
-                                                        title="Copiar Link"
+                                                        title="Copy Link"
                                                         onClick={() => copyLink(post.id)}
                                                     >
                                                         <LinkIcon size={18} />
                                                     </button>
                                                     <button
                                                         className="icon-btn text-danger"
-                                                        title="Excluir"
+                                                        title="Delete"
                                                         onClick={() => handleDelete(post.id)}
                                                     >
                                                         <Trash2 size={18} />
                                                     </button>
                                                     <button
                                                         className="icon-btn"
-                                                        title="Agendar Postagem"
+                                                        title="Schedule Post"
                                                         onClick={() => setSchedulingPost(post)}
                                                         style={{ color: '#8b5cf6' }}
                                                     >
@@ -325,7 +325,7 @@ const PostsPage = () => {
                             ) : (
                                 <tr>
                                     <td colSpan="6" style={{ textAlign: 'center', padding: '2rem', color: '#64748b' }}>
-                                        Nenhum post encontrado.
+                                        No posts found.
                                     </td>
                                 </tr>
                             )}

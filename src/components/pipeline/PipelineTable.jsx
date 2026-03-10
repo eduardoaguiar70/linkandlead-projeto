@@ -35,14 +35,14 @@ const PipelineTable = ({ leads, onOpenLead, onMoveToFunnel }) => {
 
     // Columns — defaultDir controls direction on FIRST click
     const columns = [
-        { key: 'nome', label: 'Nome', w: '180px', defaultDir: 'asc' },
-        { key: 'empresa', label: 'Empresa', w: '150px', defaultDir: 'asc' },
+        { key: 'nome', label: 'Name', w: '180px', defaultDir: 'asc' },
+        { key: 'empresa', label: 'Company', w: '150px', defaultDir: 'asc' },
         { key: 'icp_score', label: 'ICP', w: '60px', defaultDir: 'asc' }, // A first
-        { key: 'cadence_stage', label: 'Cadência', w: '80px', defaultDir: 'desc' }, // G5 first
-        { key: 'total_interactions_count', label: 'Interações', w: '90px', defaultDir: 'desc' }, // highest first
-        { key: 'has_engaged', label: 'Engajou?', w: '80px', defaultDir: 'desc' },
+        { key: 'cadence_stage', label: 'Cadence', w: '80px', defaultDir: 'desc' }, // G5 first
+        { key: 'total_interactions_count', label: 'Interactions', w: '90px', defaultDir: 'desc' }, // highest first
+        { key: 'has_engaged', label: 'Engaged?', w: '80px', defaultDir: 'desc' },
         { key: 'tier', label: 'Tier', w: '50px', defaultDir: 'desc' },
-        { key: 'proposal_value', label: 'Proposta', w: '100px', defaultDir: 'desc' },
+        { key: 'proposal_value', label: 'Proposal', w: '100px', defaultDir: 'desc' },
         { key: 'crm_stage', label: 'Stage', w: '90px', defaultDir: 'asc' },
     ]
 
@@ -100,13 +100,13 @@ const PipelineTable = ({ leads, onOpenLead, onMoveToFunnel }) => {
             {selected.size > 0 && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '8px 16px', background: '#fff3ee', border: '1px solid #ffd4c2', borderRadius: '8px' }}>
                     <span style={{ fontSize: '13px', fontWeight: 600, color: '#111827' }}>
-                        {selected.size} lead{selected.size > 1 ? 's' : ''} selecionado{selected.size > 1 ? 's' : ''}
+                        {selected.size} lead{selected.size > 1 ? 's' : ''} selected
                     </span>
                     <button
                         onClick={handleMoveToFunnel}
                         style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 14px', borderRadius: '6px', fontSize: '12px', fontWeight: 700, background: '#ff4d00', color: '#fff', border: 'none', cursor: 'pointer' }}
                     >
-                        <ArrowRightToLine size={14} /> Mover para o Funil
+                        <ArrowRightToLine size={14} /> Move to Funnel
                     </button>
                 </div>
             )}
@@ -153,12 +153,12 @@ const PipelineTable = ({ leads, onOpenLead, onMoveToFunnel }) => {
                                     <td style={{ ...TD, color: '#6b7280' }} onClick={() => onOpenLead(lead)} title={lead.stage_reasoning || ''}>{lead.cadence_stage || '—'}</td>
                                     <td style={{ ...TD, textAlign: 'center' }} onClick={() => onOpenLead(lead)}>{lead.total_interactions_count || 0}</td>
                                     <td style={{ ...TD, textAlign: 'center' }} onClick={() => onOpenLead(lead)}>
-                                        {lead.has_engaged ? <span style={{ color: '#059669', fontWeight: 700, fontSize: '11px' }}>Sim</span> : <span style={{ color: '#d1d5db', fontSize: '11px' }}>Não</span>}
+                                        {lead.has_engaged ? <span style={{ color: '#059669', fontWeight: 700, fontSize: '11px' }}>Yes</span> : <span style={{ color: '#d1d5db', fontSize: '11px' }}>No</span>}
                                     </td>
                                     <td style={{ ...TD, textAlign: 'center' }} onClick={() => onOpenLead(lead)}>{lead.tier || '—'}</td>
                                     <td style={TD} onClick={() => onOpenLead(lead)}>
                                         {parseFloat(lead.proposal_value) > 0 ? (
-                                            <span style={{ fontSize: '12px', fontWeight: 600, color: '#059669' }}>R$ {parseFloat(lead.proposal_value).toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</span>
+                                            <span style={{ fontSize: '12px', fontWeight: 600, color: '#059669' }}>${parseFloat(lead.proposal_value).toLocaleString('en-US', { minimumFractionDigits: 0 })}</span>
                                         ) : <span style={{ color: '#d1d5db' }}>—</span>}
                                     </td>
                                     <td style={TD} onClick={() => onOpenLead(lead)}>
@@ -168,7 +168,7 @@ const PipelineTable = ({ leads, onOpenLead, onMoveToFunnel }) => {
                             )
                         })}
                         {pageLeads.length === 0 && (
-                            <tr><td colSpan={10} style={{ ...TD, textAlign: 'center', color: '#9ca3af', padding: '40px' }}>Nenhum lead encontrado</td></tr>
+                            <tr><td colSpan={10} style={{ ...TD, textAlign: 'center', color: '#9ca3af', padding: '40px' }}>No leads found</td></tr>
                         )}
                     </tbody>
                 </table>
@@ -178,11 +178,11 @@ const PipelineTable = ({ leads, onOpenLead, onMoveToFunnel }) => {
             {totalPages > 1 && (
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 4px' }}>
                     <span style={{ fontSize: '12px', color: '#9ca3af' }}>
-                        {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, sorted.length)} de {sorted.length}
+                        {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, sorted.length)} of {sorted.length}
                     </span>
                     <div style={{ display: 'flex', gap: '6px' }}>
-                        <button disabled={page === 0} onClick={() => setPage(p => p - 1)} style={{ padding: '4px 10px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, border: '1px solid #e5e7eb', background: '#fff', color: page === 0 ? '#d1d5db' : '#374151', cursor: page === 0 ? 'default' : 'pointer' }}>Anterior</button>
-                        <button disabled={page >= totalPages - 1} onClick={() => setPage(p => p + 1)} style={{ padding: '4px 10px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, border: '1px solid #e5e7eb', background: '#fff', color: page >= totalPages - 1 ? '#d1d5db' : '#374151', cursor: page >= totalPages - 1 ? 'default' : 'pointer' }}>Próxima</button>
+                        <button disabled={page === 0} onClick={() => setPage(p => p - 1)} style={{ padding: '4px 10px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, border: '1px solid #e5e7eb', background: '#fff', color: page === 0 ? '#d1d5db' : '#374151', cursor: page === 0 ? 'default' : 'pointer' }}>Previous</button>
+                        <button disabled={page >= totalPages - 1} onClick={() => setPage(p => p + 1)} style={{ padding: '4px 10px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, border: '1px solid #e5e7eb', background: '#fff', color: page >= totalPages - 1 ? '#d1d5db' : '#374151', cursor: page >= totalPages - 1 ? 'default' : 'pointer' }}>Next</button>
                     </div>
                 </div>
             )}

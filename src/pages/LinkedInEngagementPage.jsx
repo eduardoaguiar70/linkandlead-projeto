@@ -31,7 +31,7 @@ const timeAgo = (dateString) => {
     if (diffHours < 24) return `Há ${diffHours}h`
     if (diffDays === 1) return 'Há 1 dia'
     if (diffDays < 30) return `Há ${diffDays} dias`
-    return date.toLocaleDateString('pt-BR')
+    return date.toLocaleDateString('en-US')
 }
 
 const LinkedInEngagementPage = () => {

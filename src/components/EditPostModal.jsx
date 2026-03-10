@@ -3,9 +3,9 @@ import { supabase } from '../services/supabaseClient'
 import { X, Loader2, Save, Image as ImageIcon, UploadCloud, Calendar as CalendarIcon } from 'lucide-react'
 import DatePicker, { registerLocale } from 'react-datepicker'
 import "react-datepicker/dist/react-datepicker.css"
-import ptBR from 'date-fns/locale/pt-BR'
+import enUS from 'date-fns/locale/en-US'
 
-registerLocale('pt-BR', ptBR)
+registerLocale('en-US', enUS)
 
 const EditPostModal = ({ post, onClose, onSuccess }) => {
     const [theme, setTheme] = useState(post.tema || '')
@@ -43,11 +43,11 @@ const EditPostModal = ({ post, onClose, onSuccess }) => {
             // Validate basic constraints
             const validFiles = files.filter(file => {
                 if (!file.type.startsWith('image/')) {
-                    alert(`Arquivo ${file.name} não é uma imagem.`)
+                    alert(`File ${file.name} is not an image.`)
                     return false
                 }
                 if (file.size > 50 * 1024 * 1024) {
-                    alert(`Arquivo ${file.name} excede o limite de 50MB.`)
+                    alert(`File ${file.name} exceeds the 50MB limit.`)
                     return false
                 }
                 return true
@@ -108,13 +108,13 @@ const EditPostModal = ({ post, onClose, onSuccess }) => {
 
             if (dbError) throw dbError
 
-            alert("Post atualizado com sucesso!")
+            alert("Post successfully updated!")
             onSuccess() // Should trigger refresh
             onClose()
 
         } catch (err) {
             console.error(err)
-            setErrorMsg("Erro ao atualizar: " + err.message)
+            setErrorMsg("Error updating: " + err.message)
         } finally {
             setLoading(false)
         }
@@ -130,10 +130,10 @@ const EditPostModal = ({ post, onClose, onSuccess }) => {
             <div className="modern-modal" style={{ maxWidth: '700px', width: '90%', maxHeight: '90vh', overflowY: 'auto' }}>
                 <div className="modal-header">
                     <div className="header-title">
-                        <h2>Editar Post #{post.id}</h2>
+                        <h2>Edit Post #{post.id}</h2>
                         <span className="subtitle">{post.tema}</span>
                     </div>
-                    <button className="close-btn" onClick={onClose} aria-label="Fechar">
+                    <button className="close-btn" onClick={onClose} aria-label="Close">
                         <X size={24} />
                     </button>
                 </div>
@@ -155,7 +155,7 @@ const EditPostModal = ({ post, onClose, onSuccess }) => {
                             <AlertCircle color="#ef4444" size={20} style={{ marginTop: '2px', flexShrink: 0 }} />
                             <div>
                                 <h4 style={{ color: '#991b1b', fontWeight: 700, fontSize: '0.95rem', marginBottom: '4px' }}>
-                                    📢 Atenção: Cliente solicitou alterações
+                                    📢 Attention: Client requested changes
                                 </h4>
                                 <p style={{ color: '#7f1d1d', fontSize: '0.9rem', lineHeight: '1.5' }}>
                                     "{post.feedback_cliente}"
@@ -167,20 +167,20 @@ const EditPostModal = ({ post, onClose, onSuccess }) => {
                     <form onSubmit={handleSave}>
                         {/* THEME EDITOR */}
                         <div className="modern-form-group">
-                            <label className="input-label">Tema / Título Interno</label>
+                            <label className="input-label">Theme / Internal Title</label>
                             <input
                                 type="text"
                                 value={theme}
                                 onChange={e => setTheme(e.target.value)}
                                 className="modern-input"
-                                placeholder="Título do post..."
+                                placeholder="Post title..."
                             />
                         </div>
 
                         {/* SCHEDULE DATE (PREMIUM UI) */}
                         <div className="modern-form-group">
                             <label className="input-label" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <CalendarIcon size={16} /> Data de Publicação / Agendamento
+                                <CalendarIcon size={16} /> Publication / Schedule Date
                             </label>
                             <div className="custom-datepicker-wrapper">
                                 <DatePicker
@@ -190,8 +190,8 @@ const EditPostModal = ({ post, onClose, onSuccess }) => {
                                     timeFormat="HH:mm"
                                     timeIntervals={15}
                                     dateFormat="dd/MM/yyyy HH:mm"
-                                    locale="pt-BR"
-                                    placeholderText="Selecione data e hora..."
+                                    locale="en-US"
+                                    placeholderText="Select date and time..."
                                     className="modern-input"
                                     wrapperClassName="w-full"
                                     showPopperArrow={false}
@@ -201,7 +201,7 @@ const EditPostModal = ({ post, onClose, onSuccess }) => {
 
                         {/* TEXT EDITOR */}
                         <div className="modern-form-group">
-                            <label className="input-label">Texto do Post</label>
+                            <label className="input-label">Post Text</label>
                             <textarea
                                 value={text}
                                 onChange={e => setText(e.target.value)}
@@ -212,14 +212,14 @@ const EditPostModal = ({ post, onClose, onSuccess }) => {
 
                         {/* IMAGE EDITOR (CAROUSEL SUPPORT) */}
                         <div className="modern-form-group">
-                            <label className="input-label">Mídia (Imagens)</label>
+                            <label className="input-label">Media (Images)</label>
 
                             {/* Current/New Preview Grid */}
                             <div style={{ marginBottom: '1rem', background: '#f8fafc', padding: '1rem', borderRadius: '8px' }}>
                                 {newImageFiles.length > 0 ? (
                                     <div>
                                         <div style={{ color: '#16a34a', fontWeight: 600, marginBottom: '0.5rem', textAlign: 'center' }}>
-                                            {newImageFiles.length} Novas imagens selecionadas:
+                                            {newImageFiles.length} New images selected:
                                         </div>
                                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(80px, 1fr))', gap: '8px' }}>
                                             {newImageFiles.map((file, idx) => (
@@ -238,7 +238,7 @@ const EditPostModal = ({ post, onClose, onSuccess }) => {
                                         ))}
                                     </div>
                                 ) : (
-                                    <div style={{ color: '#94a3b8', textAlign: 'center' }}>Sem imagem atualmente</div>
+                                    <div style={{ color: '#94a3b8', textAlign: 'center' }}>No image currently</div>
                                 )}
                             </div>
 
@@ -253,7 +253,7 @@ const EditPostModal = ({ post, onClose, onSuccess }) => {
                                 />
                                 <div className="upload-content-empty">
                                     <UploadCloud size={20} className="upload-icon-empty" />
-                                    <span className="upload-text">Clique para trocar imagens (Substituir tudo)</span>
+                                    <span className="upload-text">Click to change images (Replace all)</span>
                                 </div>
                             </div>
                         </div>
@@ -262,10 +262,10 @@ const EditPostModal = ({ post, onClose, onSuccess }) => {
 
                         <div className="modal-footer">
                             <button type="button" className="btn-cancel" onClick={onClose} disabled={loading}>
-                                Cancelar
+                                Cancel
                             </button>
                             <button type="submit" className="btn-generate-primary" disabled={loading}>
-                                {loading ? <><Loader2 className="spinner" /> Salvando...</> : <><Save size={18} /> Salvar Alterações</>}
+                                {loading ? <><Loader2 className="spinner" /> Saving...</> : <><Save size={18} /> Save Changes</>}
                             </button>
                         </div>
                     </form>

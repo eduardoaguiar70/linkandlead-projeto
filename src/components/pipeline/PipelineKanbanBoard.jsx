@@ -13,13 +13,13 @@ import PipelineLeadCard from './PipelineLeadCard'
 import { supabase } from '../../services/supabaseClient'
 
 const STAGES = [
-    { id: 'Frio', title: 'Frio', icon: Snowflake },
-    { id: 'Engajado', title: 'Engajado', icon: Zap },
-    { id: 'Qualificado', title: 'Qualificado', icon: Target },
-    { id: 'Agendado', title: 'Agendado', icon: Calendar },
-    { id: 'Proposta', title: 'Proposta', icon: FileText },
-    { id: 'Ganho', title: 'Ganho', icon: Trophy },
-    { id: 'Perdido', title: 'Perdido', icon: XCircle },
+    { id: 'Frio', title: 'Cold', icon: Snowflake },
+    { id: 'Engajado', title: 'Engaged', icon: Zap },
+    { id: 'Qualificado', title: 'Qualified', icon: Target },
+    { id: 'Agendado', title: 'Scheduled', icon: Calendar },
+    { id: 'Proposta', title: 'Proposal', icon: FileText },
+    { id: 'Ganho', title: 'Won', icon: Trophy },
+    { id: 'Perdido', title: 'Lost', icon: XCircle },
 ]
 
 const PipelineKanbanBoard = ({ leads, setLeads, onCardClick }) => {

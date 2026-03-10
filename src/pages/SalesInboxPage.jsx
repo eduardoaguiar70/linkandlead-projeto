@@ -88,10 +88,10 @@ const SalesInboxPage = () => {
             setPendingTaskCount(p => Math.max(0, p - 1))
             setSidebarTasks(prev => prev.filter(t => t.leads?.id !== activeLead.id))
 
-            showCrmToast('✅ Tarefa concluída!')
+            showCrmToast('✅ Task completed!')
         } catch (err) {
             console.error('[Inbox] markDone error:', err)
-            showCrmToast('Erro ao salvar.', 'error')
+            showCrmToast('Error saving.', 'error')
         }
     }
 
@@ -112,10 +112,10 @@ const SalesInboxPage = () => {
             setPendingTaskCount(p => Math.max(0, p - 1))
             setSidebarTasks(prev => prev.filter(t => t.leads?.id !== activeLead.id))
 
-            showCrmToast('🚫 Lead adicionado à lista negra.')
+            showCrmToast('🚫 Lead added to blacklist.')
         } catch (err) {
             console.error('[Inbox] blacklist error:', err)
-            showCrmToast('Erro ao salvar.', 'error')
+            showCrmToast('Error saving.', 'error')
         }
     }
 
@@ -157,11 +157,11 @@ const SalesInboxPage = () => {
                 body: JSON.stringify(payload)
             })
 
-            if (!response.ok) throw new Error('Erro na requisição')
+            if (!response.ok) throw new Error('Request error')
             const data = await response.json()
-            setAiChatHistory(prev => [...prev, { role: 'assistant', content: data.reply || 'Sem resposta.' }])
+            setAiChatHistory(prev => [...prev, { role: 'assistant', content: data.reply || 'No response.' }])
         } catch {
-            setAiChatHistory(prev => [...prev, { role: 'assistant', content: 'Erro ao gerar resposta.' }])
+            setAiChatHistory(prev => [...prev, { role: 'assistant', content: 'Error generating response.' }])
         } finally {
             setAiLoading(false)
         }
@@ -702,7 +702,7 @@ const SalesInboxPage = () => {
             <div className="w-16 h-16 rounded-full bg-primary/10 border border-primary/30 flex items-center justify-center">
                 <Mail size={24} className="text-primary/70" />
             </div>
-            <p className="text-gray-300">Selecione um cliente para acessar o Inbox.</p>
+            <p className="text-gray-300">Select a client to access the Inbox.</p>
         </div>
     )
 
@@ -712,7 +712,7 @@ const SalesInboxPage = () => {
             {/* HEADER & TOGGLE */}
             <div className="flex flex-wrap justify-between items-center px-4 gap-3 shrink-0">
                 <h1 className="text-xl font-bold text-black flex items-center gap-2">
-                    <LayoutGrid size={20} className="text-primary" /> Inbox Inteligente
+                    <LayoutGrid size={20} className="text-primary" /> Intelligent Inbox
                 </h1>
 
                 {/* Search Input */}
@@ -720,7 +720,7 @@ const SalesInboxPage = () => {
                     <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
                     <input
                         type="text"
-                        placeholder="Pesquisar lead..."
+                        placeholder="Search lead..."
                         value={searchTerm}
                         onChange={e => setSearchTerm(e.target.value)}
                         className="w-full bg-gray-50 border border-gray-200 rounded-xl pl-9 pr-8 py-2 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30 transition-all"
@@ -755,7 +755,7 @@ const SalesInboxPage = () => {
                                     }`}
                             >
                                 <MessageSquare size={13} />
-                                Conversas
+                                Chat
                                 <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${sidebarTab === 'conversas' ? 'bg-white/20' : 'bg-gray-200 text-gray-600'
                                     }`}>
                                     {filteredLeads.length}
@@ -769,7 +769,7 @@ const SalesInboxPage = () => {
                                     }`}
                             >
                                 <ClipboardList size={13} />
-                                Tarefas
+                                Tasks
                                 <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${sidebarTab === 'tarefas' ? 'bg-white/20' : 'bg-gray-200 text-gray-600'
                                     }`}>
                                     {pendingTaskCount}
@@ -785,7 +785,7 @@ const SalesInboxPage = () => {
                         {sidebarTab === 'conversas' && (
                             <>
                                 {loadingLeads ? (
-                                    <div className="p-8 text-center text-text-muted text-sm">Carregando...</div>
+                                    <div className="p-8 text-center text-text-muted text-sm">Loading...</div>
                                 ) : filteredLeads.map(lead => (
                                     <div
                                         key={lead.id}
@@ -804,7 +804,7 @@ const SalesInboxPage = () => {
                                         <div className="flex justify-between items-start mb-1">
                                             <span className={`text-sm truncate max-w-[120px] lg:max-w-[140px] ${(lead.unread_count || 0) > 0 ? 'font-bold text-gray-900' : 'font-semibold text-gray-700'
                                                 }`}>
-                                                {lead.nome || 'Sem Nome'}
+                                                {lead.nome || 'No Name'}
                                             </span>
                                             <div className="flex items-center gap-1.5 shrink-0">
                                                 {(lead.unread_count || 0) > 0 && (
@@ -819,7 +819,7 @@ const SalesInboxPage = () => {
                                         </div>
                                         <div className={`text-xs mb-2 truncate ${(lead.unread_count || 0) > 0 ? 'text-gray-700 font-medium' : 'text-gray-500'
                                             }`}>
-                                            {lead.headline || 'Lead qualificado'}
+                                            {lead.headline || 'Qualified lead'}
                                         </div>
                                         <div className="flex items-center gap-2 text-[10px]">
                                             <span className={`font-bold px-1.5 py-0.5 rounded ${lead.icp_score === 'A' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
@@ -831,14 +831,14 @@ const SalesInboxPage = () => {
                                             <span className="text-gray-400">
                                                 {(() => {
                                                     const d = lead.last_interaction_date
-                                                    if (!d) return 'Sem interação'
+                                                    if (!d) return 'No interaction'
                                                     const diff = Date.now() - new Date(d).getTime()
                                                     const mins = Math.floor(diff / 60000)
-                                                    if (mins < 60) return `💬 há ${mins}m`
+                                                    if (mins < 60) return `💬 ${mins}m ago`
                                                     const hrs = Math.floor(mins / 60)
-                                                    if (hrs < 24) return `💬 há ${hrs}h`
+                                                    if (hrs < 24) return `💬 ${hrs}h ago`
                                                     const days = Math.floor(hrs / 24)
-                                                    return `💬 há ${days}d`
+                                                    return `💬 ${days}d ago`
                                                 })()}
                                             </span>
                                         </div>
@@ -846,7 +846,7 @@ const SalesInboxPage = () => {
                                 ))}
                                 {!loadingLeads && filteredLeads.length === 0 && (
                                     <div className="p-8 text-center text-text-muted text-sm">
-                                        {searchTerm ? 'Nenhum lead encontrado.' : 'Nenhum lead com engajamento.'}
+                                        {searchTerm ? 'No leads found.' : 'No engaged leads.'}
                                     </div>
                                 )}
                             </>
@@ -858,14 +858,14 @@ const SalesInboxPage = () => {
                                 {loadingTasks ? (
                                     <div className="p-8 text-center text-gray-400 text-sm flex flex-col items-center gap-2">
                                         <Loader2 size={18} className="animate-spin text-primary" />
-                                        Carregando tarefas...
+                                        Loading tasks...
                                     </div>
                                 ) : sidebarTasks.length === 0 ? (
                                     <div className="p-8 text-center text-gray-400 text-sm flex flex-col items-center gap-3">
                                         <div className="w-12 h-12 rounded-full bg-emerald-50 flex items-center justify-center">
                                             <Check size={20} className="text-emerald-600" />
                                         </div>
-                                        <span>Nenhuma tarefa pendente! 🎉</span>
+                                        <span>No pending tasks! 🎉</span>
                                     </div>
                                 ) : sidebarTasks.map(task => {
                                     const tLead = task.leads || {}
@@ -876,7 +876,7 @@ const SalesInboxPage = () => {
 
                                     const interactionCount = tLead.total_interactions_count || 0
                                     const isFirstContact = interactionCount === 0
-                                    const actionLabel = isFirstContact ? '✉️ Enviar Icebreaker' : '💬 Continuar Conversa'
+                                    const actionLabel = isFirstContact ? '✉️ Send Icebreaker' : '💬 Continue Chat'
                                     const actionColor = isFirstContact
                                         ? 'bg-orange-50 text-orange-600 border-orange-200'
                                         : 'bg-emerald-50 text-emerald-600 border-emerald-200'
@@ -948,14 +948,14 @@ const SalesInboxPage = () => {
                                     <>
                                         <button
                                             onClick={handleMarkDone}
-                                            title="Marcar tarefa como Concluída"
+                                            title="Mark task as Completed"
                                             className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-bold text-emerald-600 border border-emerald-200 hover:bg-emerald-50 hover:border-emerald-300 transition-all"
                                         >
-                                            <CheckCircle2 size={13} /> Concluído
+                                            <CheckCircle2 size={13} /> Completed
                                         </button>
                                         <button
                                             onClick={handleBlacklistLead}
-                                            title="Adicionar à Lista Negra"
+                                            title="Add to Blacklist"
                                             className="flex items-center justify-center w-8 h-8 rounded-lg text-red-400 border border-red-200 hover:bg-red-50 hover:text-red-500 hover:border-red-300 transition-all"
                                         >
                                             <Ban size={13} />
@@ -981,11 +981,11 @@ const SalesInboxPage = () => {
                         {/* Timeline */}
                         <div className="flex-1 overflow-y-auto p-4 lg:p-6 flex flex-col-reverse gap-4 custom-scrollbar bg-gray-50/50">
                             {loadingChat ? (
-                                <div className="text-center text-gray-400 text-sm py-10">Carregando histórico...</div>
+                                <div className="text-center text-gray-400 text-sm py-10">Loading history...</div>
                             ) : interactions.length === 0 ? (
                                 <div className="text-center text-gray-400 text-sm py-10 flex flex-col items-center gap-2">
                                     <MessageSquare size={24} className="opacity-20" />
-                                    Nenhuma mensagem trocada ainda.
+                                    No messages exchanged yet.
                                 </div>
                             ) : (() => {
                                 // Build date label helper
@@ -996,14 +996,14 @@ const SalesInboxPage = () => {
                                     const msgDay = new Date(date.getFullYear(), date.getMonth(), date.getDate())
                                     const diffDays = Math.round((today - msgDay) / (1000 * 60 * 60 * 24))
 
-                                    if (diffDays === 0) return 'HOJE'
-                                    if (diffDays === 1) return 'ONTEM'
+                                    if (diffDays === 0) return 'TODAY'
+                                    if (diffDays === 1) return 'YESTERDAY'
                                     if (diffDays < 7) {
-                                        return date.toLocaleDateString('pt-BR', { weekday: 'long' }).toUpperCase()
+                                        return date.toLocaleDateString('en-US', { weekday: 'long' }).toUpperCase()
                                     }
                                     const day = date.getDate()
-                                    const month = date.toLocaleDateString('pt-BR', { month: 'short' }).toUpperCase().replace('.', '')
-                                    return `${day} DE ${month}.`
+                                    const month = date.toLocaleDateString('en-US', { month: 'short' }).toUpperCase().replace('.', '')
+                                    return `${month} ${day}`
                                 }
 
                                 const getDateKey = (dateStr) => {
@@ -1046,7 +1046,7 @@ const SalesInboxPage = () => {
                                                 {msg.content}
                                             </div>
                                             <span className="text-[10px] text-gray-400 mt-1 px-1">
-                                                {new Date(msg.interaction_date).toLocaleString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                                                {new Date(msg.interaction_date).toLocaleString('en-US', { hour: '2-digit', minute: '2-digit' })}
                                             </span>
                                         </div>
                                     )
@@ -1075,7 +1075,7 @@ const SalesInboxPage = () => {
                                 <textarea
                                     className="w-full bg-white border border-gray-200 rounded-xl pl-4 pr-12 py-3 text-gray-800 placeholder-gray-400 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition-all resize-none text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                                     rows="1"
-                                    placeholder={isSending ? 'Enviando...' : 'Digite sua resposta... (Ctrl+Enter para enviar)'}
+                                    placeholder={isSending ? 'Sending...' : 'Type your reply... (Ctrl+Enter to send)'}
                                     value={newMessage}
                                     onChange={e => setNewMessage(e.target.value)}
                                     disabled={isSending}
@@ -1101,7 +1101,7 @@ const SalesInboxPage = () => {
                         <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center">
                             <Zap size={32} className="text-primary/50" />
                         </div>
-                        <p className="text-sm text-gray-400">Selecione um lead para iniciar o atendimento.</p>
+                        <p className="text-sm text-gray-400">Select a lead to start chatting.</p>
                     </div>
                 )}
 
@@ -1119,7 +1119,7 @@ const SalesInboxPage = () => {
                                             : 'text-gray-500 hover:text-gray-800 hover:bg-gray-200'
                                             }`}
                                     >
-                                        <ClipboardList size={13} /> Detalhes
+                                        <ClipboardList size={13} /> Details
                                     </button>
                                     <button
                                         onClick={() => setRightTab('copiloto')}
@@ -1128,7 +1128,7 @@ const SalesInboxPage = () => {
                                             : 'text-gray-500 hover:text-gray-800 hover:bg-gray-200'
                                             }`}
                                     >
-                                        <Sparkles size={13} /> Copiloto IA
+                                        <Sparkles size={13} /> AI Copilot
                                     </button>
                                 </div>
                             </div>
@@ -1138,14 +1138,14 @@ const SalesInboxPage = () => {
                                 <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-4">
                                     {/* Lead Info Card */}
                                     <div>
-                                        <h4 className="text-xs font-bold text-primary uppercase tracking-wider mb-3">Dados do Lead</h4>
+                                        <h4 className="text-xs font-bold text-primary uppercase tracking-wider mb-3">Lead Data</h4>
                                         <div className="flex items-center justify-between gap-3">
                                             <div className={`flex-1 text-center py-2 px-3 rounded-lg border ${activeLead.icp_score === 'A' ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : activeLead.icp_score === 'B' ? 'bg-amber-50 border-amber-200 text-amber-700' : 'bg-gray-50 border-gray-200 text-gray-500'}`}>
                                                 <div className="text-[10px] uppercase tracking-wider opacity-70 mb-1">ICP</div>
                                                 <div className="text-lg font-bold">{activeLead.icp_score || 'C'}</div>
                                             </div>
                                             <div className="flex-1 text-center py-2 px-3 rounded-lg bg-blue-50 border border-blue-200 text-blue-700">
-                                                <div className="text-[10px] uppercase tracking-wider opacity-70 mb-1">Interações</div>
+                                                <div className="text-[10px] uppercase tracking-wider opacity-70 mb-1">Interactions</div>
                                                 <div className="text-lg font-bold">{activeLead.total_interactions_count || activeLead.total_interactions || 0}</div>
                                             </div>
                                             {(() => {
@@ -1158,7 +1158,7 @@ const SalesInboxPage = () => {
                                                             : 'bg-gray-50 border-gray-200 text-gray-500'
                                                 return (
                                                     <div className={`flex-1 text-center py-2 px-3 rounded-lg border ${cStyle}`}>
-                                                        <div className="text-[10px] uppercase tracking-wider opacity-70 mb-1">Cadência</div>
+                                                        <div className="text-[10px] uppercase tracking-wider opacity-70 mb-1">Cadence</div>
                                                         <div className="text-lg font-bold">{stage || '—'}</div>
                                                     </div>
                                                 )
@@ -1182,18 +1182,18 @@ const SalesInboxPage = () => {
                                                     <Sparkles size={20} className="text-primary/60" />
                                                 </div>
                                                 <p className="text-xs text-gray-400 max-w-[200px] leading-relaxed">
-                                                    Peça para a IA gerar, reescrever ou ajustar mensagens para este lead.
+                                                    Ask AI to generate, rewrite, or tweak messages for this lead.
                                                 </p>
                                                 {/* Quick start button */}
                                                 <button
                                                     onClick={() => {
-                                                        const prompt = interactions.length === 0 ? 'Gere um icebreaker para este lead.' : 'Gere uma resposta para a última mensagem deste lead.'
+                                                        const prompt = interactions.length === 0 ? 'Generate an icebreaker for this lead.' : 'Generate a reply to the last message.'
                                                         setAiInput(prompt)
                                                     }}
                                                     className="mt-2 px-4 py-2 rounded-lg bg-primary/10 hover:bg-primary/20 border border-primary/30 text-primary text-[11px] font-bold transition-all"
                                                 >
                                                     <Sparkles size={12} className="inline mr-1.5" />
-                                                    {interactions.length === 0 ? 'Gerar Icebreaker' : 'Gerar Resposta'}
+                                                    {interactions.length === 0 ? 'Generate Icebreaker' : 'Generate Reply'}
                                                 </button>
                                             </div>
                                         ) : (
@@ -1212,7 +1212,7 @@ const SalesInboxPage = () => {
                                                                 }}
                                                                 className="mt-2 w-full py-1.5 rounded-lg bg-primary/20 hover:bg-primary/30 border border-primary/30 text-primary text-[10px] font-bold transition-all flex items-center justify-center gap-1.5"
                                                             >
-                                                                <Check size={11} /> Usar esta mensagem
+                                                                <Check size={11} /> Use this message
                                                             </button>
                                                         )}
                                                     </div>
@@ -1222,7 +1222,7 @@ const SalesInboxPage = () => {
                                         {aiLoading && (
                                             <div className="flex justify-start">
                                                 <div className="px-4 py-3 rounded-xl bg-gray-50 border border-gray-200 text-gray-500 text-xs flex items-center gap-2">
-                                                    <Loader2 size={12} className="animate-spin text-primary" /> Gerando...
+                                                    <Loader2 size={12} className="animate-spin text-primary" /> Generating...
                                                 </div>
                                             </div>
                                         )}
@@ -1237,7 +1237,7 @@ const SalesInboxPage = () => {
                                                 onChange={e => setAiInput(e.target.value)}
                                                 onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey && aiInput.trim()) { e.preventDefault(); handleAiChat() } }}
                                                 disabled={aiLoading}
-                                                placeholder="Ex: Refaça mais amigável..."
+                                                placeholder="Ex: Make it friendlier..."
                                                 className="w-full bg-white border border-gray-200 rounded-xl pl-3.5 pr-10 py-2.5 text-xs text-gray-800 placeholder-gray-400 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30 transition-all disabled:opacity-50"
                                             />
                                             <button
@@ -1254,7 +1254,7 @@ const SalesInboxPage = () => {
                         </div>
                     ) : (
                         <div className="bg-white rounded-2xl border border-gray-200 p-8 text-center text-gray-400 text-sm h-40 flex items-center justify-center shadow-sm">
-                            Contexto do lead aparecerá aqui.
+                            Lead context will appear here.
                         </div>
                     )}
                 </div>

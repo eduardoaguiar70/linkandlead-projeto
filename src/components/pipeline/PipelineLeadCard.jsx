@@ -74,7 +74,7 @@ const PipelineLeadCard = ({ lead, onClick, onRemove }) => {
                 <button
                     onPointerDown={e => e.stopPropagation()} // stop dnd-kit from hijacking the click
                     onClick={handleRemove}
-                    title="Remover do Funil"
+                    title="Remove from Funnel"
                     style={{
                         position: 'absolute', top: '6px', right: '6px',
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -111,7 +111,7 @@ const PipelineLeadCard = ({ lead, onClick, onRemove }) => {
                     />
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{ fontSize: '13px', fontWeight: 600, color: '#111827', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{lead.nome || 'Sem Nome'}</p>
+                    <p style={{ fontSize: '13px', fontWeight: 600, color: '#111827', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{lead.nome || 'No Name'}</p>
                     {lead.empresa && <p style={{ fontSize: '11px', color: '#9ca3af', margin: '1px 0 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{lead.empresa}</p>}
                 </div>
             </div>
@@ -132,7 +132,7 @@ const PipelineLeadCard = ({ lead, onClick, onRemove }) => {
 
                 {proposalValue > 0 && (
                     <span style={{ display: 'flex', alignItems: 'center', gap: '2px', fontSize: '10px', fontWeight: 700, color: '#059669' }}>
-                        <DollarSign size={10} /> {proposalValue.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}
+                        <DollarSign size={10} /> {proposalValue.toLocaleString('en-US', { maximumFractionDigits: 0 })}
                     </span>
                 )}
 
@@ -143,7 +143,7 @@ const PipelineLeadCard = ({ lead, onClick, onRemove }) => {
                 )}
 
                 {lead.has_engaged && (
-                    <span style={{ fontSize: '9px', fontWeight: 700, padding: '1px 5px', borderRadius: '4px', background: '#fff3ee', color: '#ff4d00', border: '1px solid #ffd4c2' }}>Resp.</span>
+                    <span style={{ fontSize: '9px', fontWeight: 700, padding: '1px 5px', borderRadius: '4px', background: '#fff3ee', color: '#ff4d00', border: '1px solid #ffd4c2' }}>Replied</span>
                 )}
             </div>
         </div>

@@ -100,12 +100,12 @@ const AdminLayout = () => {
                             <MessageCircle size={20} className="text-primary" />
                         </div>
                         <div className="flex-1 min-w-0">
-                            <h4 className="text-sm font-bold text-gray-900 mb-1">Nova mensagem</h4>
+                            <h4 className="text-sm font-bold text-gray-900 mb-1">New message</h4>
                             <p className="text-xs text-gray-500 truncate block">
-                                {inAppNotification.leadName} enviou uma mensagem.
+                                {inAppNotification.leadName} sent a message.
                             </p>
                             <span className="text-[10px] font-bold text-primary mt-2 flex items-center gap-1">
-                                Clique para abrir o Inbox <ChevronRight size={10} />
+                                Click to open Inbox <ChevronRight size={10} />
                             </span>
                         </div>
 
@@ -145,39 +145,39 @@ const AdminLayout = () => {
 
                     {/* ═══ PRIMARY: Máquina de Vendas (always visible, no toggle) ═══ */}
                     <div className="px-6 py-2 text-[10px] font-extrabold tracking-widest text-primary uppercase opacity-70">
-                        Máquina de Vendas
+                        Sales Engine
                     </div>
 
                     <div className="nav-group-items">
                         <Link to="/" className={isActive('/')}>
-                            <LayoutDashboard size={18} /> Visão Geral
+                            <LayoutDashboard size={18} /> Overview
                         </Link>
                         <Link to="/network" className={isActive('/network')}>
-                            <Users size={18} /> Minha Rede
+                            <Users size={18} /> My Network
                         </Link>
                         <Link to="/connections" className={isActive('/connections')}>
-                            <Link2 size={18} /> Solicitações de Conexão
+                            <Link2 size={18} /> Connection Requests
                         </Link>
                         <Link to="/missions" className={isActive('/missions')}>
-                            <Flame size={18} /> Cockpit de Vendas
+                            <Flame size={18} /> Sales Cockpit
                         </Link>
                         <Link to="/sales/inbox" className={isActive('/sales/inbox')}>
-                            <MessageCircle size={18} /> Inbox Inteligente
+                            <MessageCircle size={18} /> Intelligent Inbox
                         </Link>
                         <Link to="/pipeline" className={isActive('/pipeline')}>
                             <Kanban size={18} /> Pipeline
                         </Link>
                         <Link to="/clients" className={isActive('/clients')}>
-                            <Users size={18} /> Clientes
+                            <Users size={18} /> Clients
                         </Link>
                         <Link to="/engagement" className={isActive('/engagement')}>
-                            <ThumbsUp size={18} /> Engajamento
+                            <ThumbsUp size={18} /> Engagement
                         </Link>
                         <Link to="/blacklist" className={isActive('/blacklist')}>
-                            <ShieldBan size={18} /> Lista Negra
+                            <ShieldBan size={18} /> Blacklist
                         </Link>
                         <Link to="/content-library" className={isActive('/content-library')}>
-                            <Library size={18} /> Biblioteca de Conteúdos
+                            <Library size={18} /> Content Library
                         </Link>
                     </div>
 
@@ -201,7 +201,7 @@ const AdminLayout = () => {
                                 textTransform: 'uppercase'
                             }}
                         >
-                            Conteúdo
+                            Content
                             {showCreative ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
                         </button>
 
@@ -249,7 +249,7 @@ const AdminLayout = () => {
                 {(location.pathname === '/' || location.pathname.startsWith('/sales') || location.pathname.startsWith('/leads') || location.pathname.startsWith('/campaigns') || location.pathname.startsWith('/network') || location.pathname.startsWith('/connections') || location.pathname.startsWith('/engagement') || location.pathname.startsWith('/missions') || location.pathname.startsWith('/content-library') || location.pathname.startsWith('/pipeline') || location.pathname.startsWith('/blacklist')) && (
                     <div className="px-6 py-3 bg-white/5 border-b border-white/10 flex items-center justify-between backdrop-blur-md">
                         <div className="flex items-center gap-4">
-                            <span className="text-sm text-text-muted font-medium">Contexto:</span>
+                            <span className="text-sm text-text-muted font-medium">Context:</span>
                             <ClientSelector />
                         </div>
                     </div>

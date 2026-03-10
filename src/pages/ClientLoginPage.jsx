@@ -34,7 +34,7 @@ const ClientLoginPage = () => {
 
             if (profile.role !== 'client') {
                 await supabase.auth.signOut()
-                throw new Error('Acesso não autorizado. Apenas clientes podem acessar esta área.')
+                throw new Error('Unauthorized access. Only clients can access this area.')
             }
 
             // Success redirect
@@ -42,7 +42,7 @@ const ClientLoginPage = () => {
 
         } catch (err) {
             console.error(err)
-            setError(err.message || 'Falha no login')
+            setError(err.message || 'Login failed')
         } finally {
             setLoading(false)
         }
@@ -89,13 +89,13 @@ const ClientLoginPage = () => {
                         color: '#111827', // text-gray-900
                         marginBottom: '0.5rem'
                     }}>
-                        Bem-vindo de volta
+                        Welcome back
                     </h1>
                     <p style={{
                         color: '#4b5563', // text-gray-600
                         fontSize: '0.95rem'
                     }}>
-                        Acesse o Portal do Cliente Link&Lead
+                        Access the Link&Lead Client Portal
                     </p>
                 </div>
 
@@ -123,7 +123,7 @@ const ClientLoginPage = () => {
                             color: '#374151', // text-gray-700
                             marginBottom: '0.5rem'
                         }}>
-                            Email Corporativo
+                            Corporate Email
                         </label>
                         <input
                             type="email"
@@ -131,7 +131,7 @@ const ClientLoginPage = () => {
                             onChange={e => setEmail(e.target.value)}
                             required
                             className="clean-input"
-                            placeholder="seu@empresa.com"
+                            placeholder="your@company.com"
                         />
                     </div>
 
@@ -143,7 +143,7 @@ const ClientLoginPage = () => {
                             color: '#374151',
                             marginBottom: '0.5rem'
                         }}>
-                            Senha
+                            Password
                         </label>
                         <input
                             type="password"
@@ -161,7 +161,7 @@ const ClientLoginPage = () => {
                         className="clean-button"
                     >
                         {loading && <Loader2 className="spinner" size={20} />}
-                        {loading ? 'Validando...' : 'Entrar na Plataforma'}
+                        {loading ? 'Validating...' : 'Sign in to Platform'}
                     </button>
                 </form>
             </div>

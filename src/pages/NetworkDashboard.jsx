@@ -400,7 +400,7 @@ const NetworkDashboard = () => {
 
     const handleCopy = (text) => {
         navigator.clipboard.writeText(text)
-        setNotification({ message: 'Copiado para a área de transferência', type: 'info' })
+        setNotification({ message: 'Copied to clipboard', type: 'info' })
         setTimeout(() => setNotification(null), 2000)
     }
 
@@ -410,10 +410,10 @@ const NetworkDashboard = () => {
 
         try {
             await new Promise(resolve => setTimeout(resolve, 1500))
-            setNotification({ message: 'Conexão enviada com sucesso!', type: 'success' })
+            setNotification({ message: 'Connection sent successfully!', type: 'success' })
             setSelectedLead(null)
         } catch (e) {
-            setNotification({ message: 'Erro ao enviar.', type: 'error' })
+            setNotification({ message: 'Error sending.', type: 'error' })
         } finally {
             setSendingMessage(false)
             setTimeout(() => setNotification(null), 3000)
@@ -424,7 +424,7 @@ const NetworkDashboard = () => {
     const handleEnrichmentQueue = async () => {
         if (!selectedClientId) return
         setEnrichmentLoading(true)
-        setNotification({ message: 'Iniciando coleta em segundo plano...', type: 'info' })
+        setNotification({ message: 'Starting background collection...', type: 'info' })
 
         try {
             const response = await fetch('https://n8n-n8n-start.kfocge.easypanel.host/webhook/start-connections-sync', {
@@ -436,14 +436,14 @@ const NetworkDashboard = () => {
             })
 
             if (response.ok) {
-                setNotification({ message: 'Coleta iniciada! Os leads serão processados em breve.', type: 'success' })
+                setNotification({ message: 'Collection started! Leads will be processed shortly.', type: 'success' })
             } else {
-                throw new Error('Falha no webhook')
+                throw new Error('Webhook failed')
             }
 
         } catch (error) {
             console.error(error)
-            setNotification({ message: 'Erro ao iniciar fila de enriquecimento.', type: 'error' })
+            setNotification({ message: 'Error starting enrichment queue.', type: 'error' })
         } finally {
             setEnrichmentLoading(false)
             setTimeout(() => setNotification(null), 5000)
@@ -464,7 +464,7 @@ const NetworkDashboard = () => {
                 .single()
 
             if (error || !client?.unipile_account_id) {
-                setNotification({ message: 'Erro: Cliente sem conta Unipile conectada.', type: 'error' })
+                setNotification({ message: 'Error: Client missing connected Unipile account.', type: 'error' })
                 setSyncLoading(false)
                 setTimeout(() => setNotification(null), 5000)
                 return
@@ -486,18 +486,18 @@ const NetworkDashboard = () => {
                 // Build rich notification message
                 let msg
                 if (result.total_leads && result.total_leads > 0) {
-                    msg = `Iniciamos a leitura de ${result.total_leads.toLocaleString()} conexões. O processo levará cerca de ${result.estimated_time_human || 'alguns minutos'}. Você pode continuar usando o sistema normalmente.`
+                    msg = `We started reading ${result.total_leads.toLocaleString()} connections. The process will take about ${result.estimated_time_human || 'a few minutes'}. You can continue using the system normally.`
                 } else {
-                    msg = result.message || 'Sincronização iniciada. A atualização aparecerá em breve.'
+                    msg = result.message || 'Sync started. The update will appear shortly.'
                 }
 
                 setNotification({ message: msg, type: 'success' })
             } else {
-                throw new Error(`Falha na API (${response.status})`)
+                throw new Error(`API failure (${response.status})`)
             }
         } catch (e) {
             console.error(e)
-            setNotification({ message: 'Erro ao iniciar sincronização.', type: 'error' })
+            setNotification({ message: 'Error starting sync.', type: 'error' })
         } finally {
             setSyncLoading(false)
             setTimeout(() => setNotification(null), 10000)
@@ -509,7 +509,7 @@ const NetworkDashboard = () => {
         if (!selectedClientId) return
 
         setSyncLoading(true)
-        setNotification({ message: 'Iniciando sincronização de mensagens...', type: 'info' })
+        setNotification({ message: 'Starting messages sync...', type: 'info' })
 
         try {
             // 1. Fetch Client Unipile ID & Current User
@@ -522,7 +522,7 @@ const NetworkDashboard = () => {
                 .single()
 
             if (error || !client?.unipile_account_id) {
-                setNotification({ message: 'Erro: Cliente sem conta Unipile conectada.', type: 'error' })
+                setNotification({ message: 'Error: Client missing connected Unipile account.', type: 'error' })
                 setSyncLoading(false)
                 setTimeout(() => setNotification(null), 5000)
                 return
@@ -552,7 +552,7 @@ const NetworkDashboard = () => {
 
                     // Show success with message count
                     setNotification({
-                        message: `Sincronização concluída! ${messageCount} mensagens processadas.`,
+                        message: `Sync completed! ${messageCount} messages processed.`,
                         type: 'success'
                     })
 
@@ -560,15 +560,15 @@ const NetworkDashboard = () => {
                     fetchLeads(0, true)
                     fetchTotalMessages()
                 } else {
-                    throw new Error(result.message || 'Falha na sincronização')
+                    throw new Error(result.message || 'Sync failed')
                 }
             } else {
-                throw new Error('Erro ao sincronizar. Tente novamente.')
+                throw new Error('Error syncing. Try again.')
             }
         } catch (error) {
             console.error(error)
             setNotification({
-                message: error.message || 'Erro ao sincronizar. Tente novamente.',
+                message: error.message || 'Error syncing. Try again.',
                 type: 'error'
             })
         } finally {
@@ -583,7 +583,7 @@ const NetworkDashboard = () => {
         if (!selectedClientId || !leadId) return
 
         setIcebreakerLoading(leadId)
-        setNotification({ message: 'Gerando Icebreaker personalizado...', type: 'info' })
+        setNotification({ message: 'Generating personalized Icebreaker...', type: 'info' })
 
         try {
             const response = await fetch('https://n8n-n8n-start.kfocge.easypanel.host/webhook/generate-icebreaker', {
@@ -596,15 +596,15 @@ const NetworkDashboard = () => {
             })
 
             if (response.ok) {
-                setNotification({ message: 'Icebreaker gerado com sucesso!', type: 'success' })
+                setNotification({ message: 'Icebreaker generated successfully!', type: 'success' })
                 // Realtime should update the UI
             } else {
-                setNotification({ message: 'Erro ao gerar Icebreaker.', type: 'error' })
+                setNotification({ message: 'Error generating Icebreaker.', type: 'error' })
             }
 
         } catch (error) {
             console.error(error)
-            setNotification({ message: 'Erro de conexão.', type: 'error' })
+            setNotification({ message: 'Connection error.', type: 'error' })
         } finally {
             setIcebreakerLoading(null)
             setTimeout(() => setNotification(null), 3000)
@@ -614,7 +614,7 @@ const NetworkDashboard = () => {
 
     const handleDeleteLead = async (id, e) => {
         e.stopPropagation()
-        if (!confirm('Tem certeza que deseja remover este lead da base?')) return
+        if (!confirm('Are you sure you want to remove this lead from the database?')) return
 
         try {
             const { error } = await supabase
@@ -627,10 +627,10 @@ const NetworkDashboard = () => {
 
             setLeads(prev => prev.filter(l => l.id !== id))
             setStats(prev => ({ ...prev, total: prev.total - 1 }))
-            setNotification({ message: 'Lead removido com sucesso.', type: 'success' })
+            setNotification({ message: 'Lead removed successfully.', type: 'success' })
         } catch (error) {
             console.error('Error deleting lead:', error)
-            setNotification({ message: 'Erro ao remover lead.', type: 'error' })
+            setNotification({ message: 'Error removing lead.', type: 'error' })
         }
     }
 
@@ -642,7 +642,7 @@ const NetworkDashboard = () => {
         // Ideally we should have it from context or fetch it effectively.
         // We will fetch it again to be safe or assuming we have it.
 
-        setNotification({ message: 'Solicitando importação de histórico...', type: 'info' })
+        setNotification({ message: 'Requesting history import...', type: 'info' })
 
         try {
             // 1. Fetch Client Unipile ID
@@ -653,7 +653,7 @@ const NetworkDashboard = () => {
                 .single()
 
             if (error || !client?.unipile_account_id) {
-                setNotification({ message: 'Erro: Cliente sem conta Unipile conectada.', type: 'error' })
+                setNotification({ message: 'Error: Client missing connected Unipile account.', type: 'error' })
                 return
             }
 
@@ -668,13 +668,13 @@ const NetworkDashboard = () => {
             })
 
             if (response.ok) {
-                setNotification({ message: 'Histórico sendo importado! Pode levar alguns minutos.', type: 'success' })
+                setNotification({ message: 'History being imported! It may take a few minutes.', type: 'success' })
             } else {
-                setNotification({ message: 'Erro ao acionar importação de histórico.', type: 'error' })
+                setNotification({ message: 'Error triggering history import.', type: 'error' })
             }
         } catch (e) {
             console.error('Error importing history:', e)
-            setNotification({ message: 'Erro de conexão.', type: 'error' })
+            setNotification({ message: 'Connection error.', type: 'error' })
         }
     }
 
@@ -683,7 +683,7 @@ const NetworkDashboard = () => {
         e.stopPropagation()
         if (!selectedClientId || !lead) return
 
-        setNotification({ message: 'Verificando novas mensagens...', type: 'info' })
+        setNotification({ message: 'Checking new messages...', type: 'info' })
 
         try {
             const response = await fetch('https://n8n-n8n-start.kfocge.easypanel.host/webhook/sync-recent-manual', {
@@ -696,13 +696,13 @@ const NetworkDashboard = () => {
             })
 
             if (response.ok) {
-                setNotification({ message: 'Sincronização rápida iniciada!', type: 'success' })
+                setNotification({ message: 'Quick sync started!', type: 'success' })
             } else {
-                setNotification({ message: 'Erro ao sincronizar.', type: 'error' })
+                setNotification({ message: 'Error syncing.', type: 'error' })
             }
         } catch (e) {
             console.error('Error syncing recent:', e)
-            setNotification({ message: 'Erro de conexão.', type: 'error' })
+            setNotification({ message: 'Connection error.', type: 'error' })
         }
     }
 
@@ -711,9 +711,9 @@ const NetworkDashboard = () => {
         e.stopPropagation()
         if (!selectedClientId || !lead) return
 
-        if (!confirm('Atenção: Essa ação fará uma varredura profunda no histórico de conversas do último ano.\\n\\nIsso pode levar alguns minutos. Deseja continuar?')) return
+        if (!confirm('Warning: This action will perform a deep scan of the conversation history from the last year.\\n\\nThis might take a few minutes. Do you wish to continue?')) return
 
-        setNotification({ message: 'Iniciando importação completa de histórico...', type: 'info' })
+        setNotification({ message: 'Starting complete history import...', type: 'info' })
 
         try {
             // 1. Fetch Client Unipile Account ID (REQUIRED by webhook)
@@ -725,7 +725,7 @@ const NetworkDashboard = () => {
 
             if (error || !client?.unipile_account_id) {
                 setNotification({
-                    message: 'Conecte uma conta do LinkedIn nas configurações deste cliente.',
+                    message: "Connect a LinkedIn account in this client's settings.",
                     type: 'error'
                 })
                 return
@@ -744,15 +744,15 @@ const NetworkDashboard = () => {
             })
 
             if (response.ok) {
-                setNotification({ message: 'Importação iniciada! O processo rodará em segundo plano.', type: 'success' })
+                setNotification({ message: 'Import started! The process will run in the background.', type: 'success' })
             } else {
                 const errorText = await response.text()
                 console.error(`Webhook Error: ${response.status}`, errorText)
-                setNotification({ message: `Erro ao iniciar importação: ${response.status}`, type: 'error' })
+                setNotification({ message: `Error starting import: ${response.status}`, type: 'error' })
             }
         } catch (e) {
             console.error('Error importing history:', e)
-            setNotification({ message: 'Erro de conexão.', type: 'error' })
+            setNotification({ message: 'Connection error.', type: 'error' })
         }
     }
 
@@ -774,7 +774,7 @@ const NetworkDashboard = () => {
             if (countError) throw countError
 
             if (totalPendingCount === 0 || totalPendingCount === null) {
-                setNotification({ message: 'Nenhum lead pendente de sincronização encontrado.', type: 'info' })
+                setNotification({ message: 'No sync-pending leads found.', type: 'info' })
                 setTimeout(() => setNotification(null), 5000)
                 return
             }
@@ -809,7 +809,7 @@ const NetworkDashboard = () => {
                 .single()
 
             if (clientError || !client?.unipile_account_id) {
-                setNotification({ message: 'Conecte uma conta do LinkedIn nas configurações deste cliente.', type: 'error' })
+                setNotification({ message: "Connect a LinkedIn account in this client\'s settings.", type: 'error' })
                 setTimeout(() => setNotification(null), 5000)
                 return
             }
@@ -873,7 +873,7 @@ const NetworkDashboard = () => {
                             .from('history_sync_progress')
                             .update({
                                 processed: currentProcessed,
-                                last_lead_name: lead.nome || 'Desconhecido',
+                                last_lead_name: lead.nome || 'Unknown',
                                 updated_at: new Date().toISOString()
                             })
                             .eq('client_id', selectedClientId)
@@ -892,7 +892,7 @@ const NetworkDashboard = () => {
                         .from('history_sync_progress')
                         .update({
                             failures: currentFailures,
-                            last_lead_name: lead.nome || 'Desconhecido',
+                            last_lead_name: lead.nome || 'Unknown',
                             updated_at: new Date().toISOString()
                         })
                         .eq('client_id', selectedClientId)
@@ -920,7 +920,7 @@ const NetworkDashboard = () => {
         } catch (err) {
             console.error('[Arqueólogo] Error:', err)
             setSyncProgress(prev => ({ ...prev, status: 'error' }))
-            setNotification({ message: 'Erro ao iniciar importação. Tente novamente.', type: 'error' })
+            setNotification({ message: 'Error starting import. Try again.', type: 'error' })
             setTimeout(() => setNotification(null), 5000)
         }
     }
@@ -948,7 +948,7 @@ const NetworkDashboard = () => {
 
             if (error || !client?.unipile_account_id) {
                 setNotification({
-                    message: 'Conecte uma conta do LinkedIn nas configurações deste cliente.',
+                    message: "Connect a LinkedIn account in this client's settings.",
                     type: 'error'
                 })
                 return
@@ -956,13 +956,13 @@ const NetworkDashboard = () => {
             clientAccountId = client.unipile_account_id
         } catch (err) {
             console.error("Error fetching client account ID", err)
-            setNotification({ message: 'Erro ao buscar conta Unipile do cliente.', type: 'error' })
+            setNotification({ message: "Error fetching client's Unipile account.", type: 'error' })
             return
         }
 
         // 2. PREPARAÇÃO DOS LEADS: usar o state `leads` (view já é flat, id = ID real do lead)
         let realLeadIds = []
-        setNotification({ message: 'Preparando lista de leads...', type: 'info' })
+        setNotification({ message: 'Preparing lead list...', type: 'info' })
 
         if (selectedLeads.size > 0) {
             // Filtrar apenas os leads selecionados do state
@@ -976,7 +976,7 @@ const NetworkDashboard = () => {
         }
 
         if (realLeadIds.length === 0) {
-            setNotification({ message: 'Nenhum lead encontrado para processar.', type: 'error' })
+            setNotification({ message: 'No leads found to process.', type: 'error' })
             return
         }
 
@@ -1032,7 +1032,7 @@ const NetworkDashboard = () => {
         // 5. Finish
         setImportQueue(prev => ({ ...prev, active: false }))
         setNotification({
-            message: `Processamento concluído! ${realLeadIds.length - failures} sucessos, ${failures} falhas.`,
+            message: `Processing completed! ${realLeadIds.length - failures} successes, ${failures} failures.`,
             type: failures > 0 ? 'info' : 'success'
         })
         setTimeout(() => setNotification(null), 5000)
@@ -1105,8 +1105,8 @@ const NetworkDashboard = () => {
                     <Loader2 className="animate-spin text-orange-500 shrink-0" size={24} />
                     <div className="flex-1">
                         <div className="flex justify-between items-center mb-1">
-                            <h3 className="font-bold text-sm">Importando Histórico...</h3>
-                            <span className="text-xs text-slate-400">{importQueue.current} de {importQueue.total}</span>
+                            <h3 className="font-bold text-sm">Importing History...</h3>
+                            <span className="text-xs text-slate-400">{importQueue.current} of {importQueue.total}</span>
                         </div>
                         <div className="w-full bg-slate-700 rounded-full h-2 overflow-hidden">
                             <div
@@ -1114,7 +1114,7 @@ const NetworkDashboard = () => {
                                 style={{ width: `${(importQueue.current / importQueue.total) * 100}%` }}
                             />
                         </div>
-                        <p className="text-xs text-slate-400 mt-1 truncate">Processando: <span className="text-white">{importQueue.currentLeadName}</span></p>
+                        <p className="text-xs text-slate-400 mt-1 truncate">Processing: <span className="text-white">{importQueue.currentLeadName}</span></p>
                     </div>
                 </div>
             )}
@@ -1128,26 +1128,26 @@ const NetworkDashboard = () => {
                                 <History size={32} />
                             </div>
                         </div>
-                        <h3 className="text-xl font-bold text-center text-slate-900 mb-2">Importar Histórico em Massa</h3>
+                        <h3 className="text-xl font-bold text-center text-slate-900 mb-2">Bulk History Import</h3>
                         <p className="text-slate-600 text-center mb-6 text-sm">
                             {selectedLeads.size > 0
-                                ? `Você selecionou ${selectedLeads.size} leads para atualização.`
-                                : `Você não selecionou nenhum lead. Isso iniciará a importação para TODOS os ${stats.total} leads da base.`}
+                                ? `You selected ${selectedLeads.size} leads to update.`
+                                : `You haven't selected any leads. This will start the import for ALL ${stats.total} leads in the database.`}
                             <br /><br />
-                            <span className="font-bold text-slate-800">Atenção:</span> O processo será feito sequencialmente (um por um) para evitar bloqueios, levando cerca de <span className="text-orange-600 font-bold">3 segundos por lead</span>.
+                            <span className="font-bold text-slate-800">Warning:</span> The process will run sequentially (one by one) to avoid rate limits, taking about <span className="text-orange-600 font-bold">3 seconds per lead</span>.
                         </p>
                         <div className="flex gap-3">
                             <button
                                 onClick={cancelImport}
                                 className="flex-1 py-3 rounded-lg border border-slate-200 font-bold text-slate-600 hover:bg-slate-50 transition-colors"
                             >
-                                Cancelar
+                                Cancel
                             </button>
                             <button
                                 onClick={executeHistoryImport}
                                 className="flex-1 py-3 rounded-lg bg-orange-600 font-bold text-white hover:bg-orange-700 transition-colors shadow-lg shadow-orange-200"
                             >
-                                Confirmar e Iniciar
+                                Confirm and Start
                             </button>
                         </div>
                     </div>
@@ -1158,9 +1158,9 @@ const NetworkDashboard = () => {
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-2 mb-5">
                     <div>
                         <h1 className="text-2xl font-bold text-slate-900 tracking-tight mb-1">
-                            {clientName ? `Conexões de ${clientName}` : 'Minha Rede'}
+                            {clientName ? `${clientName}'s Connections` : 'My Network'}
                         </h1>
-                        <p className="text-slate-600 text-base font-medium">Gerencie todos os leads e conexões da sua conta.</p>
+                        <p className="text-slate-600 text-base font-medium">Manage all leads and connections for your account.</p>
                     </div>
                 </div>
 
@@ -1168,23 +1168,23 @@ const NetworkDashboard = () => {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-5">
                     <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
                         <div className="flex items-center gap-3 mb-2 text-slate-600 text-sm font-bold uppercase tracking-wider">
-                            <Users size={16} /> Total de Leads
+                            <Users size={16} /> Total Leads
                         </div>
                         <div className="text-3xl font-extrabold text-slate-900">{stats.total}</div>
                     </div>
 
                     <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
                         <div className="flex items-center gap-3 mb-2 text-slate-600 text-sm font-bold uppercase tracking-wider">
-                            <MessageCircle size={16} /> Mensagens
+                            <MessageCircle size={16} /> Messages
                         </div>
                         <div className="text-3xl font-extrabold text-blue-600">{totalMessages.toLocaleString()}</div>
-                        <div className="text-xs text-slate-500 mt-1">Interações da sua rede</div>
+                        <div className="text-xs text-slate-500 mt-1">Interactions from your network</div>
                     </div>
 
                     {/* TOP LEADS RANKING */}
                     <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
                         <div className="flex items-center gap-3 mb-4 text-slate-600 text-sm font-bold uppercase tracking-wider">
-                            <Trophy size={16} className="text-amber-500" /> Top Leads (Engajamento)
+                            <Trophy size={16} className="text-amber-500" /> Top Leads (Engagement)
                         </div>
                         {topLeads.length > 0 ? (
                             <div className="space-y-2">
@@ -1215,7 +1215,7 @@ const NetworkDashboard = () => {
                                 ))}
                             </div>
                         ) : (
-                            <p className="text-sm text-slate-400 text-center py-4">Nenhum lead com interações</p>
+                            <p className="text-sm text-slate-400 text-center py-4">No leads with interactions</p>
                         )}
                     </div>
                 </div>
@@ -1232,7 +1232,7 @@ const NetworkDashboard = () => {
                                 </div>
                                 <input
                                     type="text"
-                                    placeholder="Buscar lead, cargo ou empresa..."
+                                    placeholder="Search lead, title, or company..."
                                     className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200 transition-colors"
                                     value={searchTerm}
                                     onChange={(e) => setSearchTerm(e.target.value)}
@@ -1249,7 +1249,7 @@ const NetworkDashboard = () => {
                         <div className="flex items-center gap-3 w-full md:w-auto justify-end">
                             {selectedLeads.size > 0 && (
                                 <span className="text-xs font-bold text-orange-600 animate-fade-in mr-2">
-                                    {selectedLeads.size} selecionados
+                                    {selectedLeads.size} selected
                                 </span>
                             )}
 
@@ -1267,12 +1267,12 @@ const NetworkDashboard = () => {
                                 )}
                                 {syncProgress.status === 'completed' && (
                                     <div className="flex items-center gap-1.5 text-[11px] font-medium text-emerald-600 bg-emerald-50 border border-emerald-200 rounded-full px-2.5 py-1">
-                                        ✅ {syncProgress.total} leads sincronizados
+                                        ✅ {syncProgress.total} synced leads
                                     </div>
                                 )}
                                 {syncProgress.status === 'error' && (
                                     <div className="flex items-center gap-1.5 text-[11px] font-medium text-red-600 bg-red-50 border border-red-200 rounded-full px-2.5 py-1">
-                                        ❌ Erro na sincronização — tente novamente
+                                        ❌ Sync error — try again
                                     </div>
                                 )}
                                 <button
@@ -1284,14 +1284,14 @@ const NetworkDashboard = () => {
                                         }`}
                                 >
                                     <History size={16} className={syncProgress.status === 'running' ? 'animate-spin' : ''} />
-                                    {syncProgress.status === 'running' ? `Sincronizando (${syncProgress.current}/${syncProgress.total})` : 'Importar Histórico'}
+                                    {syncProgress.status === 'running' ? `Syncing (${syncProgress.current}/${syncProgress.total})` : 'Import History'}
                                 </button>
                             </div>
 
                             <button
                                 onClick={() => setIsAddLeadsModalOpen(true)}
                                 className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-orange-600 text-white border border-orange-600 hover:bg-orange-700 font-bold text-sm transition-all shadow-md shadow-orange-100">
-                                <Plus size={16} /> Adicionar Leads
+                                <Plus size={16} /> Add Leads
                             </button>
                         </div>
                     </div>
@@ -1313,7 +1313,7 @@ const NetworkDashboard = () => {
                                         }))}
                                         className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200 transition-colors text-sm"
                                     >
-                                        <option value="">Todos os Status</option>
+                                        <option value="">All Statuses</option>
                                         <option value="NOT_CONTACTED">Not Contacted</option>
                                         <option value="PENDING_ENRICHMENT">In Queue</option>
                                         <option value="PROCESSING">Processing</option>
@@ -1330,7 +1330,7 @@ const NetworkDashboard = () => {
                                 {/* QUALIFICATION FILTER */}
                                 <div className="flex-1 min-w-[200px]">
                                     <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
-                                        Qualificação
+                                        Qualification
                                     </label>
                                     <select
                                         value={filters.qualification[0] || ''}
@@ -1340,7 +1340,7 @@ const NetworkDashboard = () => {
                                         }))}
                                         className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200 transition-colors text-sm"
                                     >
-                                        <option value="">Todas as Qualificações</option>
+                                        <option value="">All Qualifications</option>
                                         <option value="A">A-Tier (High Ticket)</option>
                                         <option value="B">B-Tier (Enterprise)</option>
                                         <option value="C">C-Tier (Standard)</option>
@@ -1350,7 +1350,7 @@ const NetworkDashboard = () => {
                                 {/* HAS MESSAGES FILTER */}
                                 <div className="flex-1 min-w-[180px]">
                                     <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
-                                        Mensagens
+                                        Messages
                                     </label>
                                     <select
                                         value={filters.hasMessages || ''}
@@ -1360,9 +1360,9 @@ const NetworkDashboard = () => {
                                         }))}
                                         className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200 transition-colors text-sm"
                                     >
-                                        <option value="">Todos</option>
-                                        <option value="yes">Com mensagens</option>
-                                        <option value="no">Sem mensagens</option>
+                                        <option value="">All</option>
+                                        <option value="yes">With messages</option>
+                                        <option value="no">No messages</option>
                                     </select>
                                 </div>
 
@@ -1371,7 +1371,7 @@ const NetworkDashboard = () => {
                                     onClick={() => setFilters({ status: [], qualification: [], company: '', role: '', hasMessages: '' })}
                                     className="px-4 py-2.5 bg-white border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-100 hover:border-slate-300 font-medium text-sm transition-colors"
                                 >
-                                    Limpar Filtros
+                                    Clear Filters
                                 </button>
                             </div>
 
@@ -1396,7 +1396,7 @@ const NetworkDashboard = () => {
                                     ))}
                                     {filters.hasMessages && (
                                         <span className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-medium">
-                                            {filters.hasMessages === 'yes' ? 'Com mensagens' : 'Sem mensagens'}
+                                            {filters.hasMessages === 'yes' ? 'With messages' : 'No messages'}
                                             <button onClick={() => setFilters(prev => ({ ...prev, hasMessages: '' }))} className="hover:text-blue-900">
                                                 <X size={12} />
                                             </button>
@@ -1441,7 +1441,7 @@ const NetworkDashboard = () => {
                                             onClick={() => handleSort('created_at')}
                                         >
                                             <div className="flex items-center gap-1">
-                                                Adicionado Em
+                                                Added On
                                                 <ArrowUpDown size={12} className={`text-slate-400 ${sortConfig.key === 'created_at' ? 'opacity-100 text-orange-500' : 'opacity-0 group-hover:opacity-100'}`} />
                                             </div>
                                         </th>
@@ -1451,19 +1451,19 @@ const NetworkDashboard = () => {
                                             onClick={() => handleSort('empresa')}
                                         >
                                             <div className="flex items-center gap-1">
-                                                Empresa
+                                                Company
                                                 <ArrowUpDown size={12} className={`text-slate-400 ${sortConfig.key === 'empresa' ? 'opacity-100 text-orange-500' : 'opacity-0 group-hover:opacity-100'}`} />
                                             </div>
                                         </th>
 
-                                        <th className="py-4 px-4 w-[10%]">Qualificação</th>
+                                        <th className="py-4 px-4 w-[10%]">Qualification</th>
 
                                         <th
                                             className="py-4 px-4 w-[15%] cursor-pointer hover:bg-slate-100 transition-colors group"
                                             onClick={() => handleSort('location')}
                                         >
                                             <div className="flex items-center gap-1">
-                                                Local
+                                                Location
                                                 <ArrowUpDown size={12} className={`text-slate-400 ${sortConfig.key === 'location' ? 'opacity-100 text-orange-500' : 'opacity-0 group-hover:opacity-100'}`} />
                                             </div>
                                         </th>
@@ -1499,12 +1499,12 @@ const NetworkDashboard = () => {
                                             </div>
                                         </th>
 
-                                        <th className="py-4 px-4 w-[8%] text-right">Ações</th>
+                                        <th className="py-4 px-4 w-[8%] text-right">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {loading && leads.length === 0 ? (
-                                        <tr><td colSpan="7" className="py-20 text-center text-gray-400"><Loader2 className="animate-spin mx-auto mb-2" />Carregando Leads...</td></tr>
+                                        <tr><td colSpan="7" className="py-20 text-center text-gray-400"><Loader2 className="animate-spin mx-auto mb-2" />Loading Leads...</td></tr>
                                     ) : leads.map((item, index) => {
                                         console.log(`[Render ${index + 1}/${leads.length}] Full item:`, item)
 
@@ -1516,17 +1516,17 @@ const NetworkDashboard = () => {
                                         const totalInteractions = lead.total_interactions_count || 0
 
                                         // Dynamic Status based on interactions
-                                        let statusLabel = 'A Contatar'
+                                        let statusLabel = 'To Contact'
                                         let statusColor = 'text-slate-500 bg-slate-100'
 
                                         if (totalInteractions > 0) {
-                                            statusLabel = 'Em Conversa'
+                                            statusLabel = 'In Conversation'
                                             statusColor = 'text-blue-600 bg-blue-50'
                                         }
 
                                         // Override with pipeline status if disqualified
                                         if (campaignStatus === 'DISQUALIFIED') {
-                                            statusLabel = 'Desqualificado'
+                                            statusLabel = 'Disqualified'
                                             statusColor = 'text-red-600 bg-red-50'
                                         }
 
@@ -1639,10 +1639,10 @@ const NetworkDashboard = () => {
                                                         // Loading state
                                                         if (lead.ready_for_analysis) {
                                                             return (
-                                                                <div className="flex items-center justify-center" title="IA analisando...">
+                                                                <div className="flex items-center justify-center" title="AI analyzing...">
                                                                     <div className="px-2 py-1 rounded-full bg-violet-50 border border-violet-200 flex items-center gap-1">
                                                                         <Sparkles size={12} className="text-violet-500 animate-pulse" />
-                                                                        <span className="text-xs text-violet-600 font-medium">Analisando</span>
+                                                                        <span className="text-xs text-violet-600 font-medium">Analyzing</span>
                                                                     </div>
                                                                 </div>
                                                             )
@@ -1670,7 +1670,7 @@ const NetworkDashboard = () => {
                                                                 bg: 'bg-emerald-50',
                                                                 border: 'border-emerald-200',
                                                                 text: 'text-emerald-700',
-                                                                label: '🔥 Quente',
+                                                                label: '🔥 Hot',
                                                                 icon: null
                                                             }
                                                         } else if (sentiment === 'NEGATIVE') {
@@ -1678,7 +1678,7 @@ const NetworkDashboard = () => {
                                                                 bg: 'bg-rose-50',
                                                                 border: 'border-rose-200',
                                                                 text: 'text-rose-700',
-                                                                label: '❄️ Frio',
+                                                                label: '❄️ Cold',
                                                                 icon: null
                                                             }
                                                         } else if (sentiment === 'NEUTRAL') {
@@ -1686,7 +1686,7 @@ const NetworkDashboard = () => {
                                                                 bg: 'bg-amber-50',
                                                                 border: 'border-amber-200',
                                                                 text: 'text-amber-700',
-                                                                label: '🌡️ Morno',
+                                                                label: '🌡️ Warm',
                                                                 icon: null
                                                             }
                                                         }
@@ -1712,17 +1712,17 @@ const NetworkDashboard = () => {
 
                                                 <td className="py-3 px-4 text-right">
                                                     <div className="flex justify-end items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
-                                                        <button onClick={(e) => handleSyncRecent(lead, e)} className="p-1.5 rounded text-slate-400 hover:text-blue-600 hover:bg-blue-50" title="Sync Recente"><RefreshCw size={14} /></button>
-                                                        <button onClick={(e) => handleSyncHistory(lead, e)} className="p-1.5 rounded text-slate-400 hover:text-amber-600 hover:bg-amber-50" title="Importar Histórico"><History size={14} /></button>
+                                                        <button onClick={(e) => handleSyncRecent(lead, e)} className="p-1.5 rounded text-slate-400 hover:text-blue-600 hover:bg-blue-50" title="Recent Sync"><RefreshCw size={14} /></button>
+                                                        <button onClick={(e) => handleSyncHistory(lead, e)} className="p-1.5 rounded text-slate-400 hover:text-amber-600 hover:bg-amber-50" title="Import History"><History size={14} /></button>
 
                                                         <div className="w-px h-3 bg-slate-200 mx-1"></div>
 
                                                         {needsIcebreaker && (
-                                                            <button onClick={(e) => handleGenerateIcebreaker(lead.id, e)} className="p-1.5 rounded bg-indigo-50 text-indigo-600 hover:bg-indigo-100" title="Gerar Icebreaker">
+                                                            <button onClick={(e) => handleGenerateIcebreaker(lead.id, e)} className="p-1.5 rounded bg-indigo-50 text-indigo-600 hover:bg-indigo-100" title="Generate Icebreaker">
                                                                 {icebreakerLoading === lead.id ? <Loader2 className="animate-spin" size={14} /> : <Bot size={14} />}
                                                             </button>
                                                         )}
-                                                        <button onClick={(e) => handleDeleteLead(item.id, e)} className="p-1.5 rounded text-slate-400 hover:text-red-600 hover:bg-red-50" title="Remover"><Trash2 size={14} /></button>
+                                                        <button onClick={(e) => handleDeleteLead(item.id, e)} className="p-1.5 rounded text-slate-400 hover:text-red-600 hover:bg-red-50" title="Remove"><Trash2 size={14} /></button>
                                                     </div>
                                                 </td>
                                             </tr>
@@ -1777,8 +1777,8 @@ const NetworkDashboard = () => {
                         {/* Drawer Header */}
                         <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-white">
                             <div>
-                                <h2 className="text-xl font-bold text-slate-800">Cadência de Venda</h2>
-                                <p className="text-xs text-gray-500 mt-1">Gerencie a interação com este lead</p>
+                                <h2 className="text-xl font-bold text-slate-800">Sales Cadence</h2>
+                                <p className="text-xs text-gray-500 mt-1">Manage interaction with this lead</p>
                             </div>
                             <button onClick={() => setSelectedLead(null)} className="p-2 rounded-full hover:bg-gray-100 text-gray-400 hover:text-slate-600 transition-colors">
                                 <X size={20} />
@@ -1798,7 +1798,7 @@ const NetworkDashboard = () => {
                                         <div className="flex justify-between items-start">
                                             <h3 className="text-lg font-bold text-slate-900 leading-tight">{selectedLead.nome}</h3>
                                             {selectedLead.company_website && (
-                                                <a href={selectedLead.company_website} target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-blue-600 transition-colors" title="Visitar Site">
+                                                <a href={selectedLead.company_website} target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-blue-600 transition-colors" title="Visit Website">
                                                     <Globe size={18} />
                                                 </a>
                                             )}
@@ -1814,10 +1814,10 @@ const NetworkDashboard = () => {
                                 {/* ICP REASON */}
                                 <div className="p-3 bg-orange-50 rounded-lg border border-orange-100/60">
                                     <h4 className="flex items-center gap-2 text-[10px] font-bold text-orange-600 uppercase tracking-wider mb-1">
-                                        <Sparkles size={12} /> Motivo da Qualificação
+                                        <Sparkles size={12} /> Qualification Reason
                                     </h4>
                                     <p className="text-sm text-slate-700 leading-relaxed font-medium">
-                                        {selectedLead.icp_reason || "Este perfil apresenta alta aderência com seu ICP ideal, ocupando cargo de decisão em setor estratégico."}
+                                        {selectedLead.icp_reason || "This profile has a high fit with your ideal ICP, occupying a decision-making role in a strategic sector."}
                                     </p>
                                 </div>
                             </div>
@@ -1825,7 +1825,7 @@ const NetworkDashboard = () => {
                             {/* Skills Tag Cloud (Collapsed/Secondary) */}
                             {selectedLead.skills && (
                                 <div>
-                                    <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 px-2">Habilidades Detectadas</h4>
+                                    <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 px-2">Detected Skills</h4>
                                     <div className="flex flex-wrap gap-2 px-2">
                                         {(() => {
                                             try {
@@ -1846,16 +1846,16 @@ const NetworkDashboard = () => {
                             {/* TIMELINE / INTERACTIONS */}
                             <div className="pt-4 border-t border-gray-100">
                                 <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 px-2 flex items-center gap-2">
-                                    <MessageSquare size={12} /> Histórico de Interações
+                                    <MessageSquare size={12} /> Interaction History
                                 </h4>
                                 <div className="space-y-3 px-2">
                                     {loadingChat ? (
                                         <div className="text-center text-xs text-gray-400 py-4">
-                                            <Loader2 className="animate-spin inline mr-1" size={12} /> Carregando...
+                                            <Loader2 className="animate-spin inline mr-1" size={12} /> Loading...
                                         </div>
                                     ) : interactions.length === 0 ? (
                                         <div className="text-center text-xs text-gray-400 py-4 italic bg-slate-50 rounded-lg border border-slate-100">
-                                            Nenhuma interação registrada.
+                                            No interactions recorded.
                                         </div>
                                     ) : (
                                         interactions.map(msg => (
@@ -1867,7 +1867,7 @@ const NetworkDashboard = () => {
                                                     {msg.content}
                                                 </div>
                                                 <span className="text-[10px] text-gray-400 mt-1 px-1 text-right">
-                                                    {new Date(msg.interaction_date).toLocaleDateString()} {new Date(msg.interaction_date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                    {new Date(msg.interaction_date).toLocaleDateString('en-US')} {new Date(msg.interaction_date).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
                                                 </span>
                                             </div>
                                         ))
@@ -1878,19 +1878,19 @@ const NetworkDashboard = () => {
 
                         {/* BLOCK 2: ACTION (Bottom Fixed) */}
                         <div className="p-6 border-t border-gray-200 bg-white">
-                            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Mensagem de Conexão</label>
+                            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Connection Message</label>
 
                             <div className="relative mb-4">
                                 <textarea
                                     className="w-full h-32 p-3 bg-slate-50 border border-gray-300 rounded-lg text-sm text-slate-700 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 resize-none font-medium leading-relaxed"
                                     value={messageDraft}
                                     onChange={(e) => setMessageDraft(e.target.value)}
-                                    placeholder="Escreva sua mensagem de conexão..."
+                                    placeholder="Write your connection message..."
                                 />
                                 <button
                                     onClick={() => handleCopy(messageDraft)}
                                     className="absolute top-2 right-2 p-1.5 rounded-md bg-white text-gray-400 hover:text-orange-600 border border-gray-200 shadow-sm transition-all"
-                                    title="Copiar texto"
+                                    title="Copy text"
                                 >
                                     <Copy size={14} />
                                 </button>
@@ -1905,11 +1905,11 @@ const NetworkDashboard = () => {
                                     }`}
                             >
                                 {sendingMessage ? <Loader2 className="animate-spin" size={20} /> : <Send size={18} />}
-                                {sendingMessage ? 'Enviando...' : 'Enviar Conexão'}
+                                {sendingMessage ? 'Sending...' : 'Send Connection'}
                             </button>
 
                             <p className="text-center text-[10px] text-gray-400 mt-2">
-                                Esta ação enviará um convite de conexão via LinkedIn.
+                                This action will send a connection invite via LinkedIn.
                             </p>
                         </div>
                     </div>

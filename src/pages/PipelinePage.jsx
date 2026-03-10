@@ -139,7 +139,7 @@ const PipelinePage = () => {
                 <div style={{ width: 56, height: 56, borderRadius: '50%', background: '#fff3ee', border: '2px solid #ffd4c2', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     <Kanban size={24} style={{ color: '#ff4d00' }} />
                 </div>
-                <p style={{ color: '#6b7280', fontSize: '14px' }}>Selecione um cliente para ver o Pipeline.</p>
+                <p style={{ color: '#6b7280', fontSize: '14px' }}>Select a client to view the Pipeline.</p>
             </div>
         )
     }
@@ -150,14 +150,14 @@ const PipelinePage = () => {
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
                 <h1 style={{ fontSize: '20px', fontWeight: 700, color: '#111827', display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
                     <Kanban size={20} style={{ color: '#ff4d00' }} />
-                    Pipeline de Vendas
+                    Sales Pipeline
                 </h1>
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     {/* Toggle */}
                     <div style={{ display: 'flex', background: '#f3f4f6', borderRadius: '8px', padding: '3px', border: '1px solid #e5e7eb' }}>
                         <button onClick={() => setViewMode('table')} style={toggleBtnStyle(viewMode === 'table')}>
-                            <Table2 size={15} /> Tabela
+                            <Table2 size={15} /> Table
                         </button>
                         <button onClick={() => setViewMode('kanban')} style={toggleBtnStyle(viewMode === 'kanban')}>
                             <Kanban size={15} /> Kanban
@@ -167,7 +167,7 @@ const PipelinePage = () => {
                     {/* Count */}
                     <span style={{ fontSize: '12px', color: '#9ca3af', background: '#fff', border: '1px solid #e5e7eb', borderRadius: '20px', padding: '4px 12px', fontWeight: 600 }}>
                         <Users size={12} style={{ display: 'inline', verticalAlign: '-2px', marginRight: '4px' }} />
-                        {viewMode === 'table' ? `${filteredTableLeads.length} leads` : `${filteredKanbanLeads.length} no funil`}
+                        {viewMode === 'table' ? `${filteredTableLeads.length} leads` : `${filteredKanbanLeads.length} in the funnel`}
                     </span>
                 </div>
             </div>
@@ -185,7 +185,7 @@ const PipelinePage = () => {
             {loading ? (
                 <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: '12px' }}>
                     <Loader2 size={28} className="animate-spin" style={{ color: '#ff4d00' }} />
-                    <span style={{ fontSize: '14px', color: '#9ca3af' }}>Carregando...</span>
+                    <span style={{ fontSize: '14px', color: '#9ca3af' }}>Loading...</span>
                 </div>
             ) : (
                 <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', minHeight: 0 }}>

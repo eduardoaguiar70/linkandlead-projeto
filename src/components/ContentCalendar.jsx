@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { format } from 'date-fns'
-import { ptBR } from 'date-fns/locale'
+import { enUS } from 'date-fns/locale'
 import { DayPicker } from 'react-day-picker'
 import 'react-day-picker/dist/style.css'
 import { Clock, CheckCircle2, ArrowRight, X } from 'lucide-react'
@@ -142,7 +142,7 @@ const ContentCalendar = ({ posts }) => {
 
             <DayPicker
                 mode="single"
-                locale={ptBR}
+                locale={enUS}
                 onDayClick={handleDayClick}
                 modifiers={modifiers}
                 modifiersStyles={modifiersStyles}
@@ -174,7 +174,7 @@ const ContentCalendar = ({ posts }) => {
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
                             <div>
                                 <h4 style={{ margin: 0, fontWeight: 700, color: '#1e293b', fontSize: '1.1rem' }}>
-                                    {format(selectedDayPosts.date, "EEEE, d 'de' MMMM", { locale: ptBR })}
+                                    {format(selectedDayPosts.date, "EEEE, d 'de' MMMM", { locale: enUS })}
                                 </h4>
                                 <span style={{ fontSize: '0.85rem', color: '#64748b' }}>
                                     {selectedDayPosts.posts.length} {selectedDayPosts.posts.length === 1 ? 'postagem' : 'postagens'}

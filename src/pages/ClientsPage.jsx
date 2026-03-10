@@ -39,7 +39,7 @@ export default function ClientsPage() {
             if (error) throw error;
             setClients(data || []);
         } catch (error) {
-            console.error('Erro ao buscar clientes:', error);
+            console.error('Error fetching clients:', error);
         } finally {
             setLoading(false);
         }
@@ -56,7 +56,7 @@ export default function ClientsPage() {
             const files = (data || []).filter(f => f.name !== '.emptyFolderPlaceholder');
             setExistingFiles(files);
         } catch (error) {
-            console.error('Erro ao buscar arquivos do cliente:', error);
+            console.error('Error fetching client files:', error);
             setExistingFiles([]);
         }
     }
@@ -70,8 +70,8 @@ export default function ClientsPage() {
             .createSignedUrl(filePath, 60);
 
         if (error) {
-            console.error('Erro ao gerar link de download:', error);
-            alert('Erro ao baixar arquivo.');
+            console.error('Error generating download link:', error);
+            alert('Error downloading file.');
             return;
         }
         window.open(data.signedUrl, '_blank');
@@ -130,7 +130,7 @@ export default function ClientsPage() {
     };
 
     const handleDelete = async () => {
-        if (!editingClient || !window.confirm('Tem certeza que deseja excluir este cliente? Esta ação não pode ser desfeita.')) return;
+        if (!editingClient || !window.confirm('Are you sure you want to delete this client? This action cannot be undone.')) return;
 
         setSaving(true);
         try {
@@ -143,10 +143,10 @@ export default function ClientsPage() {
 
             setShowModal(false);
             fetchClients();
-            alert('Cliente excluído com sucesso!');
+            alert('Client successfully deleted!');
         } catch (error) {
-            console.error('Erro ao excluir:', error);
-            alert('Erro ao excluir: ' + error.message);
+            console.error('Error deleting:', error);
+            alert('Error deleting: ' + error.message);
         } finally {
             setSaving(false);
         }
@@ -154,13 +154,13 @@ export default function ClientsPage() {
 
     const handleCopyLink = (client) => {
         if (!client.access_token) {
-            alert("Este cliente não possui um token de acesso.");
+            alert("This client does not have an access token.");
             return;
         }
         const link = `${window.location.origin}/portal/${client.access_token}`;
         navigator.clipboard.writeText(link);
 
-        setToast({ message: "Link de acesso copiado!", type: "success" });
+        setToast({ message: "Access link copied!", type: "success" });
         setTimeout(() => setToast(null), 3000);
     };
 
@@ -186,16 +186,16 @@ export default function ClientsPage() {
 
         if (uploadError) {
             console.error('[DEBUG] Upload error:', uploadError);
-            throw new Error(`Upload falhou: ${uploadError.message}`);
+            throw new Error(`Upload failed: ${uploadError.message}`);
         }
 
-        console.log('[DEBUG] Upload concluído:', uploadData);
+        console.log('[DEBUG] Upload complete:', uploadData);
         return uploadData.path;
     };
 
     const handleSubmit = async (e) => {
         e.preventDefault(); // 1. Prevent Default
-        console.log("1. Iniciou handleSave");
+        console.log("1. Started handleSave");
         setSaving(true);
 
         try {
@@ -211,14 +211,14 @@ export default function ClientsPage() {
                 pain_points: formData.pain_points,
                 unipile_account_id: formData.unipile_account_id
             };
-            console.log("3. Payload montado:", payload);
+            console.log("3. Payload constructed:", payload);
 
             // --- EXECUTE SUPABASE CALLS AFTER PAYLOAD IS READY ---
             let clientData = null;
             let realClientId = null;
 
             if (editingClient) {
-                console.log("[DEBUG] Atualizando cliente existente...", editingClient.id);
+                console.log("[DEBUG] Updating existing client...", editingClient.id);
                 const { data, error } = await supabase
                     .from('clients')
                     .update(payload) // Use the constructed payload
@@ -229,7 +229,7 @@ export default function ClientsPage() {
                 if (error) throw error;
                 clientData = data;
             } else {
-                console.log("[DEBUG] Criando novo cliente...");
+                console.log("[DEBUG] Creating new client...");
                 const { data, error } = await supabase
                     .from('clients')
                     .insert([payload]) // Use the constructed payload
@@ -241,14 +241,14 @@ export default function ClientsPage() {
             }
 
             // SAFETY CHECKS
-            if (!clientData) throw new Error("Erro crítico: Dados do cliente não retornaram do banco.");
+            if (!clientData) throw new Error("Critical error: Client data did not return from database.");
             realClientId = clientData.id;
-            console.log("[DEBUG] ID Numérico capturado:", realClientId);
-            if (!realClientId) throw new Error("Erro crítico: ID do cliente é inválido.");
+            console.log("[DEBUG] Captured numeric ID:", realClientId);
+            if (!realClientId) throw new Error("Critical error: Client ID is invalid.");
 
             // UPLOAD + UPDATE core_doc_id
             if (filesToUpload.length > 0) {
-                console.log(`[DEBUG] Iniciando upload para ID: ${realClientId}`);
+                console.log(`[DEBUG] Starting upload for ID: ${realClientId}`);
                 const docPath = await uploadFiles(realClientId);
                 if (docPath) {
                     const { error: updateError } = await supabase
@@ -256,23 +256,23 @@ export default function ClientsPage() {
                         .update({ core_doc_id: docPath })
                         .eq('id', realClientId);
                     if (updateError) {
-                        console.error('[DEBUG] Erro ao atualizar core_doc_id:', updateError);
+                        console.error('[DEBUG] Error updating core_doc_id:', updateError);
                     } else {
-                        console.log('[DEBUG] core_doc_id atualizado:', docPath);
+                        console.log('[DEBUG] core_doc_id updated:', docPath);
                     }
                 }
             }
 
             // SUCCESS
-            alert(editingClient ? 'Cliente atualizado com sucesso!' : 'Cliente cadastrado com sucesso!');
+            alert(editingClient ? 'Client successfully updated!' : 'Client successfully registered!');
             setShowModal(false);
             fetchClients();
 
         } catch (error) {
-            console.error("ERRO CRÍTICO NO SALVAMENTO:", error);
-            alert("Erro: " + (error.message || "Erro desconhecido"));
+            console.error("CRITICAL ERROR SAVING:", error);
+            alert("Error: " + (error.message || "Unknown error"));
         } finally {
-            console.log("[DEBUG] Finalizando processo (finally).");
+            console.log("[DEBUG] Finalizing process (finally).");
             setSaving(false);
         }
     };
@@ -280,7 +280,7 @@ export default function ClientsPage() {
     return (
         <div style={{ padding: '2rem' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-                <h1 style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#1f2937' }}>Gerenciar Clientes</h1>
+                <h1 style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#1f2937' }}>Manage Clients</h1>
                 <button
                     onClick={handleNew}
                     style={{
@@ -292,29 +292,29 @@ export default function ClientsPage() {
                         cursor: 'pointer'
                     }}
                 >
-                    + Novo Cliente
+                    + New Client
                 </button>
             </div>
 
             {loading ? (
-                <p>Carregando...</p>
+                <p>Loading...</p>
             ) : (
                 <div style={{ background: 'white', boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1)', borderRadius: '0.5rem', overflow: 'hidden' }}>
                     <table style={{ width: '100%', textAlign: 'left', borderCollapse: 'collapse' }}>
                         <thead style={{ background: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
                             <tr>
-                                <th style={{ padding: '1rem', fontWeight: '600', color: '#4b5563' }}>Empresa</th>
-                                <th style={{ padding: '1rem', fontWeight: '600', color: '#4b5563' }}>Descrição</th>
-                                <th style={{ padding: '1rem', fontWeight: '600', color: '#4b5563' }}>Tom de Voz</th>
-                                <th style={{ padding: '1rem', fontWeight: '600', color: '#4b5563', width: '120px' }}>Conexão</th>
-                                <th style={{ padding: '1rem', fontWeight: '600', color: '#4b5563', textAlign: 'right' }}>Ações</th>
+                                <th style={{ padding: '1rem', fontWeight: '600', color: '#4b5563' }}>Company</th>
+                                <th style={{ padding: '1rem', fontWeight: '600', color: '#4b5563' }}>Description</th>
+                                <th style={{ padding: '1rem', fontWeight: '600', color: '#4b5563' }}>Tone of Voice</th>
+                                <th style={{ padding: '1rem', fontWeight: '600', color: '#4b5563', width: '120px' }}>Connection</th>
+                                <th style={{ padding: '1rem', fontWeight: '600', color: '#4b5563', textAlign: 'right' }}>Actions</th>
                             </tr>
                         </thead>
                         <tbody>
                             {clients.length === 0 ? (
                                 <tr>
-                                    <td colSpan="4" style={{ padding: '2rem', textAlign: 'center', color: '#6b7280' }}>
-                                        Nenhum cliente cadastrado.
+                                    <td colSpan="5" style={{ padding: '2rem', textAlign: 'center', color: '#6b7280' }}>
+                                        No clients registered.
                                     </td>
                                 </tr>
                             ) : (
@@ -331,8 +331,8 @@ export default function ClientsPage() {
                                                     <Linkedin size={16} /> OK
                                                 </div>
                                             ) : (
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#9ca3af', fontSize: '0.8rem' }} title="Pendente Unipile ID">
-                                                    <AlertTriangle size={16} /> Pendente
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#9ca3af', fontSize: '0.8rem' }} title="Pending Unipile ID">
+                                                    <AlertTriangle size={16} /> Pending
                                                 </div>
                                             )}
                                         </td>
@@ -347,7 +347,7 @@ export default function ClientsPage() {
                                                     padding: '0.25rem',
                                                     marginRight: '0.5rem'
                                                 }}
-                                                title="Copiar Link de Acesso"
+                                                title="Copy Access Link"
                                             >
                                                 <LinkIcon size={18} />
                                             </button>
@@ -360,7 +360,7 @@ export default function ClientsPage() {
                                                     color: '#2563eb',
                                                     padding: '0.25rem'
                                                 }}
-                                                title="Editar / Ver Detalhes"
+                                                title="Edit / View Details"
                                             >
                                                 <Pencil size={18} />
                                             </button>
@@ -404,7 +404,7 @@ export default function ClientsPage() {
                     <div style={{ background: 'white', padding: '2rem', borderRadius: '0.5rem', width: '100%', maxWidth: '500px', maxHeight: '90vh', overflowY: 'auto' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
                             <h2 style={{ margin: 0 }}>
-                                {editingClient ? 'Editar Cliente' : 'Novo Cliente'}
+                                {editingClient ? 'Edit Client' : 'New Client'}
                             </h2>
                             <button
                                 type="button"
@@ -434,15 +434,15 @@ export default function ClientsPage() {
                                 <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '0.75rem' }}>
                                     <Info style={{ color: '#2563eb', flexShrink: 0, marginTop: '2px' }} size={20} />
                                     <div>
-                                        <h4 style={{ margin: '0 0 0.25rem 0', fontSize: '0.9rem', color: '#1e40af' }}>Integração LinkedIn (Obrigatório)</h4>
+                                        <h4 style={{ margin: '0 0 0.25rem 0', fontSize: '0.9rem', color: '#1e40af' }}>LinkedIn Integration (Required)</h4>
                                         <p style={{ margin: 0, fontSize: '0.8rem', color: '#1e3a8a', lineHeight: '1.4' }}>
-                                            ⚠️ Importante: Para obter este ID, você deve primeiro conectar o perfil do LinkedIn deste cliente manualmente através do Dashboard da Unipile. Copie o <strong>'Account ID'</strong> gerado lá e cole abaixo.
+                                            ⚠️ Important: To get this ID, you must first manually connect this client's LinkedIn profile through the Unipile Dashboard. Copy the <strong>'Account ID'</strong> generated there and paste it below.
                                         </p>
                                     </div>
                                 </div>
                                 <div>
                                     <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.85rem', fontWeight: 'bold', color: '#1e3a8a' }}>
-                                        ID da Conta Unipile (LinkedIn)
+                                        Unipile Account ID (LinkedIn)
                                     </label>
                                     <input
                                         name="unipile_account_id"
@@ -455,7 +455,7 @@ export default function ClientsPage() {
                             </div>
 
                             <div>
-                                <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem' }}>Nome da Empresa</label>
+                                <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem' }}>Company Name</label>
                                 <input
                                     required
                                     name="name"
@@ -466,7 +466,7 @@ export default function ClientsPage() {
                             </div>
 
                             <div>
-                                <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem' }}>Email de Contato</label>
+                                <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem' }}>Contact Email</label>
                                 <input
                                     type="email"
                                     name="email_contato"
@@ -478,7 +478,7 @@ export default function ClientsPage() {
                             </div>
 
                             <div>
-                                <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem' }}>Descrição do Negócio</label>
+                                <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem' }}>Business Description</label>
                                 <textarea
                                     required
                                     name="description"
@@ -490,22 +490,22 @@ export default function ClientsPage() {
                             </div>
 
                             <div>
-                                <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem' }}>Tom de Voz</label>
+                                <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem' }}>Tone of Voice</label>
                                 <select
                                     name="tone_of_voice"
                                     value={formData.tone_of_voice}
                                     onChange={handleInputChange}
                                     style={{ width: '100%', padding: '0.5rem', border: '1px solid #d1d5db', borderRadius: '0.25rem', color: '#1f2937' }}
                                 >
-                                    <option>Profissional</option>
-                                    <option>Descontraído</option>
-                                    <option>Autoritário</option>
-                                    <option>Educativo</option>
+                                    <option>Professional</option>
+                                    <option>Casual</option>
+                                    <option>Authoritative</option>
+                                    <option>Educational</option>
                                 </select>
                             </div>
 
                             <div>
-                                <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem' }}>Público Alvo (Padrão)</label>
+                                <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem' }}>Target Audience (Default)</label>
                                 <input
                                     name="target_audience_default"
                                     value={formData.target_audience_default}
@@ -515,7 +515,7 @@ export default function ClientsPage() {
                             </div>
 
                             <div>
-                                <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem' }}>Dores e Problemas</label>
+                                <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem' }}>Pain Points</label>
                                 <textarea
                                     name="pain_points"
                                     value={formData.pain_points}
@@ -528,7 +528,7 @@ export default function ClientsPage() {
                             {/* DOCUMENT UPLOAD SECTION */}
                             <div style={{ borderTop: '1px solid #e5e7eb', paddingTop: '1rem', marginTop: '0.5rem' }}>
                                 <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: '600' }}>
-                                    Arquivos de Contexto (PDF, DOC)
+                                    Context Files (PDF, DOC)
                                 </label>
 
                                 <div style={{
@@ -556,14 +556,14 @@ export default function ClientsPage() {
                                     />
                                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem', color: '#6b7280' }}>
                                         <Upload size={24} />
-                                        <span style={{ fontSize: '0.875rem' }}>Clique ou arraste arquivos aqui</span>
+                                        <span style={{ fontSize: '0.875rem' }}>Click or drag files here</span>
                                     </div>
                                 </div>
 
                                 {/* LISTA DE ARQUIVOS PENDENTES */}
                                 {filesToUpload.length > 0 && (
                                     <div style={{ marginBottom: '1rem' }}>
-                                        <p style={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#4b5563', marginBottom: '0.25rem' }}>Prontos para enviar:</p>
+                                        <p style={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#4b5563', marginBottom: '0.25rem' }}>Ready to upload:</p>
                                         <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
                                             {filesToUpload.map((file, idx) => (
                                                 <li key={idx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.875rem', background: '#f9fafb', padding: '0.25rem 0.5rem', marginBottom: '0.25rem', borderRadius: '0.25rem' }}>
@@ -587,7 +587,7 @@ export default function ClientsPage() {
                                 {/* LISTA DE ARQUIVOS JÁ EXISTENTES (Storage) */}
                                 {existingFiles.length > 0 && (
                                     <div>
-                                        <p style={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#4b5563', marginBottom: '0.25rem' }}>Arquivos Anteriores:</p>
+                                        <p style={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#4b5563', marginBottom: '0.25rem' }}>Previous Files:</p>
                                         <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
                                             {existingFiles.map((file) => (
                                                 <li
@@ -602,7 +602,7 @@ export default function ClientsPage() {
                                                         type="button"
                                                         onClick={() => handleDownloadFile(file.name)}
                                                         style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#2563eb', padding: '2px', display: 'flex', alignItems: 'center' }}
-                                                        title="Baixar arquivo"
+                                                        title="Download file"
                                                     >
                                                         <Download size={14} />
                                                     </button>
@@ -619,14 +619,14 @@ export default function ClientsPage() {
                                     onClick={() => setShowModal(false)}
                                     style={{ flex: 1, padding: '0.5rem', background: '#f3f4f6', border: 'none', borderRadius: '0.25rem', cursor: 'pointer' }}
                                 >
-                                    Cancelar
+                                    Cancel
                                 </button>
                                 <button
                                     type="submit"
                                     disabled={saving}
                                     style={{ flex: 1, padding: '0.5rem', background: '#ea580c', color: 'white', border: 'none', borderRadius: '0.25rem', cursor: 'pointer' }}
                                 >
-                                    {saving ? 'Salvando...' : (editingClient ? 'Salvar Alterações' : 'Salvar Cliente')}
+                                    {saving ? 'Saving...' : (editingClient ? 'Save Changes' : 'Save Client')}
                                 </button>
                             </div>
 
@@ -637,7 +637,7 @@ export default function ClientsPage() {
                                     disabled={saving}
                                     style={{ width: '100%', marginTop: '0.5rem', padding: '0.5rem', background: '#fee2e2', color: '#ef4444', border: 'none', borderRadius: '0.25rem', cursor: 'pointer', fontWeight: '500' }}
                                 >
-                                    Excluir Cliente
+                                    Delete Client
                                 </button>
                             )}
                         </form>

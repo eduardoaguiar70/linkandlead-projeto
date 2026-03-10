@@ -107,14 +107,14 @@ const LeadDetailModal = ({ lead, campaignLead, onClose }) => {
 
         // Map level to trust progression (outbound context)
         const trustLevels = [
-            { max: 0, label: 'Sem Cadência', desc: 'Este lead ainda não iniciou a cadência de prospecção.', percent: 5, color: '#94a3b8', text: 'text-slate-400' },
-            { max: 1, label: 'Primeiro Contato', desc: 'Lead recebeu o primeiro toque. Nível de confiança inicial.', percent: 15, color: '#3b82f6', text: 'text-blue-400' },
-            { max: 2, label: 'Reconhecimento', desc: 'Lead começa a reconhecer você. Confiança em construção.', percent: 30, color: '#06b6d4', text: 'text-cyan-400' },
-            { max: 3, label: 'Consideração', desc: 'Lead demonstra abertura para conversar. Confiança em crescimento.', percent: 45, color: '#f59e0b', text: 'text-amber-400' },
-            { max: 4, label: 'Interesse Ativo', desc: 'Lead engajado e interessado. Boa confiança estabelecida.', percent: 60, color: '#f97316', text: 'text-orange-400' },
-            { max: 5, label: 'Relacionamento', desc: 'Lead confia em você como referência. Relação sólida.', percent: 75, color: '#10b981', text: 'text-emerald-400' },
-            { max: 6, label: 'Alta Confiança', desc: 'Lead altamente engajado. Pronto para proposta.', percent: 90, color: '#22c55e', text: 'text-green-400' },
-            { max: Infinity, label: 'Pronto p/ Fechar', desc: 'Máxima confiança atingida. Momento ideal para conversão.', percent: 100, color: '#eab308', text: 'text-yellow-400' }
+            { max: 0, label: 'No Cadence', desc: 'This lead has not started the prospecting cadence yet.', percent: 5, color: '#94a3b8', text: 'text-slate-400' },
+            { max: 1, label: 'First Contact', desc: 'Lead received the first touch. Initial trust level.', percent: 15, color: '#3b82f6', text: 'text-blue-400' },
+            { max: 2, label: 'Recognition', desc: 'Lead starts to recognize you. Trust is building.', percent: 30, color: '#06b6d4', text: 'text-cyan-400' },
+            { max: 3, label: 'Consideration', desc: 'Lead shows openness to talk. Growing trust.', percent: 45, color: '#f59e0b', text: 'text-amber-400' },
+            { max: 4, label: 'Active Interest', desc: 'Engaged and interested lead. Good trust established.', percent: 60, color: '#f97316', text: 'text-orange-400' },
+            { max: 5, label: 'Relationship', desc: 'Lead trusts you as a reference. Solid relationship.', percent: 75, color: '#10b981', text: 'text-emerald-400' },
+            { max: 6, label: 'High Trust', desc: 'Highly engaged lead. Ready for a proposal.', percent: 90, color: '#22c55e', text: 'text-green-400' },
+            { max: Infinity, label: 'Ready to Close', desc: 'Maximum trust reached. Ideal time for conversion.', percent: 100, color: '#eab308', text: 'text-yellow-400' }
         ]
 
         const config = trustLevels.find(t => level <= t.max) || trustLevels[0]
@@ -162,7 +162,7 @@ const LeadDetailModal = ({ lead, campaignLead, onClose }) => {
                             <h2 className="text-xl font-bold text-white truncate">{lead.nome || 'Lead'}</h2>
                             <p className="text-slate-400 text-sm flex items-center gap-1.5 mt-0.5 truncate">
                                 <Briefcase size={14} className="shrink-0" />
-                                {lead.headline || 'Sem cargo informado'}
+                                {lead.headline || 'No role provided'}
                             </p>
                             {lead.location && (
                                 <p className="text-slate-500 text-xs flex items-center gap-1 mt-1">
@@ -189,26 +189,26 @@ const LeadDetailModal = ({ lead, campaignLead, onClose }) => {
                     <div className="grid grid-cols-3 gap-3">
                         {/* Badge 1: Qualificação ICP */}
                         <div className={`flex flex-col items-center gap-1 py-3 px-2 rounded-2xl border-2 ${quality.label === 'A' ? 'bg-emerald-50 border-emerald-300' :
-                                quality.label === 'B' ? 'bg-amber-50 border-amber-300' :
-                                    'bg-red-50 border-red-300'
+                            quality.label === 'B' ? 'bg-amber-50 border-amber-300' :
+                                'bg-red-50 border-red-300'
                             }`}>
                             <span className={`text-2xl font-black ${quality.text}`}>{quality.label}</span>
-                            <span className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider text-center leading-tight">Qualificação ICP</span>
+                            <span className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider text-center leading-tight">ICP Qualification</span>
                         </div>
 
                         {/* Badge 2: Interações */}
                         <div className={`flex flex-col items-center gap-1 py-3 px-2 rounded-2xl border-2 ${interaction.percent === 100 ? 'bg-emerald-50 border-emerald-300' :
-                                interaction.percent === 66 ? 'bg-amber-50 border-amber-300' :
-                                    'bg-red-50 border-red-300'
+                            interaction.percent === 66 ? 'bg-amber-50 border-amber-300' :
+                                'bg-red-50 border-red-300'
                             }`}>
                             <span className={`text-2xl font-black ${interaction.text}`}>{interaction.label}</span>
-                            <span className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider text-center leading-tight">Interações</span>
+                            <span className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider text-center leading-tight">Interactions</span>
                         </div>
 
                         {/* Badge 3: Cadência */}
                         <div className="flex flex-col items-center gap-1 py-3 px-2 rounded-2xl border-2 bg-blue-50 border-blue-200">
                             <span className={`text-2xl font-black ${cadence.text}`}>{cadence.stage || '—'}</span>
-                            <span className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider text-center leading-tight">Cadência</span>
+                            <span className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider text-center leading-tight">Cadence</span>
                             {cadence.label && <span className={`text-[9px] font-medium ${cadence.text} leading-tight text-center`}>{cadence.label}</span>}
                         </div>
                     </div>
@@ -216,15 +216,15 @@ const LeadDetailModal = ({ lead, campaignLead, onClose }) => {
                     {/* ICP Reasoning */}
                     <div className="mt-4 p-3 bg-white rounded-xl border border-slate-200 shadow-sm">
                         <p className="text-xs text-slate-600">
-                            <span className="font-bold text-slate-800 mr-1">Por que ICP {quality.label}?</span>
-                            {enrichedData?.icp_reason || lead?.icp_reason || "Sem justificativa disponível."}
+                            <span className="font-bold text-slate-800 mr-1">Why ICP {quality.label}?</span>
+                            {enrichedData?.icp_reason || lead?.icp_reason || "No reasoning available."}
                         </p>
                     </div>
 
                     {/* Cadence Stage Explanation */}
                     <div className="mt-3 p-3 bg-white rounded-xl border border-slate-200 shadow-sm">
                         <p className="text-xs text-slate-600">
-                            <span className="font-bold text-slate-800 mr-1">Nível de Cadência ({cadence.stage || '—'}):</span>
+                            <span className="font-bold text-slate-800 mr-1">Cadence Level ({cadence.stage || '—'}):</span>
                             {cadence.desc}
                         </p>
                     </div>
@@ -238,7 +238,7 @@ const LeadDetailModal = ({ lead, campaignLead, onClose }) => {
                         <div className="bg-blue-50 rounded-xl p-4 border border-blue-200">
                             <div className="flex items-center gap-2 mb-2">
                                 <Brain size={16} className="text-blue-600" />
-                                <span className="text-xs font-bold text-blue-700 uppercase tracking-wider">Resumo da Conversa</span>
+                                <span className="text-xs font-bold text-blue-700 uppercase tracking-wider">Conversation Summary</span>
                             </div>
                             <p className="text-sm text-slate-700 leading-relaxed">
                                 {enrichedData?.conversation_summary || lead?.conversation_summary}
@@ -250,7 +250,7 @@ const LeadDetailModal = ({ lead, campaignLead, onClose }) => {
                     <div>
                         <div className="flex items-center gap-2 mb-3">
                             <Sparkles size={16} className="text-amber-500" />
-                            <span className="text-xs font-bold text-slate-600 uppercase tracking-wider">Motor de Ação</span>
+                            <span className="text-xs font-bold text-slate-600 uppercase tracking-wider">Action Engine</span>
                         </div>
 
                         {aiReplies.length > 0 ? (
@@ -277,7 +277,7 @@ const LeadDetailModal = ({ lead, campaignLead, onClose }) => {
                                         >
                                             {idx === 0 && (
                                                 <span className="absolute -top-2 left-3 px-2 py-0.5 bg-violet-600 text-white text-[10px] font-bold uppercase rounded-full">
-                                                    Recomendada
+                                                    Recommended
                                                 </span>
                                             )}
                                             <p className="text-sm text-slate-700 leading-relaxed pr-10">
@@ -286,7 +286,7 @@ const LeadDetailModal = ({ lead, campaignLead, onClose }) => {
                                             {/* Strategy Explanation */}
                                             {strategy && (
                                                 <p className="text-xs text-slate-500 italic mt-2 border-t border-slate-200 pt-2">
-                                                    💡 <span className="font-medium">Estratégia:</span> {strategy}
+                                                    💡 <span className="font-medium">Strategy:</span> {strategy}
                                                 </p>
                                             )}
                                             <button
@@ -304,13 +304,13 @@ const LeadDetailModal = ({ lead, campaignLead, onClose }) => {
                                     <div className="mt-4 p-4 bg-white rounded-xl border-2 border-dashed border-blue-300 space-y-3">
                                         <div className="flex items-center gap-2 text-xs text-blue-600 font-bold uppercase tracking-wider">
                                             <MessageCircle size={14} />
-                                            Editar Mensagem Antes de Enviar
+                                            Edit Message Before Sending
                                         </div>
                                         <textarea
                                             className="w-full h-28 p-3 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-700 focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 resize-none"
                                             value={draftMessage}
                                             onChange={(e) => setDraftMessage(e.target.value)}
-                                            placeholder="Edite a mensagem aqui..."
+                                            placeholder="Edit the message here..."
                                         />
                                         <div className="flex gap-2">
                                             <button
@@ -318,19 +318,19 @@ const LeadDetailModal = ({ lead, campaignLead, onClose }) => {
                                                 className="flex-1 py-2.5 rounded-lg bg-slate-100 text-slate-600 font-semibold text-sm hover:bg-slate-200 transition flex items-center justify-center gap-2"
                                             >
                                                 <Copy size={14} />
-                                                Copiar
+                                                Copy
                                             </button>
                                             <button
                                                 onClick={() => {
                                                     console.log('[LinkedIn Send] Simulating send:', draftMessage)
-                                                    alert('✅ Mensagem pronta para envio! (Simulação)')
+                                                    alert('✅ Message ready to send! (Simulation)')
                                                     setDraftMessage('')
                                                     setSelectedSuggestionIdx(null)
                                                 }}
                                                 className="flex-1 py-2.5 rounded-lg bg-blue-600 text-white font-semibold text-sm hover:bg-blue-700 transition flex items-center justify-center gap-2 shadow-lg shadow-blue-200"
                                             >
                                                 <Send size={14} />
-                                                Enviar via LinkedIn
+                                                Send via LinkedIn
                                             </button>
                                         </div>
                                     </div>
@@ -340,8 +340,8 @@ const LeadDetailModal = ({ lead, campaignLead, onClose }) => {
                             <div className="p-5 rounded-2xl bg-slate-50 border border-dashed border-slate-300 text-center">
                                 <Sparkles size={24} className="mx-auto text-slate-400 mb-2" />
                                 <p className="text-sm text-slate-500">
-                                    Nenhuma sugestão disponível ainda.<br />
-                                    <span className="text-slate-400">Sincronize as mensagens para gerar.</span>
+                                    No suggestions available yet.<br />
+                                    <span className="text-slate-400">Sync messages to generate.</span>
                                 </p>
                             </div>
                         )}
@@ -352,7 +352,7 @@ const LeadDetailModal = ({ lead, campaignLead, onClose }) => {
                         <div>
                             <div className="flex items-center gap-2 mb-3">
                                 <MessageCircle size={16} className="text-slate-500" />
-                                <span className="text-xs font-bold text-slate-600 uppercase tracking-wider">Últimas Mensagens</span>
+                                <span className="text-xs font-bold text-slate-600 uppercase tracking-wider">Recent Messages</span>
                             </div>
                             <div className="space-y-2">
                                 {interactions.slice(0, 3).map((msg, idx) => (
@@ -365,11 +365,11 @@ const LeadDetailModal = ({ lead, campaignLead, onClose }) => {
                                                 </span>
                                                 <span className={`text-xs font-semibold ${msg.direction === 'outbound' ? 'text-blue-600' : 'text-emerald-600'
                                                     }`}>
-                                                    {msg.direction === 'outbound' ? 'Enviada' : 'Recebida'}
+                                                    {msg.direction === 'outbound' ? 'Sent' : 'Received'}
                                                 </span>
                                             </div>
                                             <span className="text-[10px] text-slate-400">
-                                                {new Date(msg.interaction_date).toLocaleDateString('pt-BR')}
+                                                {new Date(msg.interaction_date).toLocaleDateString('en-US')}
                                             </span>
                                         </div>
                                         <p className="text-sm text-slate-700 line-clamp-2">{msg.content || '—'}</p>
@@ -382,7 +382,7 @@ const LeadDetailModal = ({ lead, campaignLead, onClose }) => {
                     {!loadingInteractions && interactions.length === 0 && (
                         <div className="text-center py-6 text-slate-600 text-sm">
                             <MessageCircle size={24} className="mx-auto mb-2 opacity-50" />
-                            Nenhuma mensagem registrada
+                            No messages recorded
                         </div>
                     )}
                 </div>

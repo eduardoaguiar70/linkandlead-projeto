@@ -32,7 +32,7 @@ const PipelineColumn = ({ id, title, icon: Icon, leads, onCardClick, onRemoveLea
                 </div>
                 {totalProposal > 0 && (
                     <span style={{ display: 'flex', alignItems: 'center', gap: '2px', fontSize: '11px', fontWeight: 700, color: '#10b981' }}>
-                        <DollarSign size={10} /> {totalProposal.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}
+                        <DollarSign size={10} /> {totalProposal.toLocaleString('en-US', { maximumFractionDigits: 0 })}
                     </span>
                 )}
             </div>

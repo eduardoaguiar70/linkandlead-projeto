@@ -44,7 +44,7 @@ const CreatePostModal = ({ onClose, onSuccess }) => {
                 const validClients = (data || []).filter(c => c.name)
                 setClients(validClients)
             } catch (err) {
-                console.error('Erro ao buscar clientes:', err)
+                console.error('Error fetching clients:', err)
             } finally {
                 setLoadingClients(false)
             }
@@ -69,7 +69,7 @@ const CreatePostModal = ({ onClose, onSuccess }) => {
     // --- STEP 1: GENERATE DRAFT ---
     const handleGenerateDraft = async (e) => {
         e.preventDefault()
-        if (!selectedClientId) return alert("Por favor, selecione um cliente.")
+        if (!selectedClientId) return alert("Please select a client.")
         if (!tema || !publico) return
 
         setLoading(true)
@@ -95,7 +95,7 @@ const CreatePostModal = ({ onClose, onSuccess }) => {
             setStep(2)
         } catch (err) {
             console.error(err)
-            setErrorMsg('Falha ao gerar rascunho. Tente novamente.')
+            setErrorMsg('Failed to generate draft. Try again.')
         } finally {
             setLoading(false)
         }
@@ -104,7 +104,7 @@ const CreatePostModal = ({ onClose, onSuccess }) => {
     // --- FINAL SAVE (Shared Logic) ---
     const performSave = async (isManual = false) => {
         if (!selectedClientId) {
-            alert("Erro: ID do cliente não identificado")
+            alert("Error: Client ID not identified")
             return
         }
 
@@ -123,7 +123,7 @@ const CreatePostModal = ({ onClose, onSuccess }) => {
                 finalClientName = clientData?.name
             }
 
-            if (!finalClientName) throw new Error("Nome do cliente não encontrado")
+            if (!finalClientName) throw new Error("Client name not found")
 
             // Upload Images
             let finalImageUrls = []
@@ -152,8 +152,8 @@ const CreatePostModal = ({ onClose, onSuccess }) => {
             const payload = {
                 id_client: selectedClientId,
                 nome_cliente: finalClientName,
-                tema: tema || 'Post Manual',
-                publico: publico || 'Geral',
+                tema: tema || 'Manual Post',
+                publico: publico || 'General',
                 corpo_post: generatedText,
                 sugestao_imagem: finalImageUrls,
                 status: 'waiting_approval'
@@ -168,17 +168,17 @@ const CreatePostModal = ({ onClose, onSuccess }) => {
                 if (error) throw error
                 // Basic check
                 if (data && data[0] && !data[0].nome_cliente) {
-                    alert("Aviso: Banco de dados pode ter ignorado o nome do cliente.")
+                    alert("Warning: Database may have ignored the client name.")
                 }
             }
 
-            alert("Post salvo com sucesso!")
+            alert("Post successfully saved!")
             if (onSuccess) onSuccess()
             else onClose()
 
         } catch (err) {
             console.error("Save Error:", err)
-            setErrorMsg("Erro ao salvar post: " + err.message)
+            setErrorMsg("Error saving post: " + err.message)
         } finally {
             setLoading(false)
         }
@@ -189,7 +189,7 @@ const CreatePostModal = ({ onClose, onSuccess }) => {
             const newFiles = Array.from(e.target.files)
             const validFiles = newFiles.filter(file => {
                 if (file.size > 50 * 1024 * 1024) {
-                    alert(`Arquivo ${file.name} excede 50MB.`)
+                    alert(`File ${file.name} exceeds 50MB.`)
                     return false
                 }
                 return true
@@ -209,7 +209,7 @@ const CreatePostModal = ({ onClose, onSuccess }) => {
                     />
                 </div>
             ))}
-            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider ml-2">Passo {step}/3</span>
+            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider ml-2">Step {step}/3</span>
         </div>
     )
 
@@ -243,8 +243,8 @@ const CreatePostModal = ({ onClose, onSuccess }) => {
                 {/* HEADER */}
                 <div className="p-6 border-b border-glass-border flex justify-between items-center bg-white/[0.02]">
                     <div>
-                        <h2 className="text-xl font-bold text-white mb-0.5">Novo Conteúdo B2B</h2>
-                        <p className="text-xs font-medium text-transparent bg-clip-text bg-gradient-to-r from-primary to-orange-400 uppercase tracking-wider">Criar Novo Post</p>
+                        <h2 className="text-xl font-bold text-white mb-0.5">New B2B Content</h2>
+                        <p className="text-xs font-medium text-transparent bg-clip-text bg-gradient-to-r from-primary to-orange-400 uppercase tracking-wider">Create New Post</p>
                     </div>
                     <button onClick={onClose} className="p-2 rounded-full hover:bg-white/10 text-gray-400 hover:text-white transition-colors">
                         <X size={20} />
@@ -258,7 +258,7 @@ const CreatePostModal = ({ onClose, onSuccess }) => {
                         className={`flex-1 py-4 text-sm font-medium flex items-center justify-center gap-2 transition-colors relative ${activeTab === 'ai' ? 'text-white' : 'text-gray-500 hover:text-gray-300'}`}
                     >
                         <Sparkles size={16} className={activeTab === 'ai' ? 'text-primary' : ''} />
-                        Criar com IA
+                        Create with AI
                         {activeTab === 'ai' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary shadow-[0_0_10px_rgba(255,77,0,0.5)]" />}
                     </button>
                     <button
@@ -283,7 +283,7 @@ const CreatePostModal = ({ onClose, onSuccess }) => {
                             {step === 1 && (
                                 <form onSubmit={handleGenerateDraft}>
                                     <div className="mb-6">
-                                        <label className="block text-sm font-medium text-gray-400 mb-2 ml-1">Selecione o Cliente</label>
+                                        <label className="block text-sm font-medium text-gray-400 mb-2 ml-1">Select Client</label>
                                         <div className="relative">
                                             <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none"><Building2 size={18} /></div>
                                             <select
@@ -292,22 +292,22 @@ const CreatePostModal = ({ onClose, onSuccess }) => {
                                                 className="w-full bg-white/5 border border-glass-border rounded-xl pl-10 pr-4 py-3 text-white appearance-none focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition-all"
                                                 required
                                             >
-                                                <option value="" className="bg-charcoal text-gray-500">Selecione...</option>
+                                                <option value="" className="bg-charcoal text-gray-500">Select...</option>
                                                 {clients.map(c => <option key={c.id} value={c.id} className="bg-charcoal text-white">{c.name}</option>)}
                                             </select>
                                         </div>
                                     </div>
 
                                     <ModernInput
-                                        label="Tema Central"
+                                        label="Central Theme"
                                         icon={Briefcase}
                                         type="textarea"
-                                        placeholder="Sobre o que vamos falar hoje?"
+                                        placeholder="What are we talking about today?"
                                         value={tema} onChange={e => setTema(e.target.value)} required
                                     />
 
                                     <ModernInput
-                                        label="Público-Alvo"
+                                        label="Target Audience"
                                         icon={User}
                                         placeholder="CEO, Marketing Managers..."
                                         value={publico} onChange={e => setPublico(e.target.value)} required
@@ -316,9 +316,9 @@ const CreatePostModal = ({ onClose, onSuccess }) => {
                                     {errorMsg && <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm flex items-center gap-2"><AlertCircle size={16} /> {errorMsg}</div>}
 
                                     <div className="flex gap-4 pt-4">
-                                        <button type="button" onClick={onClose} className="flex-1 px-4 py-3 rounded-xl border border-glass-border text-gray-400 hover:bg-white/5 hover:text-white transition-all font-medium">Cancelar</button>
+                                        <button type="button" onClick={onClose} className="flex-1 px-4 py-3 rounded-xl border border-glass-border text-gray-400 hover:bg-white/5 hover:text-white transition-all font-medium">Cancel</button>
                                         <button type="submit" disabled={loading} className="flex-[2] btn-primary">
-                                            {loading ? <Loader2 className="animate-spin" /> : <><Sparkles size={18} /> Gerar Rascunho</>}
+                                            {loading ? <Loader2 className="animate-spin" /> : <><Sparkles size={18} /> Generate Draft</>}
                                         </button>
                                     </div>
                                 </form>
@@ -327,7 +327,7 @@ const CreatePostModal = ({ onClose, onSuccess }) => {
                             {/* STEP 2 */}
                             {step === 2 && (
                                 <div className="animate-fade-in-up">
-                                    <label className="block text-sm font-medium text-gray-400 mb-2 ml-1">Rascunho Gerado (Edite à vontade):</label>
+                                    <label className="block text-sm font-medium text-gray-400 mb-2 ml-1">Generated Draft (Edit freely):</label>
                                     <textarea
                                         value={generatedText}
                                         onChange={e => setGeneratedText(e.target.value)}
@@ -335,9 +335,9 @@ const CreatePostModal = ({ onClose, onSuccess }) => {
                                     />
 
                                     <div className="flex gap-4">
-                                        <button onClick={() => setStep(1)} className="flex-1 px-4 py-3 rounded-xl border border-glass-border text-gray-400 hover:bg-white/5 hover:text-white transition-all font-medium">Voltar e Ajustar</button>
+                                        <button onClick={() => setStep(1)} className="flex-1 px-4 py-3 rounded-xl border border-glass-border text-gray-400 hover:bg-white/5 hover:text-white transition-all font-medium">Back and Adjust</button>
                                         <button onClick={() => setStep(3)} className="flex-[2] btn-primary">
-                                            Aprovar Texto <CheckCircle2 size={18} />
+                                            Approve Text <CheckCircle2 size={18} />
                                         </button>
                                     </div>
                                 </div>
@@ -349,19 +349,19 @@ const CreatePostModal = ({ onClose, onSuccess }) => {
                                     <FormMediaUpload selectedFiles={selectedFiles} setSelectedFiles={setSelectedFiles} handleFileChange={handleFileChange} />
 
                                     <div className="bg-white/5 border border-glass-border rounded-xl p-4 mb-6">
-                                        <h4 className="text-sm font-bold text-gray-300 mb-2 uppercase tracking-wider">Resumo</h4>
+                                        <h4 className="text-sm font-bold text-gray-300 mb-2 uppercase tracking-wider">Summary</h4>
                                         <div className="text-sm text-gray-400 space-y-1">
-                                            <p><span className="text-gray-500">Cliente:</span> {clienteName}</p>
-                                            <p><span className="text-gray-500">Tema:</span> {tema}</p>
+                                            <p><span className="text-gray-500">Client:</span> {clienteName}</p>
+                                            <p><span className="text-gray-500">Theme:</span> {tema}</p>
                                         </div>
                                     </div>
 
                                     {errorMsg && <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm flex items-center gap-2"><AlertCircle size={16} /> {errorMsg}</div>}
 
                                     <div className="flex gap-4">
-                                        <button onClick={() => setStep(2)} className="flex-1 px-4 py-3 rounded-xl border border-glass-border text-gray-400 hover:bg-white/5 hover:text-white transition-all font-medium">Voltar</button>
+                                        <button onClick={() => setStep(2)} className="flex-1 px-4 py-3 rounded-xl border border-glass-border text-gray-400 hover:bg-white/5 hover:text-white transition-all font-medium">Back</button>
                                         <button onClick={() => performSave(false)} disabled={loading} className="flex-[2] btn-primary">
-                                            {loading ? <Loader2 className="animate-spin" /> : "💾 Salvar Post Final"}
+                                            {loading ? <Loader2 className="animate-spin" /> : "💾 Save Final Post"}
                                         </button>
                                     </div>
                                 </div>
@@ -373,7 +373,7 @@ const CreatePostModal = ({ onClose, onSuccess }) => {
                     {activeTab === 'manual' && (
                         <form onSubmit={(e) => { e.preventDefault(); performSave(true); }} className="animate-fade-in-up">
                             <div className="mb-6">
-                                <label className="block text-sm font-medium text-gray-400 mb-2 ml-1">Selecione o Cliente</label>
+                                <label className="block text-sm font-medium text-gray-400 mb-2 ml-1">Select Client</label>
                                 <div className="relative">
                                     <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none"><Building2 size={18} /></div>
                                     <select
@@ -382,24 +382,24 @@ const CreatePostModal = ({ onClose, onSuccess }) => {
                                         className="w-full bg-white/5 border border-glass-border rounded-xl pl-10 pr-4 py-3 text-white appearance-none focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition-all"
                                         required
                                     >
-                                        <option value="" className="bg-charcoal text-gray-500">Selecione...</option>
+                                        <option value="" className="bg-charcoal text-gray-500">Select...</option>
                                         {clients.map(c => <option key={c.id} value={c.id} className="bg-charcoal text-white">{c.name}</option>)}
                                     </select>
                                 </div>
                             </div>
 
                             <ModernInput
-                                label="Título / Tema"
+                                label="Title / Theme"
                                 icon={Briefcase}
-                                placeholder="Ex: Campanha de Verão"
+                                placeholder="Ex: Summer Campaign"
                                 value={tema} onChange={e => setTema(e.target.value)}
                             />
 
                             <ModernInput
-                                label="Texto do Post"
+                                label="Post Text"
                                 icon={FileText}
                                 type="textarea"
-                                placeholder="Escreva o conteúdo aqui..."
+                                placeholder="Write the content here..."
                                 value={generatedText} onChange={e => setGeneratedText(e.target.value)} required
                             />
 
@@ -408,9 +408,9 @@ const CreatePostModal = ({ onClose, onSuccess }) => {
                             {errorMsg && <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm flex items-center gap-2"><AlertCircle size={16} /> {errorMsg}</div>}
 
                             <div className="flex gap-4 pt-4">
-                                <button type="button" onClick={onClose} className="flex-1 px-4 py-3 rounded-xl border border-glass-border text-gray-400 hover:bg-white/5 hover:text-white transition-all font-medium">Cancelar</button>
+                                <button type="button" onClick={onClose} className="flex-1 px-4 py-3 rounded-xl border border-glass-border text-gray-400 hover:bg-white/5 hover:text-white transition-all font-medium">Cancel</button>
                                 <button type="submit" disabled={loading} className="flex-[2] btn-primary">
-                                    {loading ? <Loader2 className="animate-spin" /> : "💾 Salvar Manualmente"}
+                                    {loading ? <Loader2 className="animate-spin" /> : "💾 Save Manually"}
                                 </button>
                             </div>
                         </form>
@@ -425,20 +425,20 @@ const CreatePostModal = ({ onClose, onSuccess }) => {
 // Sub-component for Media Upload to keep logic clean
 const FormMediaUpload = ({ selectedFiles, setSelectedFiles, handleFileChange }) => (
     <div className="mb-8">
-        <label className="block text-sm font-medium text-gray-400 mb-2 ml-1">Mídia (Imagens/Vídeo)</label>
+        <label className="block text-sm font-medium text-gray-400 mb-2 ml-1">Media (Images/Video)</label>
         <div className={`border-2 border-dashed rounded-xl p-4 transition-all ${selectedFiles.length > 0 ? 'border-primary/50 bg-primary/5' : 'border-glass-border hover:border-gray-500 hover:bg-white/5'}`}>
             <input type="file" multiple accept="image/*,video/*,application/pdf" onChange={handleFileChange} className="hidden" id="file-upload" />
 
             {selectedFiles.length === 0 ? (
                 <label htmlFor="file-upload" className="flex flex-col items-center justify-center h-24 cursor-pointer gap-2">
                     <UploadCloud className="text-gray-500" size={24} />
-                    <span className="text-sm font-medium text-gray-400">Clique para selecionar arquivos</span>
+                    <span className="text-sm font-medium text-gray-400">Click to select files</span>
                 </label>
             ) : (
                 <div>
                     <div className="flex justify-between items-center mb-3 px-1">
-                        <span className="text-xs font-semibold text-gray-400 uppercase">{selectedFiles.length} arquivos</span>
-                        <button type="button" onClick={() => setSelectedFiles([])} className="text-xs text-red-400 hover:text-red-300 font-medium">Limpar Tudo</button>
+                        <span className="text-xs font-semibold text-gray-400 uppercase">{selectedFiles.length} files</span>
+                        <button type="button" onClick={() => setSelectedFiles([])} className="text-xs text-red-400 hover:text-red-300 font-medium">Clear All</button>
                     </div>
                     <div className="grid grid-cols-4 gap-2">
                         {selectedFiles.map((file, i) => (
