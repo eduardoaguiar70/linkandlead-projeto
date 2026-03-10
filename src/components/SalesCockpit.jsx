@@ -15,6 +15,7 @@ import {
     RefreshCw,
     AlertTriangle,
     Rocket,
+    Clock,
     Zap,
     Target,
     Hammer,
@@ -28,6 +29,7 @@ import {
     Snowflake
 } from 'lucide-react'
 import SafeImage from './SafeImage'
+import UnifiedLeadModal from './UnifiedLeadModal'
 
 // ═══════════════════════════════════════════════
 // CONSTANTS
@@ -109,6 +111,10 @@ const SalesCockpit = () => {
     const [completingIds, setCompletingIds] = useState(new Set())
     const [showAllCold, setShowAllCold] = useState(false)
 
+    // Overdue Tasks State
+    const [overdueTasks, setOverdueTasks] = useState([])
+    const [showOverdue, setShowOverdue] = useState(false)
+
     const fetchTasks = useCallback(async (isRefresh = false) => {
         if (!selectedClientId) {
             setTasks([])
@@ -126,11 +132,12 @@ const SalesCockpit = () => {
             const todayStart = new Date()
             todayStart.setHours(0, 0, 0, 0)
 
-            const [pendingResult, doneResult] = await Promise.all([
+            const [pendingResult, doneResult, overdueResult] = await Promise.all([
                 supabase
                     .from('tasks')
                     .select('*, lead:leads!inner(id, client_id, nome, empresa, headline, linkedin_profile_url, cadence_stage, total_interactions_count, avatar_url)')
                     .eq('leads.client_id', selectedClientId)
+                    .neq('leads.is_blacklisted', true)
                     .eq('status', 'PENDING')
                     .gte('created_at', todayStart.toISOString())
                     .order('created_at', { ascending: true })
@@ -139,17 +146,33 @@ const SalesCockpit = () => {
                     .from('tasks')
                     .select('id, leads!inner(client_id)', { count: 'exact' })
                     .eq('leads.client_id', selectedClientId)
+                    .neq('leads.is_blacklisted', true)
                     .eq('status', 'COMPLETED')
                     .gte('completed_at', `${new Date().toISOString().split('T')[0]}T00:00:00`)
-                    .limit(1)
+                    .limit(1),
+                supabase
+                    .from('tasks')
+                    .select('*, lead:leads!inner(id, client_id, nome, empresa, headline, linkedin_profile_url, cadence_stage, total_interactions_count, avatar_url)')
+                    .eq('leads.client_id', selectedClientId)
+                    .neq('leads.is_blacklisted', true)
+                    .eq('status', 'PENDING')
+                    .lt('created_at', todayStart.toISOString())
+                    .order('created_at', { ascending: false })
+                    .limit(50)
             ])
 
             if (pendingResult.error) throw pendingResult.error
+            if (overdueResult.error) {
+                console.error('Overdue query error:', overdueResult.error)
+                throw overdueResult.error
+            }
 
             const activeTasks = pendingResult.data || []
-            console.log('Tasks loaded:', activeTasks)
             setTasks(activeTasks)
             setDoneCount(doneResult.count || 0)
+
+            console.log('[DEBUG] Overdue tasks raw data:', overdueResult.data)
+            setOverdueTasks(overdueResult.data || [])
         } catch (err) {
             console.error('Error fetching cockpit tasks:', err)
             setError('Failed to load tasks. Please try again.')
@@ -166,10 +189,14 @@ const SalesCockpit = () => {
     const handleComplete = async (taskId) => {
         setCompletingIds(prev => new Set(prev).add(taskId))
 
-        // Find task before removing it to get lead ID
-        const taskToComplete = tasks.find(t => t.id === taskId)
+        // Find task before removing it to get lead ID (check both lists)
+        const taskToComplete = tasks.find(t => t.id === taskId) || overdueTasks.find(t => t.id === taskId)
 
         setTasks(prev => prev.filter(t => t.id !== taskId))
+        setOverdueTasks(prev => prev.filter(t => t.id !== taskId))
+
+        // Only increment done count if it was a today's task being completed, or keep it simple and increment regardless.
+        // Usually, we just increment.
         setDoneCount(prev => prev + 1)
 
         try {
@@ -201,6 +228,7 @@ const SalesCockpit = () => {
     }
 
     const navigate = useNavigate()
+    const [selectedLeadForModal, setSelectedLeadForModal] = useState(null)
 
     const handleExecute = (leadId) => {
         if (leadId) {
@@ -240,7 +268,7 @@ const SalesCockpit = () => {
                 <div className="flex flex-col items-center justify-center py-12 gap-4">
                     <Loader2 className="w-8 h-8 animate-spin text-primary" />
                     <span className="tracking-wide uppercase text-xs font-bold text-gray-400">
-                        Loading cockpit...
+                        Loading tasks...
                     </span>
                 </div>
             </div>
@@ -273,7 +301,7 @@ const SalesCockpit = () => {
             <div className="glass-panel rounded-2xl p-8 mb-8 animate-fade-in-up">
                 <div className="flex flex-col items-center justify-center py-8 gap-3 text-center">
                     <Target size={32} className="text-gray-600" />
-                    <p className="text-sm text-gray-400">Select a client to view the Cockpit.</p>
+                    <p className="text-sm text-gray-400">Select a client to view the Daily Tasks.</p>
                 </div>
             </div>
         )
@@ -292,7 +320,7 @@ const SalesCockpit = () => {
                         </div>
                         <div>
                             <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-gray-900 mb-0.5">
-                                Sales Cockpit 🚀
+                                Daily Tasks 🚀
                             </h2>
                             <p className="text-sm text-gray-500">
                                 {hotTasks.length > 0
@@ -311,6 +339,37 @@ const SalesCockpit = () => {
                         title="Refresh"
                     >
                         <RefreshCw size={16} className={refreshing ? 'animate-spin' : ''} />
+                    </button>
+                </div>
+
+                {/* Overdue Tasks Toggle Tab */}
+                <div className="flex items-center gap-2 mb-4 bg-gray-50 p-1 rounded-xl border border-gray-100 w-fit">
+                    <button
+                        onClick={() => setShowOverdue(false)}
+                        className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${!showOverdue
+                            ? 'bg-white text-gray-900 shadow-sm ring-1 ring-gray-200/50'
+                            : 'text-gray-500 hover:text-gray-700'
+                            }`}
+                    >
+                        Today's Missions
+                    </button>
+                    <button
+                        onClick={() => setShowOverdue(true)}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${showOverdue
+                            ? 'bg-red-50 text-red-700 shadow-sm ring-1 ring-red-200'
+                            : 'text-gray-500 hover:text-gray-700'
+                            }`}
+                    >
+                        <Clock size={14} className={showOverdue ? 'text-red-500' : 'text-gray-400'} />
+                        Overdue Tasks
+                        <span className={`px-1.5 py-0.5 rounded-full text-[10px] ml-1 ${showOverdue
+                            ? 'bg-red-200/50 text-red-700'
+                            : overdueTasks.length > 0
+                                ? 'bg-red-100 text-red-600'
+                                : 'bg-gray-200 text-gray-500'
+                            }`}>
+                            {overdueTasks.length}
+                        </span>
                     </button>
                 </div>
 
@@ -335,9 +394,54 @@ const SalesCockpit = () => {
             </div>
 
             {/* ═══════════════════════════════════════ */}
+            {/* OVERDUE LIST VIEW                      */}
+            {/* ═══════════════════════════════════════ */}
+            {showOverdue && (
+                <div className="animate-fade-in">
+                    {overdueTasks.length > 0 ? (
+                        <>
+                            <div className="bg-red-50 border border-red-100 rounded-2xl p-5 mb-5 flex items-start gap-3">
+                                <AlertTriangle className="text-red-500 shrink-0 mt-0.5" size={20} />
+                                <div>
+                                    <h3 className="text-red-800 font-bold text-sm">You have {overdueTasks.length} overdue tasks!</h3>
+                                    <p className="text-red-600/80 text-xs mt-0.5">These tasks were created on previous days and haven't been completed yet. Process them to keep your pipeline clean.</p>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                {overdueTasks.map(task => (
+                                    <TaskCard
+                                        key={task.id}
+                                        task={task}
+                                        themeKey="hot"
+                                        completing={completingIds.has(task.id)}
+                                        onComplete={handleComplete}
+                                        onExecute={handleExecute}
+                                        onLeadClick={setSelectedLeadForModal}
+                                    />
+                                ))}
+                            </div>
+                        </>
+                    ) : (
+                        <div className="bg-white rounded-2xl border border-gray-200 p-10 sm:p-16 text-center shadow-sm">
+                            <div className="flex justify-center mb-4">
+                                <div className="w-16 h-16 rounded-2xl bg-green-50 border border-green-200 flex items-center justify-center">
+                                    <PartyPopper size={32} className="text-green-500" />
+                                </div>
+                            </div>
+                            <h2 className="text-xl font-bold text-gray-900 mb-2">No overdue tasks! 🎉</h2>
+                            <p className="text-sm text-gray-500 max-w-sm mx-auto">
+                                Excellent work! You haven't left any tasks behind from previous days.
+                            </p>
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* ═══════════════════════════════════════ */}
             {/* ZERO INBOX                             */}
             {/* ═══════════════════════════════════════ */}
-            {allDone && (
+            {!showOverdue && allDone && (
                 <div className="bg-white rounded-2xl border border-gray-200 p-10 sm:p-16 text-center shadow-sm">
                     <div className="flex justify-center mb-4">
                         <div className="w-16 h-16 rounded-2xl bg-green-50 border border-green-200 flex items-center justify-center">
@@ -362,7 +466,7 @@ const SalesCockpit = () => {
             {/* ═══════════════════════════════════════ */}
             {/* 3-COLUMN GRID TASK BOARD                */}
             {/* ═══════════════════════════════════════ */}
-            {!allDone && (
+            {!showOverdue && !allDone && (
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
                     {/* COL 1: HOT (G4/G5) */}
@@ -381,6 +485,7 @@ const SalesCockpit = () => {
                                 completing={completingIds.has(task.id)}
                                 onComplete={handleComplete}
                                 onExecute={handleExecute}
+                                onLeadClick={setSelectedLeadForModal}
                             />
                         ))}
                     </FeedSection>
@@ -401,6 +506,7 @@ const SalesCockpit = () => {
                                 completing={completingIds.has(task.id)}
                                 onComplete={handleComplete}
                                 onExecute={handleExecute}
+                                onLeadClick={setSelectedLeadForModal}
                             />
                         ))}
                     </FeedSection>
@@ -438,10 +544,21 @@ const SalesCockpit = () => {
                                 completing={completingIds.has(task.id)}
                                 onComplete={handleComplete}
                                 onExecute={handleExecute}
+                                onLeadClick={setSelectedLeadForModal}
                             />
                         ))}
                     </FeedSection>
                 </div>
+            )}
+            {/* Unified Lead Modal */}
+            {selectedLeadForModal && (
+                <UnifiedLeadModal
+                    lead={selectedLeadForModal}
+                    onClose={() => setSelectedLeadForModal(null)}
+                    onLeadUpdated={(updated) => {
+                        setSelectedLeadForModal(prev => prev && prev.id === updated.id ? { ...prev, ...updated } : prev)
+                    }}
+                />
             )}
         </div>
     )
@@ -498,7 +615,7 @@ const FeedSection = ({ title, icon, count, themeKey, children, footer, emptyText
 // TASK CARD — Smart Action Button
 // ═══════════════════════════════════════════════
 
-const TaskCard = ({ task, themeKey, completing, onComplete, onExecute }) => {
+const TaskCard = ({ task, themeKey, completing, onComplete, onExecute, onLeadClick }) => {
     const lead = task.lead || {}
     const theme = COLUMN_THEMES[themeKey]
     const initial = lead.nome?.charAt(0)?.toUpperCase() || '?'
@@ -534,9 +651,9 @@ const TaskCard = ({ task, themeKey, completing, onComplete, onExecute }) => {
                         fallbackText={initial}
                     />
                 </div>
-                <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-0.5">
-                        <h4 className="text-sm font-semibold text-gray-900 truncate">{lead.nome || 'Lead'}</h4>
+                <div className="flex-1 min-w-0 cursor-pointer" onClick={() => onLeadClick && onLeadClick(lead)}>
+                    <div className="flex items-center gap-2 mb-1 flex-wrap">
+                        <h4 className="text-sm font-semibold text-gray-900 truncate hover:text-orange-600 transition-colors">{lead.nome || 'Lead'}</h4>
                         {stage && (
                             <span className={`shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded border ${stageStyle}`}>
                                 {stage}

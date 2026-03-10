@@ -159,10 +159,10 @@ const AdminLayout = () => {
                             <Link2 size={18} /> Connection Requests
                         </Link>
                         <Link to="/missions" className={isActive('/missions')}>
-                            <Flame size={18} /> Sales Cockpit
+                            <Flame size={18} /> Daily Tasks
                         </Link>
                         <Link to="/sales/inbox" className={isActive('/sales/inbox')}>
-                            <MessageCircle size={18} /> Intelligent Inbox
+                            <MessageCircle size={18} /> Smart Inbox
                         </Link>
                         <Link to="/pipeline" className={isActive('/pipeline')}>
                             <Kanban size={18} /> Pipeline

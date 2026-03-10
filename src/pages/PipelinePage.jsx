@@ -6,7 +6,7 @@ import PipelineTable from '../components/pipeline/PipelineTable'
 import PipelineTableFilters from '../components/pipeline/PipelineTableFilters'
 import PipelineKanbanBoard from '../components/pipeline/PipelineKanbanBoard'
 import PipelineKanbanFilters from '../components/pipeline/PipelineKanbanFilters'
-import LeadDetailModal from '../components/pipeline/LeadDetailModal'
+import UnifiedLeadModal from '../components/UnifiedLeadModal'
 
 const DEFAULT_TABLE_FILTERS = { search: '', icp: [], cadence: [], engagement: 'all', minInteractions: 0, maxInteractions: 9999, hasProposal: 'all' }
 const DEFAULT_KANBAN_FILTERS = { search: '', tier: null, hasProposal: false }
@@ -207,10 +207,11 @@ const PipelinePage = () => {
 
             {/* Modal */}
             {selectedLead && (
-                <LeadDetailModal
+                <UnifiedLeadModal
                     lead={selectedLead}
                     onClose={() => setSelectedLead(null)}
                     onLeadUpdated={handleLeadUpdated}
+                    showPipelineFields={true}
                 />
             )}
         </div>

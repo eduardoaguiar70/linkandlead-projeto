@@ -276,6 +276,7 @@ const NetworkDashboard = () => {
                 .from('leads')
                 .select('*', { count: 'exact' })
                 .eq('client_id', selectedClientId)
+                .neq('is_blacklisted', true)
                 .range(from, to)
 
             // Direct sorting

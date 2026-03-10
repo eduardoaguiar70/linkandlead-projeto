@@ -13,11 +13,13 @@ import {
     Trash2,
     Edit2,
     X,
-    Loader2
+    Loader2,
+    Magnet
 } from 'lucide-react'
 
 // Map content types to icons and colors
 const TYPE_CONFIG = {
+    'Lead Magnet': { icon: Magnet, color: 'text-purple-500', bg: 'bg-purple-50', border: 'border-purple-200' },
     'Video': { icon: Video, color: 'text-blue-500', bg: 'bg-blue-50', border: 'border-blue-200' },
     'Post': { icon: FileText, color: 'text-orange-500', bg: 'bg-orange-50', border: 'border-orange-200' },
     'Artigo': { icon: BookOpen, color: 'text-emerald-500', bg: 'bg-emerald-50', border: 'border-emerald-200' },
@@ -37,8 +39,9 @@ const ContentLibraryPage = () => {
     const [formData, setFormData] = useState({
         content_name: '',
         content_description: '',
+        template_text: '',
         content_url: '',
-        content_type: 'Video'
+        content_type: 'Lead Magnet'
     })
     const [saving, setSaving] = useState(false)
 
@@ -77,6 +80,7 @@ const ContentLibraryPage = () => {
             setFormData({
                 content_name: content.content_name,
                 content_description: content.content_description || '',
+                template_text: content.template_text || '',
                 content_url: content.content_url,
                 content_type: content.content_type
             })
@@ -85,8 +89,9 @@ const ContentLibraryPage = () => {
             setFormData({
                 content_name: '',
                 content_description: '',
+                template_text: '',
                 content_url: '',
-                content_type: 'Video'
+                content_type: 'Lead Magnet'
             })
         }
         setIsModalOpen(true)
@@ -321,9 +326,21 @@ const ContentLibraryPage = () => {
                                     value={formData.content_description}
                                     onChange={e => setFormData({ ...formData, content_description: e.target.value })}
                                     placeholder="Ex: Use this video if the lead asks about competitors..."
-                                    rows={3}
+                                    rows={2}
                                     className="w-full px-4 py-2.5 font-medium border border-gray-200 rounded-xl text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all resize-none"
                                 />
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-bold text-gray-700 uppercase tracking-widest mb-1">Chat Template Text (Quick Actions)</label>
+                                <textarea
+                                    value={formData.template_text}
+                                    onChange={e => setFormData({ ...formData, template_text: e.target.value })}
+                                    placeholder="Ex: Hi {{first_name}}, I thought you might find this interesting: "
+                                    rows={2}
+                                    className="w-full px-4 py-2.5 font-medium border border-gray-200 rounded-xl text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 transition-all resize-none bg-purple-50/30"
+                                />
+                                <p className="text-[10px] text-gray-400 mt-1">Use <code className="bg-gray-100 px-1 py-0.5 rounded text-gray-600 font-mono">{"{{first_name}}"}</code> to automatically insert the lead's name. The URL will be appended automatically.</p>
                             </div>
 
                             <div className="grid grid-cols-2 gap-4">
@@ -334,6 +351,7 @@ const ContentLibraryPage = () => {
                                         onChange={e => setFormData({ ...formData, content_type: e.target.value })}
                                         className="w-full px-4 py-2.5 font-bold border border-gray-200 rounded-xl text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all appearance-none bg-gray-50"
                                     >
+                                        <option value="Lead Magnet">Lead Magnet</option>
                                         <option value="Video">Video</option>
                                         <option value="Post">Post (Social)</option>
                                         <option value="Artigo">Article</option>

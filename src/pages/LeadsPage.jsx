@@ -66,6 +66,7 @@ const LeadsPage = () => {
                 .from('leads')
                 .select('*')
                 .eq('client_id', selectedClientId)
+                .neq('is_blacklisted', true)
                 .order('created_at', { ascending: false })
                 .range(from, to)
 

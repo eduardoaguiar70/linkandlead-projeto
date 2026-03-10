@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useClientSelection } from '../contexts/ClientSelectionContext'
 import { KpiCardSkeleton, HeroTaskCardSkeleton, Skeleton } from '../components/Skeleton'
 import SafeImage from '../components/SafeImage'
+import UnifiedLeadModal from '../components/UnifiedLeadModal'
 import {
     Crosshair,
     Flame,
@@ -54,6 +55,7 @@ const AdminPanel = () => {
     const [criticalTasks, setCriticalTasks] = useState([])
     const [radarLeads, setRadarLeads] = useState([])
     const [completingIds, setCompletingIds] = useState(new Set())
+    const [selectedLeadForModal, setSelectedLeadForModal] = useState(null)
 
     // ───────────────────────────────────────────
     // DATA FETCHING
@@ -74,6 +76,7 @@ const AdminPanel = () => {
             let doneQuery = supabase
                 .from('tasks')
                 .select('id, leads!inner(client_id)', { count: 'exact', head: true })
+                .neq('leads.is_blacklisted', true)
                 .eq('status', 'COMPLETED')
                 .gte('completed_at', `${dateStr}T00:00:00`)
 
@@ -83,6 +86,7 @@ const AdminPanel = () => {
             let pendingQuery = supabase
                 .from('tasks')
                 .select('*, leads!inner(id, client_id, nome, empresa, headline, linkedin_profile_url, cadence_stage, total_interactions_count, avatar_url, icp_score)')
+                .neq('leads.is_blacklisted', true)
                 .eq('status', 'PENDING')
                 .gte('created_at', todayStr)
                 .order('created_at', { ascending: true })
@@ -94,6 +98,7 @@ const AdminPanel = () => {
             let radarQuery = supabase
                 .from('leads')
                 .select('id, nome, empresa, headline, cadence_stage, total_interactions_count, updated_at, linkedin_profile_url, avatar_url')
+                .neq('is_blacklisted', true)
                 .gt('total_interactions_count', 0)
                 .order('updated_at', { ascending: false })
                 .limit(10)
@@ -331,6 +336,7 @@ const AdminPanel = () => {
                                     completing={completingIds.has(task.id)}
                                     onComplete={handleComplete}
                                     onExecute={handleExecute}
+                                    onLeadClick={setSelectedLeadForModal}
                                 />
                             ))}
                         </div>
@@ -357,7 +363,7 @@ const AdminPanel = () => {
                     <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide snap-x -mx-4 px-4 sm:mx-0 sm:px-0">
                         {radarLeads.length > 0 ? (
                             radarLeads.map(lead => (
-                                <RadarLeadCard key={lead.id} lead={lead} />
+                                <RadarLeadCard key={lead.id} lead={lead} onLeadClick={setSelectedLeadForModal} />
                             ))
                         ) : (
                             <div className="text-sm text-gray-400 italic p-4">No recent activity on the radar.</div>
@@ -382,9 +388,19 @@ const AdminPanel = () => {
                     className="flex items-center gap-2 text-sm font-bold text-orange-600 hover:text-orange-700 transition-colors"
                 >
                     <Trophy size={16} />
-                    Open Full Cockpit
+                    Open Full Daily Tasks
                 </button>
             </div>
+            {/* Unified Lead Modal */}
+            {selectedLeadForModal && (
+                <UnifiedLeadModal
+                    lead={selectedLeadForModal}
+                    onClose={() => setSelectedLeadForModal(null)}
+                    onLeadUpdated={(updated) => {
+                        setSelectedLeadForModal(prev => prev && prev.id === updated.id ? { ...prev, ...updated } : prev)
+                    }}
+                />
+            )}
         </div>
     )
 }
@@ -432,7 +448,7 @@ const KpiCard = ({ icon, label, value, accent = 'text-gray-900' }) => (
     </div>
 )
 
-const HeroTaskCard = ({ task, index, completing, onComplete, onExecute }) => {
+const HeroTaskCard = ({ task, index, completing, onComplete, onExecute, onLeadClick }) => {
     const lead = task.leads || {}
     const initial = lead.nome?.charAt(0)?.toUpperCase() || '?'
     const stage = lead.cadence_stage || ''
@@ -468,9 +484,9 @@ const HeroTaskCard = ({ task, index, completing, onComplete, onExecute }) => {
                             <span className="text-sm font-bold text-gray-700">{initial}</span>
                         </div>
                     )}
-                    <div className="flex-1 min-w-0">
+                    <div className="flex-1 min-w-0 cursor-pointer" onClick={() => onLeadClick && onLeadClick(lead)}>
                         <div className="flex items-center gap-2 mb-0.5">
-                            <h4 className="text-sm font-bold text-gray-900 truncate">{lead.nome || 'Lead'}</h4>
+                            <h4 className="text-sm font-bold text-gray-900 truncate hover:text-orange-600 transition-colors">{lead.nome || 'Lead'}</h4>
                             {stage && (
                                 <span className={`shrink-0 text-[9px] font-bold px-2 py-0.5 rounded-md border ${stageStyle}`}>
                                     {stage}
@@ -544,7 +560,7 @@ const HeroTaskCard = ({ task, index, completing, onComplete, onExecute }) => {
     )
 }
 
-const RadarLeadCard = ({ lead }) => {
+const RadarLeadCard = ({ lead, onLeadClick }) => {
     const initial = lead.nome?.charAt(0)?.toUpperCase() || '?'
     const stage = lead.cadence_stage || ''
     const stageStyle = CADENCE_STYLES[stage] || 'bg-gray-100 text-gray-500 border-gray-200'
@@ -561,7 +577,8 @@ const RadarLeadCard = ({ lead }) => {
     }
 
     return (
-        <div className="bg-white rounded-xl border border-gray-200 p-4 min-w-[200px] max-w-[240px] shrink-0 snap-center hover:shadow-md hover:border-gray-300 transition-all duration-300 cursor-default">
+        <div className="bg-white rounded-xl border border-gray-200 p-4 min-w-[200px] max-w-[240px] shrink-0 snap-center hover:shadow-md hover:border-gray-300 transition-all duration-300 cursor-pointer"
+            onClick={() => onLeadClick && onLeadClick(lead)}>
             <div className="flex items-center gap-3 mb-3">
                 {lead.avatar_url ? (
                     <SafeImage

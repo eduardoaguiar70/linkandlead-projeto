@@ -6,6 +6,38 @@ import { toast } from 'sonner'
 const GENERATE_ICEBREAKER_URL = 'https://n8n-n8n-start.kfocge.easypanel.host/webhook/generate-icebreaker'
 const ACCEPT_AND_SEND_URL = 'https://n8n-n8n-start.kfocge.easypanel.host/webhook/accept-and-send'
 
+// ── ICP Score Badge ────────────────────────────────────────────────────────────
+const ICP_STYLES = {
+    A: 'bg-emerald-100 text-emerald-800 border-emerald-200',
+    B: 'bg-amber-100 text-amber-800 border-amber-200',
+    C: 'bg-orange-100 text-orange-800 border-orange-200',
+    DISCARD: 'bg-gray-100 text-gray-500 border-gray-200',
+}
+
+const IcpBadge = ({ score, reasoning }) => {
+    const [showTooltip, setShowTooltip] = useState(false)
+    if (!score) return null
+    const styles = ICP_STYLES[score] ?? ICP_STYLES.DISCARD
+    return (
+        <div
+            className="relative inline-flex items-center"
+            onMouseEnter={() => setShowTooltip(true)}
+            onMouseLeave={() => setShowTooltip(false)}
+        >
+            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold border cursor-default select-none ${styles}`}>
+                ICP&nbsp;{score}
+            </span>
+            {showTooltip && reasoning && (
+                <div className="absolute bottom-full left-0 mb-2 z-50 w-64 p-3 bg-white border border-gray-200 rounded-xl shadow-xl">
+                    <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1">AI Reasoning</p>
+                    <p className="text-xs text-gray-700 leading-relaxed">{reasoning}</p>
+                    <div className="absolute top-full left-4 border-8 border-transparent border-t-white" style={{ filter: 'drop-shadow(0 1px 0 #e5e7eb)' }} />
+                </div>
+            )}
+        </div>
+    )
+}
+
 const ConnectionRequests = () => {
     const { selectedClientId } = useClientSelection()
     const [requests, setRequests] = useState([])
@@ -21,7 +53,7 @@ const ConnectionRequests = () => {
                 const { data, error } = await supabase
                     .from('connection_requests')
                     .select('*')
-                    .eq('status', 'pending')
+                    .eq('status', 'resolved')
                     .eq('client_id', selectedClientId)
 
                 if (error) {
@@ -162,10 +194,11 @@ const ConnectionRequests = () => {
                                 referrerPolicy="no-referrer"
                             />
                             <div className="flex flex-col flex-1 min-w-0">
-                                <div className="flex items-center gap-2">
+                                <div className="flex items-center gap-2 flex-wrap">
                                     <span className="font-semibold text-gray-900 truncate">
                                         {req.name || 'Unknown'}
                                     </span>
+                                    <IcpBadge score={req.icp_score} reasoning={req.icp_reasoning} />
                                     <a
                                         href={req.profile_url || `https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(req.name || '')}`}
                                         target="_blank"

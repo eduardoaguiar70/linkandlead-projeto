@@ -31,12 +31,12 @@ const HistorySyncModal = ({
                             <History size={20} className={`text-amber-600 ${isRunning ? 'animate-spin' : ''}`} style={{ animationDuration: '3s' }} />
                         </div>
                         <div>
-                            <h2 className="font-bold text-slate-800 text-sm">O Arqueólogo</h2>
-                            <p className="text-xs text-slate-500">Importação de histórico de mensagens</p>
+                            <h2 className="font-bold text-slate-800 text-sm">The Archaeologist</h2>
+                            <p className="text-xs text-slate-500">Message history import</p>
                         </div>
                     </div>
                     {isDone && (
-                        <button onClick={onClose} className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors" aria-label="Fechar">
+                        <button onClick={onClose} className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors" aria-label="Close">
                             <X size={16} />
                         </button>
                     )}
@@ -50,10 +50,10 @@ const HistorySyncModal = ({
                             <Loader2 size={20} className="animate-spin text-amber-500 mt-0.5 shrink-0" />
                             <div>
                                 <p className="font-semibold text-slate-800 text-sm">
-                                    Processando lead {current} de {total}...
+                                    Processing lead {current} of {total}...
                                 </p>
                                 <p className="text-slate-500 text-xs mt-1">
-                                    Cada lead leva ~2 segundos. Estimativa total: ~{estimateMinutes} minuto{estimateMinutes > 1 ? 's' : ''}.
+                                    Each lead takes ~2 seconds. Total estimate: ~{estimateMinutes} minute{estimateMinutes > 1 ? 's' : ''}.
                                 </p>
                             </div>
                         </div>
@@ -64,11 +64,11 @@ const HistorySyncModal = ({
                             <CheckCircle2 size={20} className="text-emerald-500 mt-0.5 shrink-0" />
                             <div>
                                 <p className="font-semibold text-slate-800 text-sm">
-                                    ✅ Importação concluída — {total} leads enviados para processamento
+                                    ✅ Import completed — {total} leads sent for processing
                                 </p>
                                 {failures > 0 && (
                                     <p className="text-amber-600 text-xs mt-1">
-                                        ⚠️ {failures} lead{failures > 1 ? 's' : ''} falharam no envio (registrado no console).
+                                        ⚠️ {failures} lead{failures > 1 ? 's' : ''} failed to send (logged in console).
                                     </p>
                                 )}
                             </div>
@@ -80,10 +80,10 @@ const HistorySyncModal = ({
                             <Ban size={20} className="text-slate-400 mt-0.5 shrink-0" />
                             <div>
                                 <p className="font-semibold text-slate-800 text-sm">
-                                    Importação cancelada pelo usuário
+                                    Import cancelled by user
                                 </p>
                                 <p className="text-slate-500 text-xs mt-1">
-                                    {current} de {total} leads foram enviados antes do cancelamento.
+                                    {current} of {total} leads were sent before cancellation.
                                 </p>
                             </div>
                         </div>
@@ -93,7 +93,7 @@ const HistorySyncModal = ({
                         <div className="flex items-start gap-3">
                             <AlertCircle size={20} className="text-red-500 mt-0.5 shrink-0" />
                             <p className="font-semibold text-red-700 text-sm">
-                                Erro durante a importação — tente novamente.
+                                Error during import — please try again.
                             </p>
                         </div>
                     )}
@@ -108,15 +108,15 @@ const HistorySyncModal = ({
                             <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden">
                                 <div
                                     className={`h-full rounded-full transition-all duration-500 ease-out ${isCompleted ? 'bg-emerald-500' :
-                                            isCancelled ? 'bg-slate-400' :
-                                                isError ? 'bg-red-400' :
-                                                    'bg-amber-500'
+                                        isCancelled ? 'bg-slate-400' :
+                                            isError ? 'bg-red-400' :
+                                                'bg-amber-500'
                                         }`}
                                     style={{ width: `${progressPercent}%` }}
                                 />
                             </div>
                             {failures > 0 && isRunning && (
-                                <p className="text-[11px] text-amber-600 mt-1">{failures} falha{failures > 1 ? 's' : ''} até agora</p>
+                                <p className="text-[11px] text-amber-600 mt-1">{failures} failure{failures > 1 ? 's' : ''} so far</p>
                             )}
                         </div>
                     )}
@@ -129,7 +129,7 @@ const HistorySyncModal = ({
                             onClick={onCancel}
                             className="w-full py-2.5 rounded-xl border border-red-200 text-red-600 hover:bg-red-50 font-semibold text-sm transition-colors"
                         >
-                            Cancelar importação
+                            Cancel import
                         </button>
                     )}
                     {isDone && (
@@ -137,7 +137,7 @@ const HistorySyncModal = ({
                             onClick={onClose}
                             className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-semibold text-sm transition-colors"
                         >
-                            Fechar
+                            Close
                         </button>
                     )}
                 </div>

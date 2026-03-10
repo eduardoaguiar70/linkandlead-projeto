@@ -3,10 +3,11 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '../services/supabaseClient'
 import { useClientSelection } from '../contexts/ClientSelectionContext'
 import SafeImage from '../components/SafeImage'
+import UnifiedLeadModal from '../components/UnifiedLeadModal'
 import {
     Crosshair, Flame, TrendingUp, Snowflake,
     Loader2, RefreshCw, AlertTriangle, Trophy, PartyPopper,
-    MessageCircle, CheckCircle2, HandMetal, Ban
+    MessageCircle, CheckCircle2, HandMetal, Ban, Clock
 } from 'lucide-react'
 
 // ═══════════════════════════════════════════════
@@ -98,7 +99,7 @@ const FeedSection = ({ title, icon, count, themeKey, children, footer, emptyText
     )
 }
 
-const LeadCard = ({ lead, themeKey, completing, blacklisting, onComplete, onBlacklist, onInbox }) => {
+const LeadCard = ({ lead, themeKey, completing, blacklisting, onComplete, onBlacklist, onInbox, onLeadClick }) => {
     const theme = COLUMN_THEMES[themeKey]
     const initial = lead.nome?.charAt(0)?.toUpperCase() || '?'
     const stage = lead.cadence_stage || ''
@@ -124,9 +125,9 @@ const LeadCard = ({ lead, themeKey, completing, blacklisting, onComplete, onBlac
                             <span className="text-sm font-bold text-gray-600">{initial}</span>
                         </div>
                     )}
-                    <div className="flex-1 min-w-0">
+                    <div className="flex-1 min-w-0 cursor-pointer" onClick={() => onLeadClick && onLeadClick(lead)}>
                         <div className="flex items-center gap-2 mb-1 flex-wrap">
-                            <h4 className="text-sm font-semibold text-gray-900 truncate">{lead.nome || 'Lead'}</h4>
+                            <h4 className="text-sm font-semibold text-gray-900 truncate hover:text-orange-600 transition-colors">{lead.nome || 'Lead'}</h4>
                             {stage && (
                                 <span className={`shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded border ${stageStyle}`}>{stage}</span>
                             )}
@@ -191,12 +192,15 @@ const MissionsPage = () => {
     const { selectedClientId } = useClientSelection()
 
     const [tasks, setTasks] = useState([])
+    const [overdueTasks, setOverdueTasks] = useState([])
+    const [showOverdue, setShowOverdue] = useState(false)
     const [loading, setLoading] = useState(true)
     const [refreshing, setRefreshing] = useState(false)
     const [error, setError] = useState(null)
     const [actionState, setActionState] = useState({}) // { [id]: 'completing' | 'blacklisting' }
     const [showAllCold, setShowAllCold] = useState(false)
     const [doneToday, setDoneToday] = useState(0)
+    const [selectedLeadForModal, setSelectedLeadForModal] = useState(null)
 
     const fetchTasks = useCallback(async (isRefresh = false) => {
         if (!selectedClientId) { setLoading(false); return }
@@ -208,11 +212,12 @@ const MissionsPage = () => {
             const todayStart = new Date()
             todayStart.setHours(0, 0, 0, 0)
 
-            const [pendingResult, doneResult] = await Promise.all([
+            const [pendingResult, doneResult, overdueResult] = await Promise.all([
                 supabase
                     .from('tasks')
                     .select('*, lead:leads!inner(id, client_id, nome, empresa, headline, avatar_url, icp_score, cadence_stage, has_engaged, last_task_completed_at, total_interactions_count, linkedin_profile_url, crm_stage)')
                     .eq('leads.client_id', selectedClientId)
+                    .neq('leads.is_blacklisted', true)
                     .eq('status', 'PENDING')
                     .gte('created_at', todayStart.toISOString())
                     .order('created_at', { ascending: true })
@@ -221,9 +226,19 @@ const MissionsPage = () => {
                     .from('tasks')
                     .select('id, leads!inner(client_id)', { count: 'exact' })
                     .eq('leads.client_id', selectedClientId)
+                    .neq('leads.is_blacklisted', true)
                     .eq('status', 'COMPLETED')
                     .gte('completed_at', `${new Date().toISOString().split('T')[0]}T00:00:00`)
-                    .limit(1)
+                    .limit(1),
+                supabase
+                    .from('tasks')
+                    .select('*, lead:leads!inner(id, client_id, nome, empresa, headline, avatar_url, icp_score, cadence_stage, has_engaged, last_task_completed_at, total_interactions_count, linkedin_profile_url, crm_stage)')
+                    .eq('leads.client_id', selectedClientId)
+                    .neq('leads.is_blacklisted', true)
+                    .eq('status', 'PENDING')
+                    .lt('created_at', todayStart.toISOString())
+                    .order('created_at', { ascending: false })
+                    .limit(50)
             ])
 
             if (pendingResult.error) throw pendingResult.error
@@ -237,6 +252,7 @@ const MissionsPage = () => {
 
             setTasks(activeTasks)
             setDoneToday(doneResult.count || 0)
+            setOverdueTasks(overdueResult.data || [])
         } catch (err) {
             console.error('[Cockpit] fetch error:', err)
             setError('Failed to load tasks. Please try again.')
@@ -248,12 +264,15 @@ const MissionsPage = () => {
 
     useEffect(() => { fetchTasks() }, [fetchTasks])
 
-    const removeOptimistically = (taskId) => setTasks(prev => prev.filter(t => t.id !== taskId))
+    const removeOptimistically = (taskId) => {
+        setTasks(prev => prev.filter(t => t.id !== taskId))
+        setOverdueTasks(prev => prev.filter(t => t.id !== taskId))
+    }
 
     const handleComplete = async (taskId) => {
         setActionState(prev => ({ ...prev, [taskId]: 'completing' }))
 
-        const taskObj = tasks.find(t => t.id === taskId)
+        const taskObj = tasks.find(t => t.id === taskId) || overdueTasks.find(t => t.id === taskId)
 
         setTimeout(() => {
             removeOptimistically(taskId)
@@ -276,7 +295,7 @@ const MissionsPage = () => {
     const handleBlacklist = async (taskId) => {
         setActionState(prev => ({ ...prev, [taskId]: 'blacklisting' }))
 
-        const taskObj = tasks.find(t => t.id === taskId)
+        const taskObj = tasks.find(t => t.id === taskId) || overdueTasks.find(t => t.id === taskId)
 
         setTimeout(() => removeOptimistically(taskId), 300)
         try {
@@ -321,7 +340,7 @@ const MissionsPage = () => {
         <div className="min-h-screen bg-gray-50 flex items-center justify-center">
             <div className="flex flex-col items-center gap-4">
                 <Loader2 className="w-8 h-8 animate-spin text-orange-500" />
-                <span className="tracking-wide uppercase text-xs font-bold text-gray-400">Loading cockpit...</span>
+                <span className="tracking-wide uppercase text-xs font-bold text-gray-400">Loading tasks...</span>
             </div>
         </div>
     )
@@ -381,6 +400,37 @@ const MissionsPage = () => {
                     </div>
                 </div>
 
+                {/* Overdue Tasks Toggle Tab */}
+                <div className="flex items-center gap-2 mb-4 bg-gray-50 p-1 rounded-xl border border-gray-100 w-fit">
+                    <button
+                        onClick={() => setShowOverdue(false)}
+                        className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${!showOverdue
+                            ? 'bg-white text-gray-900 shadow-sm ring-1 ring-gray-200/50'
+                            : 'text-gray-500 hover:text-gray-700'
+                            }`}
+                    >
+                        Today's Missions
+                    </button>
+                    <button
+                        onClick={() => setShowOverdue(true)}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${showOverdue
+                            ? 'bg-red-50 text-red-700 shadow-sm ring-1 ring-red-200'
+                            : 'text-gray-500 hover:text-gray-700'
+                            }`}
+                    >
+                        <Clock size={14} className={showOverdue ? 'text-red-500' : 'text-gray-400'} />
+                        Overdue Tasks
+                        <span className={`px-1.5 py-0.5 rounded-full text-[10px] ml-1 ${showOverdue
+                            ? 'bg-red-200/50 text-red-700'
+                            : overdueTasks.length > 0
+                                ? 'bg-red-100 text-red-600'
+                                : 'bg-gray-200 text-gray-500'
+                            }`}>
+                            {overdueTasks.length}
+                        </span>
+                    </button>
+                </div>
+
                 {/* ERROR */}
                 {error && (
                     <div className="bg-white rounded-2xl border border-red-200 p-8 mb-6">
@@ -403,7 +453,7 @@ const MissionsPage = () => {
                             </div>
                         </div>
                         <h2 className="text-xl font-bold text-gray-900 mb-2">
-                            {doneToday > 0 ? 'Empty Cockpit! 🏆' : 'All caught up! 🎉'}
+                            {doneToday > 0 ? 'No tasks left! 🏆' : 'All caught up! 🎉'}
                         </h2>
                         <p className="text-sm text-gray-500 max-w-sm mx-auto">
                             {doneToday > 0
@@ -414,8 +464,41 @@ const MissionsPage = () => {
                     </div>
                 )}
 
+                {/* OVERDUE VIEW */}
+                {showOverdue && !error && (
+                    <div className="animate-fade-in">
+                        {overdueTasks.length > 0 ? (
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                                {overdueTasks.map(task => (
+                                    <LeadCard
+                                        key={task.id}
+                                        lead={task.lead}
+                                        themeKey="hot" // use hot theme as a generic warning theme
+                                        completing={actionState[task.id] === 'completing'}
+                                        blacklisting={actionState[task.id] === 'blacklisting'}
+                                        onComplete={() => handleComplete(task.id)}
+                                        onBlacklist={() => handleBlacklist(task.id)}
+                                        onInbox={() => handleInbox(task.lead.id)}
+                                        onLeadClick={setSelectedLeadForModal}
+                                    />
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="bg-white rounded-2xl border border-gray-200 p-10 flex flex-col items-center justify-center shadow-sm">
+                                <div className="w-16 h-16 rounded-2xl bg-gray-50 border border-gray-100 flex items-center justify-center mb-4">
+                                    <PartyPopper size={32} className="text-gray-400" />
+                                </div>
+                                <h3 className="text-lg font-bold text-gray-900 mb-2">No overdue tasks!</h3>
+                                <p className="text-sm text-gray-500 text-center max-w-sm">
+                                    You have completed all past assignments successfully. Fantastic job keeping your pipeline clean!
+                                </p>
+                            </div>
+                        )}
+                    </div>
+                )}
+
                 {/* 3-COLUMN BOARD */}
-                {!allDone && !error && (
+                {!showOverdue && !allDone && !error && (
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
                         {/* HOT G4/G5 */}
@@ -424,7 +507,8 @@ const MissionsPage = () => {
                                 <LeadCard key={task.id} lead={task.lead} themeKey="hot"
                                     completing={actionState[task.id] === 'completing'}
                                     blacklisting={actionState[task.id] === 'blacklisting'}
-                                    onComplete={() => handleComplete(task.id)} onBlacklist={() => handleBlacklist(task.id)} onInbox={() => handleInbox(task.lead.id)} />
+                                    onComplete={() => handleComplete(task.id)} onBlacklist={() => handleBlacklist(task.id)} onInbox={() => handleInbox(task.lead.id)}
+                                    onLeadClick={setSelectedLeadForModal} />
                             ))}
                         </FeedSection>
 
@@ -434,7 +518,8 @@ const MissionsPage = () => {
                                 <LeadCard key={task.id} lead={task.lead} themeKey="warm"
                                     completing={actionState[task.id] === 'completing'}
                                     blacklisting={actionState[task.id] === 'blacklisting'}
-                                    onComplete={() => handleComplete(task.id)} onBlacklist={() => handleBlacklist(task.id)} onInbox={() => handleInbox(task.lead.id)} />
+                                    onComplete={() => handleComplete(task.id)} onBlacklist={() => handleBlacklist(task.id)} onInbox={() => handleInbox(task.lead.id)}
+                                    onLeadClick={setSelectedLeadForModal} />
                             ))}
                         </FeedSection>
 
@@ -461,13 +546,24 @@ const MissionsPage = () => {
                                 <LeadCard key={task.id} lead={task.lead} themeKey="cold"
                                     completing={actionState[task.id] === 'completing'}
                                     blacklisting={actionState[task.id] === 'blacklisting'}
-                                    onComplete={() => handleComplete(task.id)} onBlacklist={() => handleBlacklist(task.id)} onInbox={() => handleInbox(task.lead.id)} />
+                                    onComplete={() => handleComplete(task.id)} onBlacklist={() => handleBlacklist(task.id)} onInbox={() => handleInbox(task.lead.id)}
+                                    onLeadClick={setSelectedLeadForModal} />
                             ))}
                         </FeedSection>
 
                     </div>
                 )}
             </div>
+            {/* Unified Lead Modal */}
+            {selectedLeadForModal && (
+                <UnifiedLeadModal
+                    lead={selectedLeadForModal}
+                    onClose={() => setSelectedLeadForModal(null)}
+                    onLeadUpdated={(updated) => {
+                        setSelectedLeadForModal(prev => prev && prev.id === updated.id ? { ...prev, ...updated } : prev)
+                    }}
+                />
+            )}
         </div>
     )
 }

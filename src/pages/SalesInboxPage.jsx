@@ -2,8 +2,9 @@ import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { supabase } from '../services/supabaseClient'
 import { useClientSelection } from '../contexts/ClientSelectionContext'
-import { Search, Send, MoreVertical, Phone, Mail, MapPin, Briefcase, Zap, Star, Sparkles, MessageSquare, Check, LayoutGrid, List, Loader2, X, ClipboardList, CheckCircle2, Ban } from 'lucide-react'
+import { Search, Send, MoreVertical, Phone, Mail, MapPin, Briefcase, Zap, Star, Sparkles, MessageSquare, Check, LayoutGrid, List, Loader2, X, ClipboardList, CheckCircle2, Ban, Bell } from 'lucide-react'
 import SafeImage from '../components/SafeImage'
+import UnifiedLeadModal from '../components/UnifiedLeadModal'
 const N8N_GENERATE_REPLY_URL = 'https://n8n-n8n-start.kfocge.easypanel.host/webhook/generate-reply'
 const N8N_SEND_MESSAGE_URL = 'https://n8n-n8n-start.kfocge.easypanel.host/webhook/send-linkedin-message'
 import StrategicContextCard from '../components/StrategicContextCard'
@@ -48,9 +49,16 @@ const SalesInboxPage = () => {
     // AI Actions State
     const [draftMessage, setDraftMessage] = useState('')
     const [selectedSuggestionIdx, setSelectedSuggestionIdx] = useState(null)
+    const [showLeadModal, setShowLeadModal] = useState(false)
+    const [showFollowupOnly, setShowFollowupOnly] = useState(false)
     const [generatingReply, setGeneratingReply] = useState(false)
     const [sdrSeniorGenerated, setSdrSeniorGenerated] = useState(false)
     const [generatedReasoning, setGeneratedReasoning] = useState(null)
+
+    // Quick Actions State
+    const [quickActions, setQuickActions] = useState([])
+    const [showQuickActionsPopover, setShowQuickActionsPopover] = useState(false)
+    const [activeQuickActionTab, setActiveQuickActionTab] = useState('All')
 
     // Right sidebar tabs + AI Copilot state
     const [rightTab, setRightTab] = useState('detalhes')
@@ -185,6 +193,7 @@ const SalesInboxPage = () => {
                 .from('tasks')
                 .select('id, leads!inner(client_id, id)', { count: 'exact' })
                 .eq('leads.client_id', selectedClientId)
+                .neq('leads.is_blacklisted', true)
                 .eq('status', 'PENDING')
                 .gte('created_at', todayStart.toISOString())
                 .limit(30)
@@ -199,6 +208,25 @@ const SalesInboxPage = () => {
         fetchCount()
     }, [selectedClientId])
 
+    // Fetch Content Library for Quick Actions
+    useEffect(() => {
+        if (!selectedClientId) return
+        const fetchLibrary = async () => {
+            try {
+                const { data, error } = await supabase
+                    .from('content_library')
+                    .select('*')
+                    .eq('client_id', selectedClientId)
+
+                if (error) throw error
+                setQuickActions(data || [])
+            } catch (err) {
+                console.error('[Inbox] Error fetching content library:', err)
+            }
+        }
+        fetchLibrary()
+    }, [selectedClientId])
+
     // 1. Fetch Inbox Leads (Score > 0, Sorted Desc)
     useEffect(() => {
         if (!selectedClientId) return
@@ -210,6 +238,7 @@ const SalesInboxPage = () => {
                     .from('leads')
                     .select('*')
                     .eq('client_id', selectedClientId)
+                    .neq('is_blacklisted', true)
                     .order('last_interaction_date', { ascending: false, nullsFirst: false })
                     .limit(50)
 
@@ -358,6 +387,7 @@ const SalesInboxPage = () => {
                         .from('leads')
                         .select('*')
                         .eq('client_id', selectedClientId)
+                        .neq('is_blacklisted', true)
                         .or(`nome.ilike.%${term}%,headline.ilike.%${term}%,empresa.ilike.%${term}%`)
                         .order('total_interactions_count', { ascending: false })
                         .limit(100)
@@ -422,6 +452,20 @@ const SalesInboxPage = () => {
         })
         : baseLeads
 
+    const followupLeads = filteredLeads.filter(l => l.is_followup)
+    const displayedLeads = showFollowupOnly ? followupLeads : filteredLeads
+
+    // Helper: days until next follow-up contact
+    const getNextFollowupDays = (lead) => {
+        if (!lead.is_followup || !lead.followup_started_at) return null
+        const interval = lead.followup_interval_days || 7
+        const started = new Date(lead.followup_started_at).getTime()
+        const now = Date.now()
+        const elapsed = Math.floor((now - started) / 86400000)
+        const daysLeft = interval - (elapsed % interval)
+        return daysLeft === interval ? 0 : daysLeft
+    }
+
 
     // Fetch tasks when sidebar tab is active
     const fetchSidebarTasks = useCallback(async () => {
@@ -435,6 +479,7 @@ const SalesInboxPage = () => {
                 .from('tasks')
                 .select('id, instruction, leads!inner(id, client_id, nome, empresa, headline, cadence_stage, avatar_url, linkedin_profile_url, total_interactions_count, is_blacklisted, crm_stage, last_task_completed_at, has_engaged, last_interaction_date)')
                 .eq('leads.client_id', selectedClientId)
+                .neq('leads.is_blacklisted', true)
                 .eq('status', 'PENDING')
                 .gte('created_at', todayStart.toISOString())
                 .order('created_at', { ascending: true })
@@ -712,7 +757,7 @@ const SalesInboxPage = () => {
             {/* HEADER & TOGGLE */}
             <div className="flex flex-wrap justify-between items-center px-4 gap-3 shrink-0">
                 <h1 className="text-xl font-bold text-black flex items-center gap-2">
-                    <LayoutGrid size={20} className="text-primary" /> Intelligent Inbox
+                    <LayoutGrid size={20} className="text-primary" /> Smart Inbox
                 </h1>
 
                 {/* Search Input */}
@@ -784,9 +829,28 @@ const SalesInboxPage = () => {
                         {/* ── CONVERSAS TAB ── */}
                         {sidebarTab === 'conversas' && (
                             <>
+                                {/* Follow-up filter chip */}
+                                {followupLeads.length > 0 && (
+                                    <button
+                                        onClick={() => setShowFollowupOnly(!showFollowupOnly)}
+                                        className={`w-full flex items-center justify-between px-3 py-2 rounded-xl border text-xs font-semibold transition-all mb-1 ${showFollowupOnly
+                                            ? 'bg-orange-500 text-white border-orange-500 shadow-sm'
+                                            : 'bg-orange-50 text-orange-600 border-orange-200 hover:bg-orange-100'
+                                            }`}
+                                    >
+                                        <span className="flex items-center gap-1.5">
+                                            <Bell size={12} />
+                                            Follow-up{showFollowupOnly ? ' (active filter)' : ''}
+                                        </span>
+                                        <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${showFollowupOnly ? 'bg-white/20 text-white' : 'bg-orange-100 text-orange-700'
+                                            }`}>
+                                            {followupLeads.length}
+                                        </span>
+                                    </button>
+                                )}
                                 {loadingLeads ? (
                                     <div className="p-8 text-center text-text-muted text-sm">Loading...</div>
-                                ) : filteredLeads.map(lead => (
+                                ) : displayedLeads.map(lead => (
                                     <div
                                         key={lead.id}
                                         onClick={() => {
@@ -796,9 +860,11 @@ const SalesInboxPage = () => {
                                         }}
                                         className={`p-3 rounded-xl border cursor-pointer transition-all ${activeLead?.id === lead.id
                                             ? 'bg-orange-50 border-orange-300 shadow-sm'
-                                            : (lead.unread_count || 0) > 0
-                                                ? 'border-blue-200 bg-blue-50/40 hover:bg-blue-50 hover:border-blue-300'
-                                                : 'border-transparent hover:bg-gray-50 hover:border-gray-200'
+                                            : lead.is_followup
+                                                ? 'border-l-4 border-l-orange-400 border-t border-r border-b border-orange-200 bg-orange-50/30 hover:bg-orange-50'
+                                                : (lead.unread_count || 0) > 0
+                                                    ? 'border-blue-200 bg-blue-50/40 hover:bg-blue-50 hover:border-blue-300'
+                                                    : 'border-transparent hover:bg-gray-50 hover:border-gray-200'
                                             }`}
                                     >
                                         <div className="flex justify-between items-start mb-1">
@@ -828,6 +894,15 @@ const SalesInboxPage = () => {
                                                 }`}>
                                                 ICP {lead.icp_score || 'C'}
                                             </span>
+                                            {lead.is_followup && (() => {
+                                                const dLeft = getNextFollowupDays(lead)
+                                                return (
+                                                    <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-orange-50 text-orange-600 border border-orange-200 font-semibold">
+                                                        <Bell size={9} />
+                                                        {dLeft === 0 ? 'Contact today!' : `in ${dLeft}d`}
+                                                    </span>
+                                                )
+                                            })()}
                                             <span className="text-gray-400">
                                                 {(() => {
                                                     const d = lead.last_interaction_date
@@ -928,7 +1003,7 @@ const SalesInboxPage = () => {
                         {/* Header */}
                         <div className="p-4 border-b border-gray-200 bg-gray-50 flex items-center justify-between z-10">
                             <div className="flex items-center gap-3 flex-1 min-w-0">
-                                <div className="w-10 h-10 shrink-0 rounded-full border border-gray-200 flex items-center justify-center bg-gray-100 text-gray-500 font-bold shadow-inner overflow-hidden">
+                                <div className="w-10 h-10 shrink-0 rounded-full border border-gray-200 flex items-center justify-center bg-gray-100 text-gray-500 font-bold shadow-inner overflow-hidden cursor-pointer hover:ring-2 hover:ring-orange-300 transition-all" onClick={() => setShowLeadModal(true)}>
                                     <SafeImage
                                         src={activeLead.avatar_url}
                                         alt={activeLead.nome}
@@ -936,8 +1011,8 @@ const SalesInboxPage = () => {
                                         fallbackText={activeLead.nome?.charAt(0)}
                                     />
                                 </div>
-                                <div className="flex-1 min-w-0">
-                                    <div className="font-bold text-gray-900 text-sm truncate">{activeLead.nome}</div>
+                                <div className="flex-1 min-w-0 cursor-pointer" onClick={() => setShowLeadModal(true)}>
+                                    <div className="font-bold text-gray-900 text-sm truncate hover:text-orange-600 transition-colors">{activeLead.nome}</div>
                                     <div className="text-xs text-gray-500 truncate">{activeLead.headline || activeLead.company}</div>
                                 </div>
                             </div>
@@ -1056,10 +1131,92 @@ const SalesInboxPage = () => {
                         </div>
 
                         {/* Input Area */}
-                        <div className="p-4 border-t border-gray-200 bg-gray-50">
-                            <div className="relative">
+                        <div className="p-4 border-t border-gray-200 bg-gray-50 relative">
+                            {/* Quick Actions Popover */}
+                            {showQuickActionsPopover && (
+                                <div className="absolute bottom-full left-4 mb-2 w-80 bg-white/90 backdrop-blur-md rounded-2xl shadow-xl border border-gray-200 overflow-hidden flex flex-col z-50 animate-in fade-in slide-in-from-bottom-2 duration-200">
+                                    <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 bg-gray-50/50">
+                                        <div className="flex items-center gap-2 text-primary font-semibold text-sm">
+                                            <Zap size={16} className="fill-primary" />
+                                            Quick Actions
+                                        </div>
+                                        <button onClick={() => setShowQuickActionsPopover(false)} className="text-gray-400 hover:text-gray-600 transition-colors">
+                                            <X size={16} />
+                                        </button>
+                                    </div>
+
+                                    {/* Tabs */}
+                                    <div className="flex items-center gap-1 px-3 py-2 border-b border-gray-100 overflow-x-auto no-scrollbar">
+                                        {['All', ...new Set(quickActions.map(q => q.content_type).filter(Boolean))].map(tab => {
+                                            const count = tab === 'All' ? quickActions.length : quickActions.filter(q => q.content_type === tab).length;
+                                            return (
+                                                <button
+                                                    key={tab}
+                                                    onClick={() => setActiveQuickActionTab(tab)}
+                                                    className={`whitespace-nowrap px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${activeQuickActionTab === tab
+                                                        ? 'bg-primary/10 text-primary'
+                                                        : 'text-gray-500 hover:bg-gray-100/80 hover:text-gray-700'
+                                                        }`}
+                                                >
+                                                    {tab} <span className="opacity-60 font-normal ml-0.5">({count})</span>
+                                                </button>
+                                            )
+                                        })}
+                                    </div>
+
+                                    {/* List */}
+                                    <div className="max-h-60 overflow-y-auto p-2 space-y-1">
+                                        {quickActions
+                                            .filter(q => activeQuickActionTab === 'All' || q.content_type === activeQuickActionTab)
+                                            .length === 0 ? (
+                                            <div className="py-6 text-center text-xs text-gray-400">
+                                                No contents found. Add them in Content Library.
+                                            </div>
+                                        ) : (
+                                            quickActions
+                                                .filter(q => activeQuickActionTab === 'All' || q.content_type === activeQuickActionTab)
+                                                .map(action => (
+                                                    <button
+                                                        key={action.id}
+                                                        onClick={() => {
+                                                            const firstName = activeLead?.nome?.split(' ')[0] || 'Líder'
+                                                            let template = action.template_text || ''
+                                                            template = template.replace(/\{\{first_name\}\}/g, firstName)
+
+                                                            const finalMsg = `${template} ${action.content_url || ''}`.trim()
+                                                            setNewMessage(prev => prev ? `${prev}\n\n${finalMsg}` : finalMsg)
+                                                            setShowQuickActionsPopover(false)
+                                                        }}
+                                                        className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-orange-50/80 hover:text-orange-700 transition-all group flex flex-col gap-0.5"
+                                                    >
+                                                        <div className="font-semibold text-sm text-gray-800 group-hover:text-orange-800 transition-colors truncate">
+                                                            {action.content_name}
+                                                        </div>
+                                                        <div className="text-[10px] text-gray-400 truncate w-[280px]">
+                                                            {action.template_text}
+                                                        </div>
+                                                    </button>
+                                                ))
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+
+                            <div className="relative flex items-center w-full">
+                                {/* Button Thunder */}
+                                <button
+                                    onClick={() => setShowQuickActionsPopover(!showQuickActionsPopover)}
+                                    className={`absolute left-3 z-10 p-1.5 rounded-lg transition-all ${showQuickActionsPopover
+                                        ? 'bg-primary/20 text-primary scale-110 shadow-sm'
+                                        : 'bg-white text-primary border border-primary/20 hover:bg-primary/10 hover:border-primary/40'
+                                        }`}
+                                    title="Quick Actions"
+                                >
+                                    <Zap size={16} className={showQuickActionsPopover ? "fill-primary" : ""} />
+                                </button>
+
                                 <textarea
-                                    className="w-full bg-white border border-gray-200 rounded-xl pl-4 pr-12 py-3 text-gray-800 placeholder-gray-400 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition-all resize-none text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                                    className="w-full bg-white border border-gray-200 rounded-xl pl-[3.25rem] pr-12 py-3 text-gray-800 placeholder-gray-400 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition-all resize-none text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                                     rows="1"
                                     placeholder={isSending ? 'Sending...' : 'Type your reply... (Ctrl+Enter to send)'}
                                     value={newMessage}
@@ -1255,6 +1412,18 @@ const SalesInboxPage = () => {
                     )}
                 </div>
             </div>
+
+            {/* Unified Lead Modal */}
+            {showLeadModal && activeLead && (
+                <UnifiedLeadModal
+                    lead={activeLead}
+                    onClose={() => setShowLeadModal(false)}
+                    onLeadUpdated={(updated) => {
+                        setActiveLead(prev => prev && prev.id === updated.id ? { ...prev, ...updated } : prev)
+                        setLeads(prev => prev.map(l => l.id === updated.id ? { ...l, ...updated } : l))
+                    }}
+                />
+            )}
         </div>
     )
 }
