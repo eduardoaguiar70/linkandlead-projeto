@@ -28,7 +28,7 @@ import {
     DollarSign,
     Snowflake
 } from 'lucide-react'
-import SafeImage from './SafeImage'
+import LeadAvatar from './LeadAvatar'
 import UnifiedLeadModal from './UnifiedLeadModal'
 
 // ═══════════════════════════════════════════════
@@ -136,6 +136,7 @@ const SalesCockpit = () => {
                 supabase
                     .from('tasks')
                     .select('*, lead:leads!inner(id, client_id, nome, empresa, headline, linkedin_profile_url, cadence_stage, total_interactions_count, avatar_url)')
+                    .eq('client_id', selectedClientId)
                     .eq('leads.client_id', selectedClientId)
                     .neq('leads.is_blacklisted', true)
                     .eq('status', 'PENDING')
@@ -145,6 +146,7 @@ const SalesCockpit = () => {
                 supabase
                     .from('tasks')
                     .select('id, leads!inner(client_id)', { count: 'exact' })
+                    .eq('client_id', selectedClientId)
                     .eq('leads.client_id', selectedClientId)
                     .neq('leads.is_blacklisted', true)
                     .eq('status', 'COMPLETED')
@@ -153,6 +155,7 @@ const SalesCockpit = () => {
                 supabase
                     .from('tasks')
                     .select('*, lead:leads!inner(id, client_id, nome, empresa, headline, linkedin_profile_url, cadence_stage, total_interactions_count, avatar_url)')
+                    .eq('client_id', selectedClientId)
                     .eq('leads.client_id', selectedClientId)
                     .neq('leads.is_blacklisted', true)
                     .eq('status', 'PENDING')
@@ -643,12 +646,10 @@ const TaskCard = ({ task, themeKey, completing, onComplete, onExecute, onLeadCli
         >
             {/* Row 1: Avatar + Lead Info + Stage Badge */}
             <div className="flex items-start gap-3 mb-2">
-                <div className="w-9 h-9 rounded-lg shrink-0 border border-gray-200 flex items-center justify-center bg-gray-100 text-gray-600 font-bold text-xs overflow-hidden">
-                    <SafeImage
-                        src={lead?.avatar_url}
-                        alt={lead.nome || 'Lead'}
-                        className="w-full h-full object-cover"
-                        fallbackText={initial}
+                <div className="w-9 h-9 shrink-0">
+                    <LeadAvatar
+                        lead={lead}
+                        className="w-full h-full"
                     />
                 </div>
                 <div className="flex-1 min-w-0 cursor-pointer" onClick={() => onLeadClick && onLeadClick(lead)}>

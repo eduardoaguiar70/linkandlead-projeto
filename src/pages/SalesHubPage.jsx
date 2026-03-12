@@ -8,7 +8,7 @@ import {
     DollarSign,
     Target
 } from 'lucide-react'
-import SafeImage from '../components/SafeImage'
+import LeadAvatar from '../components/LeadAvatar'
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 const ICP_BG = { A: '#ecfdf5', B: '#fffbeb', C: '#f3f4f6' }
@@ -52,12 +52,10 @@ const LeadRow = ({ lead, onComplete, onBlacklist, onInbox, completing, blacklist
             onMouseLeave={e => { e.currentTarget.style.background = '#fff' }}
         >
             {/* Avatar */}
-            <div style={{ width: 40, height: 40, borderRadius: '50%', background: '#f3f4f6', border: '1px solid #e5e7eb', overflow: 'hidden', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '15px', fontWeight: 700, color: '#6b7280' }}>
-                <SafeImage
-                    src={lead.avatar_url}
-                    alt={lead.nome}
-                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                    fallbackText={lead.nome?.charAt(0)?.toUpperCase()}
+            <div style={{ width: 40, height: 40, shrink: 0 }}>
+                <LeadAvatar
+                    lead={lead}
+                    className="w-full h-full"
                 />
             </div>
 

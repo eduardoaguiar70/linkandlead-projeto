@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../services/supabaseClient'
 import { useClientSelection } from '../contexts/ClientSelectionContext'
-import SafeImage from '../components/SafeImage'
+import LeadAvatar from '../components/LeadAvatar'
 import {
     Search,
     Loader2,
@@ -294,17 +294,10 @@ const BlacklistPage = () => {
                         >
                             {/* Lead Info */}
                             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
-                                <div style={{
-                                    width: 36, height: 36, borderRadius: '50%', background: '#f3f4f6',
-                                    border: '1px solid #e5e7eb', overflow: 'hidden', flexShrink: 0,
-                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                    fontSize: '14px', fontWeight: 700, color: '#6b7280'
-                                }}>
-                                    <SafeImage
-                                        src={lead.avatar_url}
-                                        alt={lead.nome}
-                                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                                        fallbackText={lead.nome?.charAt(0)?.toUpperCase()}
+                                <div style={{ width: 36, height: 36, flexShrink: 0 }}>
+                                    <LeadAvatar
+                                        lead={lead}
+                                        className="w-full h-full"
                                     />
                                 </div>
                                 <div style={{ minWidth: 0 }}>
@@ -451,17 +444,10 @@ const BlacklistPage = () => {
                                         onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
                                     >
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, minWidth: 0 }}>
-                                            <div style={{
-                                                width: 32, height: 32, borderRadius: '50%', background: '#f3f4f6',
-                                                border: '1px solid #e5e7eb', overflow: 'hidden', flexShrink: 0,
-                                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                                fontSize: '12px', fontWeight: 700, color: '#6b7280'
-                                            }}>
-                                                <SafeImage
-                                                    src={lead.avatar_url}
-                                                    alt={lead.nome}
-                                                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                                                    fallbackText={lead.nome?.charAt(0)?.toUpperCase()}
+                                            <div style={{ width: 32, height: 32, flexShrink: 0 }}>
+                                                <LeadAvatar
+                                                    lead={lead}
+                                                    className="w-full h-full"
                                                 />
                                             </div>
                                             <div style={{ minWidth: 0 }}>

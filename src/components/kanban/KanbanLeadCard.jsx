@@ -1,5 +1,6 @@
 import React from 'react'
 import { MessageCircle, Clock, Zap } from 'lucide-react'
+import LeadAvatar from '../LeadAvatar'
 
 /**
  * KanbanLeadCard - A compact lead card for the Kanban board
@@ -65,12 +66,11 @@ const KanbanLeadCard = ({ lead, onClick }) => {
             {/* Top Row: Avatar + Name + Score */}
             <div className="flex items-start gap-3">
                 {/* Avatar */}
-                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-gray-200 to-gray-300 flex items-center justify-center overflow-hidden shrink-0 border border-gray-200">
-                    {avatarUrl ? (
-                        <img src={avatarUrl} alt={nome} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                    ) : (
-                        <span className="text-sm font-bold text-gray-500">{nome?.charAt(0) || '?'}</span>
-                    )}
+                <div className="w-10 h-10 shrink-0">
+                    <LeadAvatar
+                        lead={leadData}
+                        className="w-full h-full"
+                    />
                 </div>
 
                 {/* Name + Headline */}

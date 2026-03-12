@@ -4,7 +4,7 @@ import { supabase } from '../services/supabaseClient'
 import { useAuth } from '../contexts/AuthContext'
 import { useClientSelection } from '../contexts/ClientSelectionContext'
 import { KpiCardSkeleton, HeroTaskCardSkeleton, Skeleton } from '../components/Skeleton'
-import SafeImage from '../components/SafeImage'
+import LeadAvatar from '../components/LeadAvatar'
 import UnifiedLeadModal from '../components/UnifiedLeadModal'
 import {
     Crosshair,
@@ -80,7 +80,11 @@ const AdminPanel = () => {
                 .eq('status', 'COMPLETED')
                 .gte('completed_at', `${dateStr}T00:00:00`)
 
-            if (selectedClientId) doneQuery = doneQuery.eq('leads.client_id', selectedClientId)
+            if (selectedClientId) {
+                doneQuery = doneQuery
+                    .eq('client_id', selectedClientId)
+                    .eq('leads.client_id', selectedClientId)
+            }
 
             // 2. Pending Tasks (Top 30 for today, same as Cockpit)
             let pendingQuery = supabase
@@ -92,7 +96,11 @@ const AdminPanel = () => {
                 .order('created_at', { ascending: true })
                 .limit(30)
 
-            if (selectedClientId) pendingQuery = pendingQuery.eq('leads.client_id', selectedClientId)
+            if (selectedClientId) {
+                pendingQuery = pendingQuery
+                    .eq('client_id', selectedClientId)
+                    .eq('leads.client_id', selectedClientId)
+            }
 
             // 3. Radar Leads (Responding/Hot)
             let radarQuery = supabase
@@ -471,19 +479,12 @@ const HeroTaskCard = ({ task, index, completing, onComplete, onExecute, onLeadCl
             <div className="flex flex-col sm:flex-row sm:items-center gap-4">
                 {/* Lead Info */}
                 <div className="flex items-center gap-3 flex-1 min-w-0">
-                    {lead.avatar_url ? (
-                        <SafeImage
-                            src={lead.avatar_url}
-                            alt={lead.nome}
-                            className="w-11 h-11 rounded-xl shrink-0 object-cover border border-gray-200"
-                            fallbackText={initial}
-                            containerClassName="w-11 h-11 rounded-xl shrink-0 bg-gray-100 border border-gray-200"
+                    <div className="w-11 h-11 shrink-0">
+                        <LeadAvatar
+                            lead={lead}
+                            className="w-full h-full shadow-md"
                         />
-                    ) : (
-                        <div className="w-11 h-11 rounded-xl shrink-0 bg-gray-100 border border-gray-200 flex items-center justify-center">
-                            <span className="text-sm font-bold text-gray-700">{initial}</span>
-                        </div>
-                    )}
+                    </div>
                     <div className="flex-1 min-w-0 cursor-pointer" onClick={() => onLeadClick && onLeadClick(lead)}>
                         <div className="flex items-center gap-2 mb-0.5">
                             <h4 className="text-sm font-bold text-gray-900 truncate hover:text-orange-600 transition-colors">{lead.nome || 'Lead'}</h4>
@@ -580,19 +581,12 @@ const RadarLeadCard = ({ lead, onLeadClick }) => {
         <div className="bg-white rounded-xl border border-gray-200 p-4 min-w-[200px] max-w-[240px] shrink-0 snap-center hover:shadow-md hover:border-gray-300 transition-all duration-300 cursor-pointer"
             onClick={() => onLeadClick && onLeadClick(lead)}>
             <div className="flex items-center gap-3 mb-3">
-                {lead.avatar_url ? (
-                    <SafeImage
-                        src={lead.avatar_url}
-                        alt={lead.nome}
-                        className="w-9 h-9 rounded-lg shrink-0 object-cover border border-gray-200"
-                        fallbackText={initial}
-                        containerClassName="w-9 h-9 rounded-lg shrink-0 bg-gray-100 border border-gray-200"
+                <div className="w-9 h-9 shrink-0">
+                    <LeadAvatar
+                        lead={lead}
+                        className="w-full h-full"
                     />
-                ) : (
-                    <div className="w-9 h-9 rounded-lg shrink-0 bg-gray-100 border border-gray-200 flex items-center justify-center shrink-0">
-                        <span className="text-xs font-bold text-gray-600">{initial}</span>
-                    </div>
-                )}
+                </div>
                 <div className="min-w-0 flex-1">
                     <h4 className="text-xs font-semibold text-gray-900 truncate">{lead.nome || 'Lead'}</h4>
                     <p className="text-[10px] text-gray-500 truncate">{lead.empresa || lead.headline || ''}</p>

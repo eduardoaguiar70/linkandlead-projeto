@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { supabase } from '../services/supabaseClient'
 import { useClientSelection } from '../contexts/ClientSelectionContext'
 import { Search, Send, MoreVertical, Phone, Mail, MapPin, Briefcase, Zap, Star, Sparkles, MessageSquare, Check, LayoutGrid, List, Loader2, X, ClipboardList, CheckCircle2, Ban, Bell } from 'lucide-react'
-import SafeImage from '../components/SafeImage'
+import LeadAvatar from '../components/LeadAvatar'
 import UnifiedLeadModal from '../components/UnifiedLeadModal'
 const N8N_GENERATE_REPLY_URL = 'https://n8n-n8n-start.kfocge.easypanel.host/webhook/generate-reply'
 const N8N_GENERATE_ICEBREAKER_URL = 'https://n8n-n8n-start.kfocge.easypanel.host/webhook/generate-icebreaker'
@@ -151,7 +151,8 @@ const SalesInboxPage = () => {
                     name: activeLead.nome || '',
                     headline: activeLead.headline || '',
                     company: activeLead.empresa || '',
-                    about: activeLead.about || ''
+                    about: activeLead.about || '',
+                    ai_chat_history: newHistory
                 }
                 const response = await fetch(N8N_GENERATE_ICEBREAKER_URL, {
                     method: 'POST',
@@ -218,6 +219,7 @@ const SalesInboxPage = () => {
             const { data, count } = await supabase
                 .from('tasks')
                 .select('id, leads!inner(client_id, id)', { count: 'exact' })
+                .eq('client_id', selectedClientId)
                 .eq('leads.client_id', selectedClientId)
                 .neq('leads.is_blacklisted', true)
                 .eq('status', 'PENDING')
@@ -398,7 +400,7 @@ const SalesInboxPage = () => {
         }
 
         fetchInteractions()
-    }, [activeLead])
+    }, [activeLead?.id])
 
     // Global Search Effect
     useEffect(() => {
@@ -508,6 +510,7 @@ const SalesInboxPage = () => {
             const { data } = await supabase
                 .from('tasks')
                 .select('id, instruction, leads!inner(id, client_id, nome, empresa, headline, cadence_stage, avatar_url, linkedin_profile_url, total_interactions_count, is_blacklisted, crm_stage, last_task_completed_at, has_engaged, last_interaction_date)')
+                .eq('client_id', selectedClientId)
                 .eq('leads.client_id', selectedClientId)
                 .neq('leads.is_blacklisted', true)
                 .eq('status', 'PENDING')
@@ -682,7 +685,24 @@ const SalesInboxPage = () => {
                 is_sender: true,
                 interaction_date: new Date().toISOString()
             }
+            
+            // Optimistic updates for routing logic and UI
             setInteractions(prev => [tempMsg, ...prev])
+            
+            setLeads(prev => prev.map(l => l.id === activeLead.id ? { 
+                ...l, 
+                total_interactions_count: (l.total_interactions_count || 0) + 1,
+                last_interaction_date: tempMsg.interaction_date,
+                _lastMsgIsSender: true
+            } : l))
+            
+            setActiveLead(prev => prev ? {
+                ...prev,
+                total_interactions_count: (prev.total_interactions_count || 0) + 1,
+                last_interaction_date: tempMsg.interaction_date,
+                _lastMsgIsSender: true
+            } : null)
+
             setNewMessage('')
             showToast('Mensagem enviada!')
             await completeTaskIfPending()
@@ -1088,12 +1108,12 @@ const SalesInboxPage = () => {
                                             className="p-3 rounded-xl border border-transparent hover:bg-gray-50 hover:border-gray-200 cursor-pointer transition-all group"
                                         >
                                             <div className="flex items-center gap-2 mb-1.5">
-                                                <SafeImage
-                                                    src={tLead.avatar_url}
-                                                    alt={tLead.nome}
-                                                    className="w-7 h-7 rounded-full object-cover border border-gray-200"
-                                                    fallbackText={tLead.nome?.charAt(0) || '?'}
-                                                />
+                                                <div className="w-7 h-7 shrink-0">
+                                                    <LeadAvatar
+                                                        lead={tLead}
+                                                        className="w-full h-full"
+                                                    />
+                                                </div>
                                                 <div className="flex-1 min-w-0">
                                                     <span className="text-sm font-semibold text-gray-900 truncate block">{tLead.nome || 'Lead'}</span>
                                                 </div>
@@ -1128,12 +1148,10 @@ const SalesInboxPage = () => {
                         {/* Header */}
                         <div className="p-4 border-b border-gray-200 bg-gray-50 flex items-center justify-between z-10">
                             <div className="flex items-center gap-3 flex-1 min-w-0">
-                                <div className="w-10 h-10 shrink-0 rounded-full border border-gray-200 flex items-center justify-center bg-gray-100 text-gray-500 font-bold shadow-inner overflow-hidden cursor-pointer hover:ring-2 hover:ring-orange-300 transition-all" onClick={() => setShowLeadModal(true)}>
-                                    <SafeImage
-                                        src={activeLead.avatar_url}
-                                        alt={activeLead.nome}
-                                        className="w-full h-full object-cover"
-                                        fallbackText={activeLead.nome?.charAt(0)}
+                                <div className="w-10 h-10 shrink-0 cursor-pointer hover:ring-2 hover:ring-orange-300 transition-all" onClick={() => setShowLeadModal(true)}>
+                                    <LeadAvatar
+                                        lead={activeLead}
+                                        className="w-full h-full"
                                     />
                                 </div>
                                 <div className="flex-1 min-w-0 cursor-pointer" onClick={() => setShowLeadModal(true)}>
@@ -1220,7 +1238,7 @@ const SalesInboxPage = () => {
                                     // Render the message first
                                     elements.push(
                                         <div key={msg.id} className={`flex flex-col max-w-[85%] lg:max-w-[80%] ${msg.is_sender === true ? 'self-end items-end' : 'self-start items-start'}`}>
-                                            <div className={`px-4 py-3 rounded-2xl text-sm leading-relaxed ${msg.is_sender === true
+                                            <div className={`px-4 py-3 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap ${msg.is_sender === true
                                                 ? 'bg-primary text-white rounded-br-sm shadow-lg shadow-primary/10'
                                                 : 'bg-gray-100 text-gray-700 rounded-bl-sm border border-gray-200'
                                                 }`}>

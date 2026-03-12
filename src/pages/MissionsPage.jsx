@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../services/supabaseClient'
 import { useClientSelection } from '../contexts/ClientSelectionContext'
-import SafeImage from '../components/SafeImage'
+import LeadAvatar from '../components/LeadAvatar'
 import UnifiedLeadModal from '../components/UnifiedLeadModal'
 import {
     Crosshair, Flame, TrendingUp, Snowflake,
@@ -112,19 +112,12 @@ const LeadCard = ({ lead, themeKey, completing, blacklisting, onComplete, onBlac
             <div className="p-4">
                 {/* Row 1: Avatar + Lead Info */}
                 <div className="flex items-start gap-3 mb-3">
-                    {lead.avatar_url ? (
-                        <SafeImage
-                            src={lead.avatar_url}
-                            alt={lead.nome || 'Lead'}
-                            className="w-10 h-10 rounded-lg shrink-0 object-cover border border-gray-200 shadow-sm"
-                            fallbackText={initial}
-                            containerClassName="w-10 h-10 rounded-lg shrink-0 bg-gray-100 border border-gray-200 shadow-sm"
+                    <div className="w-10 h-10 shrink-0">
+                        <LeadAvatar
+                            lead={lead}
+                            className="w-full h-full"
                         />
-                    ) : (
-                        <div className="w-10 h-10 rounded-lg shrink-0 bg-gray-100 border border-gray-200 flex items-center justify-center shadow-sm">
-                            <span className="text-sm font-bold text-gray-600">{initial}</span>
-                        </div>
-                    )}
+                    </div>
                     <div className="flex-1 min-w-0 cursor-pointer" onClick={() => onLeadClick && onLeadClick(lead)}>
                         <div className="flex items-center gap-2 mb-1 flex-wrap">
                             <h4 className="text-sm font-semibold text-gray-900 truncate hover:text-orange-600 transition-colors">{lead.nome || 'Lead'}</h4>
@@ -216,6 +209,7 @@ const MissionsPage = () => {
                 supabase
                     .from('tasks')
                     .select('*, lead:leads!inner(id, client_id, nome, empresa, headline, avatar_url, icp_score, cadence_stage, has_engaged, last_task_completed_at, total_interactions_count, linkedin_profile_url, crm_stage)')
+                    .eq('client_id', selectedClientId)
                     .eq('leads.client_id', selectedClientId)
                     .neq('leads.is_blacklisted', true)
                     .eq('status', 'PENDING')
@@ -225,6 +219,7 @@ const MissionsPage = () => {
                 supabase
                     .from('tasks')
                     .select('id, leads!inner(client_id)', { count: 'exact' })
+                    .eq('client_id', selectedClientId)
                     .eq('leads.client_id', selectedClientId)
                     .neq('leads.is_blacklisted', true)
                     .eq('status', 'COMPLETED')
@@ -233,6 +228,7 @@ const MissionsPage = () => {
                 supabase
                     .from('tasks')
                     .select('*, lead:leads!inner(id, client_id, nome, empresa, headline, avatar_url, icp_score, cadence_stage, has_engaged, last_task_completed_at, total_interactions_count, linkedin_profile_url, crm_stage)')
+                    .eq('client_id', selectedClientId)
                     .eq('leads.client_id', selectedClientId)
                     .neq('leads.is_blacklisted', true)
                     .eq('status', 'PENDING')

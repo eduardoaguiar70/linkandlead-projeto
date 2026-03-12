@@ -2,7 +2,7 @@ import React, { useState } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { Star, DollarSign, MessageSquare, AlertTriangle, X, CheckCircle2, MoreVertical, Calendar, Phone, Mail, Building2, ExternalLink } from 'lucide-react'
-import SafeImage from '../SafeImage' // adjust path to components
+import LeadAvatar from '../LeadAvatar'
 
 const STAGE_THEMES = {
     A: { background: '#ecfdf5', color: '#059669', border: '1px solid #a7f3d0' },
@@ -102,12 +102,10 @@ const PipelineLeadCard = ({ lead, onClick, onRemove }) => {
 
             {/* Name + Empresa */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
-                <div style={{ width: 30, height: 30, borderRadius: '50%', background: '#f3f4f6', border: '1px solid #e5e7eb', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', flexShrink: 0, fontSize: '11px', fontWeight: 700, color: '#6b7280' }}>
-                    <SafeImage
-                        src={lead.avatar_url}
-                        alt={lead.nome}
-                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                        fallbackText={lead.nome?.charAt(0)?.toUpperCase()}
+                <div style={{ width: 30, height: 30, flexShrink: 0 }}>
+                    <LeadAvatar
+                        lead={lead}
+                        className="w-full h-full"
                     />
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>

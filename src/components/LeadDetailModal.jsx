@@ -147,14 +147,11 @@ const LeadDetailModal = ({ lead, campaignLead, onClose }) => {
 
                     <div className="flex items-center gap-4">
                         {/* Avatar */}
-                        <div className="w-16 h-16 rounded-full bg-gradient-to-br from-sky-500 to-indigo-600 p-0.5 shrink-0">
-                            <div className="w-full h-full rounded-full bg-slate-800 flex items-center justify-center overflow-hidden">
-                                {lead.avatar_url ? (
-                                    <img src={lead.avatar_url} alt={lead.nome} className="w-full h-full object-cover" />
-                                ) : (
-                                    <span className="text-2xl font-bold text-white">{lead.nome?.charAt(0) || '?'}</span>
-                                )}
-                            </div>
+                        <div className="w-16 h-16 shrink-0">
+                            <LeadAvatar
+                                lead={lead}
+                                className="w-full h-full shadow-lg"
+                            />
                         </div>
 
                         {/* Name + Headline */}

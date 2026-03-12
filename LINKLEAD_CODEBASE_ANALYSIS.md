@@ -1,15 +1,223 @@
+# Codebase Analysis - LinkLead System
 
+This document contains the consolidated source code and configuration files for the LinkLead system.
 
-======================================================
-==== ARQUIVO: src\App.css
-======================================================
+## File: package.json
+```json
+{
+  "name": "link-lead-system",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "lint": "eslint .",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/sortable": "^10.0.0",
+    "@dnd-kit/utilities": "^3.2.2",
+    "@supabase/supabase-js": "^2.87.1",
+    "date-fns": "^4.1.0",
+    "lucide-react": "^0.561.0",
+    "react": "^19.2.0",
+    "react-datepicker": "^9.0.0",
+    "react-day-picker": "^9.13.0",
+    "react-dom": "^19.2.0",
+    "react-markdown": "^10.1.0",
+    "react-pdf": "^10.3.0",
+    "react-router-dom": "^7.10.1",
+    "sonner": "^2.0.7"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.1",
+    "@types/react": "^19.2.5",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^5.1.1",
+    "autoprefixer": "^10.4.23",
+    "eslint": "^9.39.1",
+    "eslint-plugin-react-hooks": "^7.0.1",
+    "eslint-plugin-react-refresh": "^0.4.24",
+    "globals": "^16.5.0",
+    "postcss": "^8.5.6",
+    "tailwind-scrollbar-hide": "^4.0.0",
+    "tailwindcss": "^3.4.17",
+    "vite": "^7.2.4"
+  }
+}
+```
 
+## File: vite.config.js
+```javascript
+import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
+import path from 'path'
+
+// https://vite.dev/config/
+export default defineConfig({
+  plugins: [react()],
+  resolve: {
+    alias: {
+      "@": path.resolve(__dirname, "./src"),
+    },
+  },
+})
+```
+
+## File: tailwind.config.js
+```javascript
+/** @type {import('tailwindcss').Config} */
+export default {
+    content: [
+        "./index.html",
+        "./src/**/*.{js,ts,jsx,tsx}",
+    ],
+    theme: {
+        extend: {
+            colors: {
+                // OBSIDIAN GLASS THEME
+                obsidian: '#030303',
+                charcoal: '#0a0a0a',
+                primary: {
+                    DEFAULT: '#ff4d00',
+                    glow: 'rgba(255, 77, 0, 0.4)',
+                    dim: 'rgba(255, 77, 0, 0.1)',
+                },
+                glass: {
+                    DEFAULT: 'rgba(255, 255, 255, 0.03)',
+                    hover: 'rgba(255, 255, 255, 0.06)',
+                    border: 'rgba(255, 255, 255, 0.08)',
+                    shine: 'rgba(255, 255, 255, 0.15)',
+                },
+                text: {
+                    heading: '#ffffff',
+                    body: '#94a3b8',
+                    muted: '#64748b',
+                    highlight: '#e2e8f0',
+                },
+                // Status Colors
+                success: {
+                    DEFAULT: '#10b981',
+                    glow: 'rgba(16, 185, 129, 0.4)',
+                },
+                danger: {
+                    DEFAULT: '#ef4444',
+                    glow: 'rgba(239, 68, 68, 0.4)',
+                }
+            },
+            fontFamily: {
+                main: ['Plus Jakarta Sans', 'system-ui', 'sans-serif'],
+            },
+            backdropBlur: {
+                xs: '2px',
+            },
+            boxShadow: {
+                glow: '0 0 20px rgba(255, 77, 0, 0.3)',
+                'glow-lg': '0 0 30px rgba(255, 77, 0, 0.4)',
+            },
+            borderRadius: {
+                '4xl': '2rem',
+            }
+        },
+    },
+    plugins: [
+        require('tailwind-scrollbar-hide')
+    ],
+}
+```
+
+## File: ARCHITECTURE.md
+```markdown
+# Link&Lead - Arquitetura de Sistema
+
+## 🧠 Módulo de Inteligência & Automação (Intelligence Module)
+
+Este documento detalha a arquitetura do "Inbox Inteligente" e "Análise de Sentimento", descrevendo a estrutura de dados, fluxos de automação e regras visuais.
+
+### 1. Estrutura de Dados (Novas Colunas)
+
+A tabela `leads` foi enriquecida com campos de inteligência artificial. O Frontend deve consumir estes dados preferencialmente através de JOINs ou Views atualizadas.
+
+| Coluna | Tipo | Descrição e Regras |
+| :--- | :--- | :--- |
+| `trust_score` | `Integer` | **Mede a probabilidade de conversão (0-100).**<br>• **0-20:** Crítico/Hostil<br>• **21-40:** Frio/Desinteressado<br>• **41-60:** Neutro<br>• **61-80:** Engajado<br>• **81-100:** Quente (Sinais de compra) |
+| `sentiment_reasoning` | `Text` | Explicação curta da IA sobre o porquê da nota do Trust Score (ex: "Lead pediu reunião"). |
+| `icp_reason` | `Text` | Justificativa da classificação de perfil (A/B/C). |
+| `conversation_summary` | `Text` | Breve resumo do contexto da negociação até o momento. |
+| `ai_suggested_replies` | `JSONB` | Array de objetos para sugestão de resposta.<br>**Schema:** `[{ "text":String, "strategy":String }]`<br>**Uso:** `text` vai para editor, `strategy` aparece como label. |
+| `ready_for_analysis` | `Boolean` | Flag de controle de fila. `TRUE` = Lead precisa ser processado pela IA. |
+
+### 2. Arquitetura de Automação Híbrida (Triggers)
+
+O sistema utiliza uma abordagem híbrida (Reativa + Proativa) para manter os dados atualizados com baixo custo de tokens.
+
+#### A. Controle de Fila (`ready_for_analysis`)
+O campo booleano `ready_for_analysis` na tabela `leads` atua como um "cursor de fila".
+- **TRUE:** O lead aguarda processamento da IA.
+- **FALSE:** O lead está atualizado.
+
+#### B. Workflow 5: O Analista (Processador)
+- **Função:** Consome a fila, analisa o histórico do chat via OpenAI, gera Insights/Scores e limpa a fila.
+- **Lógica:** Roda a cada 15/30min → Pega leads (`ready=true`) → Processa → Seta `ready=false`.
+- **Output:** Atualiza `trust_score`, `ai_suggested_replies`, etc.
+
+#### C. Workflow 3: Sync Mensagens (Gatilho Reativo)
+- **Função:** Detecta mensagens novas em tempo real.
+- **Lógica:** Sempre que uma mensagem (sent/received) é salva no banco, este workflow força `ready_for_analysis = true` imediatamente.
+- **Objetivo:** Garantir resposta rápida da IA em conversas ativas.
+
+#### D. Workflow 6: O Vigia (Gatilho Proativo/Time-Decay)
+- **Função:** Re-engajamento de leads esquecidos (Ghosting).
+- **Lógica:** Roda via Cron (Diário 00:00). Executa query SQL para encontrar leads que:
+  1. Não estão na fila (`ready=false`);
+  2. Estão em silêncio há > 7 dias;
+  3. Possuem Score > 30 (Lead qualificado);
+  4. Pipeline em aberto (Não é Lost/Won).
+- **Ação:** Seta `ready_for_analysis = true` para que o Workflow 5 gere uma estratégia de recuperação na manhã seguinte.
+
+### 3. Mapeamento Visual (Frontend - Kanban)
+
+A visualização de lista deve ser tratada como um Kanban de Prioridades baseada nos dados acima:
+
+#### Colunas Prioritárias
+1. **🔥 Prioridade Alta:** `trust_score > 70` **OU** `Tier A`.
+2. **📩 Para Responder:** `last_interaction_type = 'received'` (Ordenado por data).
+3. **⏳ Aguardando:** `last_interaction_type = 'sent'`.
+4. **💤 Stand-by:** `trust_score < 40` **OU** Sem interação > 7 dias.
+
+#### Componente "Smart Action"
+- Deve exibir a sugestão de resposta (`item.text`) acompanhada obrigatoriamente da sua estratégia (`item.strategy`) para dar contexto ao usuário antes do envio.
+```
+
+## File: README.md
+```markdown
+# React + Vite
+
+This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+
+Currently, two official plugins are available:
+
+- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
+- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+
+## React Compiler
+
+The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+
+## Expanding the ESLint configuration
+
+If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+```
+
+## File: src\App.css
+```css
 /* App.css */
+```
 
-======================================================
-==== ARQUIVO: src\App.jsx
-======================================================
-
+## File: src\App.jsx
+```javascript
 import React, { useState, useEffect } from 'react'
 import { supabase } from './services/supabaseClient'
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom'
@@ -216,12 +424,270 @@ function App() {
 }
 
 export default App
+```
 
+## File: src\index.css
+```css
+/* Google Fonts - Plus Jakarta Sans */
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,200..800;1,200..800&display=swap');
 
-======================================================
-==== ARQUIVO: src\components\AddLeadsModal.jsx
-======================================================
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
+:root {
+  /* Brand Typography */
+  --font-main: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+
+  /* Color Palette - OBSIDIAN GLASS THEME */
+  --color-bg: #030303;
+  /* Deep Void */
+  --color-surface: rgba(255, 255, 255, 0.03);
+  --color-surface-hover: rgba(255, 255, 255, 0.06);
+  --color-glass-border: rgba(255, 255, 255, 0.08);
+  --color-glass-shine: rgba(255, 255, 255, 0.15);
+
+  /* Text Colors */
+  --color-text-heading: #ffffff;
+  /* White */
+  --color-text-body: #94a3b8;
+  /* Slate 400 */
+  --color-text-muted: #64748b;
+  /* Slate 500 */
+  --color-text-highlight: #e2e8f0;
+  /* Slate 200 */
+
+  /* Brand Colors */
+  --color-primary: #ff4d00;
+  /* Signal Orange */
+  --color-primary-glow: rgba(255, 77, 0, 0.4);
+  --color-primary-dim: rgba(255, 77, 0, 0.1);
+
+  /* Status Colors */
+  --color-success: #10b981;
+  --color-success-glow: rgba(16, 185, 129, 0.4);
+  --color-danger: #ef4444;
+  --color-danger-glow: rgba(239, 68, 68, 0.4);
+
+  /* Spacing & Radii */
+  --radius-sm: 4px;
+  /* Sharp/Tech */
+  --radius-md: 8px;
+  /* Standard */
+  --radius-lg: 16px;
+  /* Floating panels */
+  --radius-full: 9999px;
+
+  /* Animation */
+  --ease-spring: cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+/* Global Reset & Base */
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  font-family: var(--font-main);
+  background-color: var(--color-bg);
+  /* Deep mesh gradient background */
+  background-image:
+    radial-gradient(circle at 15% 50%, rgba(255, 77, 0, 0.08), transparent 25%),
+    radial-gradient(circle at 85% 30%, rgba(77, 77, 255, 0.05), transparent 25%);
+  color: var(--color-text-body);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  line-height: 1.6;
+  overflow-x: hidden;
+}
+
+/* Headings */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  color: var(--color-text-heading);
+  font-weight: 700;
+  margin-top: 0;
+  letter-spacing: -0.025em;
+  /* Tighter for modern look */
+}
+
+/* GLASS UTILITIES - The Core of the Design */
+
+.glass-panel {
+  background: var(--color-surface);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--color-glass-border);
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+}
+
+.glass-panel-hover:hover {
+  background: var(--color-surface-hover);
+  border-color: var(--color-glass-shine);
+  box-shadow: 0 0 15px rgba(255, 255, 255, 0.05);
+  transition: all 0.3s ease;
+}
+
+/* Primary Button - Neo-Glass */
+.btn-primary {
+  position: relative;
+  background: var(--color-primary);
+  color: white;
+  border: none;
+  padding: 0.75rem 1.5rem;
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+  font-size: 0.9rem;
+  letter-spacing: 0.01em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  overflow: hidden;
+  transition: all 0.2s var(--ease-spring);
+  box-shadow: 0 0 20px var(--color-primary-glow);
+  z-index: 1;
+}
+
+/* Internal glass sheen for button */
+.btn-primary::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg,
+      transparent,
+      rgba(255, 255, 255, 0.2),
+      transparent);
+  transition: 0.5s;
+  z-index: -1;
+}
+
+.btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 0 30px var(--color-primary-glow);
+}
+
+.btn-primary:hover::before {
+  left: 100%;
+}
+
+/* Inputs - Glass Style */
+input,
+select,
+textarea {
+  font-family: inherit;
+  background-color: rgba(255, 255, 255, 0.03);
+  /* Extremely transparent */
+  border: 1px solid var(--color-glass-border);
+  border-radius: var(--radius-sm);
+  padding: 0.75rem 1rem;
+  font-size: 0.95rem;
+  color: var(--color-text-heading);
+  transition: all 0.2s;
+  outline: none;
+  backdrop-filter: blur(4px);
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  background-color: rgba(255, 255, 255, 0.05);
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 1px var(--color-primary), 0 0 15px var(--color-primary-dim);
+}
+
+input::placeholder {
+  color: var(--color-text-muted);
+}
+
+/* Scrollbar - Light & Slim */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-primary);
+}
+
+/* Utility: Text Gradients */
+.text-gradient {
+  background: linear-gradient(135deg, #fff 0%, #94a3b8 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.text-gradient-primary {
+  background: linear-gradient(135deg, #ff4d00 0%, #ff8800 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Table overrides for Glass look */
+/* We'll use these in the component updates, but defining base here helps */
+
+/* Animations */
+@keyframes float {
+  0% {
+    transform: translateY(0px);
+  }
+
+  50% {
+    transform: translateY(-10px);
+  }
+
+  100% {
+    transform: translateY(0px);
+  }
+}
+
+.animate-float {
+  animation: float 6s ease-in-out infinite;
+}
+```
+
+## File: src\main.jsx
+```javascript
+import { StrictMode } from 'react'
+import { createRoot } from 'react-dom/client'
+import './index.css'
+import App from './App.jsx'
+
+console.log('Main starting...')
+window.mainLoaded = true
+
+import ErrorBoundary from './components/ErrorBoundary'
+
+import { LanguageProvider } from './contexts/LanguageContext'
+
+createRoot(document.getElementById('root')).render(
+  <StrictMode>
+    <ErrorBoundary>
+      <LanguageProvider>
+        <App />
+      </LanguageProvider>
+    </ErrorBoundary>
+  </StrictMode>,
+)
+```
+
+## File: src\components\AddLeadsModal.jsx
+```javascript
 import React, { useState } from 'react'
 import {
     X,
@@ -474,12 +940,10 @@ const AddLeadsModal = ({ isOpen, onClose, campaignId, clientId, onImportConnecti
 }
 
 export default AddLeadsModal
+```
 
-
-======================================================
-==== ARQUIVO: src\components\AdminLayout.jsx
-======================================================
-
+## File: src\components\AdminLayout.jsx
+```javascript
 import React, { useState, useEffect } from 'react'
 import { Outlet, Link, useLocation } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
@@ -755,12 +1219,10 @@ const AdminLayout = () => {
 
 export default AdminLayout
 
+```
 
-
-======================================================
-==== ARQUIVO: src\components\ClientDashboardLayout.jsx
-======================================================
-
+## File: src\components\ClientDashboardLayout.jsx
+```javascript
 import React from 'react'
 import { Outlet, Navigate, useLocation } from 'react-router-dom'
 import { useClientAuth } from '../contexts/ClientAuthContext'
@@ -836,12 +1298,10 @@ const ClientDashboardLayout = () => {
 }
 
 export default ClientDashboardLayout
+```
 
-
-======================================================
-==== ARQUIVO: src\components\ClientSelector.jsx
-======================================================
-
+## File: src\components\ClientSelector.jsx
+```javascript
 import React, { useEffect, useState } from 'react'
 import { supabase } from '../services/supabaseClient'
 import { useClientSelection } from '../contexts/ClientSelectionContext'
@@ -905,12 +1365,10 @@ const ClientSelector = () => {
 }
 
 export default ClientSelector
+```
 
-
-======================================================
-==== ARQUIVO: src\components\ConnectionRequests.jsx
-======================================================
-
+## File: src\components\ConnectionRequests.jsx
+```javascript
 import React, { useState, useEffect } from 'react'
 import { supabase } from '../services/supabaseClient'
 import { useClientSelection } from '../contexts/ClientSelectionContext'
@@ -1193,12 +1651,10 @@ const ConnectionRequests = () => {
 }
 
 export default ConnectionRequests
+```
 
-
-======================================================
-==== ARQUIVO: src\components\ContentCalendar.jsx
-======================================================
-
+## File: src\components\ContentCalendar.jsx
+```javascript
 import React, { useState } from 'react'
 import { format } from 'date-fns'
 import { enUS } from 'date-fns/locale'
@@ -1440,21 +1896,18 @@ const ContentCalendar = ({ posts }) => {
 }
 
 export default ContentCalendar
+```
 
-
-======================================================
-==== ARQUIVO: src\components\CreatePostModal.css
-======================================================
-
+## File: src\components\CreatePostModal.css
+```css
 /* 
   DEPRECATED: Styles have been moved to Tailwind classes in CreatePostModal.jsx
   as part of the Obsidian Glass visual overhaul.
 */
+```
 
-======================================================
-==== ARQUIVO: src\components\CreatePostModal.jsx
-======================================================
-
+## File: src\components\CreatePostModal.jsx
+```javascript
 import React, { useState, useEffect } from 'react'
 import { generateContent } from '../services/api'
 import { supabase } from '../services/supabaseClient'
@@ -1916,12 +2369,10 @@ const FormMediaUpload = ({ selectedFiles, setSelectedFiles, handleFileChange }) 
 )
 
 export default CreatePostModal
+```
 
-
-======================================================
-==== ARQUIVO: src\components\EditPostModal.jsx
-======================================================
-
+## File: src\components\EditPostModal.jsx
+```javascript
 import React, { useState } from 'react'
 import { supabase } from '../services/supabaseClient'
 import { X, Loader2, Save, Image as ImageIcon, UploadCloud, Calendar as CalendarIcon } from 'lucide-react'
@@ -2263,12 +2714,10 @@ const EditPostModal = ({ post, onClose, onSuccess }) => {
 }
 
 export default EditPostModal
+```
 
-
-======================================================
-==== ARQUIVO: src\components\ErrorBoundary.jsx
-======================================================
-
+## File: src\components\ErrorBoundary.jsx
+```javascript
 
 import React from 'react';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
@@ -2373,12 +2822,10 @@ class ErrorBoundary extends React.Component {
 }
 
 export default ErrorBoundary;
+```
 
-
-======================================================
-==== ARQUIVO: src\components\HistorySyncModal.jsx
-======================================================
-
+## File: src\components\HistorySyncModal.jsx
+```javascript
 import React from 'react'
 import { X, History, CheckCircle2, AlertCircle, Loader2, Ban } from 'lucide-react'
 
@@ -2528,12 +2975,10 @@ const HistorySyncModal = ({
 }
 
 export default HistorySyncModal
+```
 
-
-======================================================
-==== ARQUIVO: src\components\ImportContactsModal.jsx
-======================================================
-
+## File: src\components\ImportContactsModal.jsx
+```javascript
 import React, { useState, useEffect } from 'react'
 import { supabase } from '../services/supabaseClient'
 import { X, Linkedin, Download, Loader2, AlertCircle } from 'lucide-react'
@@ -2671,182 +3116,10 @@ const ImportContactsModal = ({ isOpen, onClose, listId, clientId, accountId, onS
 }
 
 export default ImportContactsModal
+```
 
-
-======================================================
-==== ARQUIVO: src\components\kanban\KanbanColumn.jsx
-======================================================
-
-import React from 'react'
-
-/**
- * KanbanColumn - A reusable column component for the Kanban board
- * @param {string} title - Column title
- * @param {string} icon - Emoji icon for the column
- * @param {number} count - Number of items in the column
- * @param {string} colorClass - Tailwind color class for the header accent
- * @param {React.ReactNode} children - Lead cards to render
- */
-const KanbanColumn = ({ title, icon, count = 0, colorClass = 'bg-slate-500', children }) => {
-    return (
-        <div className="flex flex-col bg-white/5 backdrop-blur-lg rounded-2xl border border-white/10 shadow-lg min-w-[300px] max-w-[320px] h-full">
-            {/* Column Header */}
-            <div className={`flex items-center justify-between px-4 py-3 border-b border-gray-200 rounded-t-2xl`}>
-                <div className="flex items-center gap-2">
-                    <span className="text-lg">{icon}</span>
-                    <h3 className="font-bold text-gray-800 text-sm">{title}</h3>
-                </div>
-                <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold text-white ${colorClass}`}>
-                    {count}
-                </span>
-            </div>
-
-            {/* Scrollable Card List */}
-            <div className="flex-1 overflow-y-auto p-3 space-y-2 max-h-[calc(100vh-320px)] custom-scrollbar">
-                {children}
-                {count === 0 && (
-                    <div className="text-center py-8 text-gray-500 text-sm italic">
-                        Nenhum lead aqui
-                    </div>
-                )}
-            </div>
-        </div>
-    )
-}
-
-export default KanbanColumn
-
-
-======================================================
-==== ARQUIVO: src\components\kanban\KanbanLeadCard.jsx
-======================================================
-
-import React from 'react'
-import { MessageCircle, Clock, Zap } from 'lucide-react'
-
-/**
- * KanbanLeadCard - A compact lead card for the Kanban board
- * @param {Object} lead - Lead data object
- * @param {Function} onClick - Click handler
- */
-const KanbanLeadCard = ({ lead, onClick }) => {
-    // Helper: Time since last interaction
-    const getTimeSince = (dateString) => {
-        if (!dateString) return '—'
-        const now = new Date()
-        const date = new Date(dateString)
-        const diffMs = now - date
-        const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
-        const diffDays = Math.floor(diffHours / 24)
-
-        if (diffDays > 0) return `${diffDays}d`
-        if (diffHours > 0) return `${diffHours}h`
-        return 'agora'
-    }
-
-    // Helper: Cadence stage styling (trust-gradient based on level)
-    const getCadenceStyle = (stage) => {
-        const match = stage?.toString().match(/(\d+)/)
-        const level = match ? parseInt(match[1], 10) : 0
-
-        if (level >= 7) return 'bg-yellow-100 text-yellow-700 border border-yellow-300'
-        if (level >= 6) return 'bg-green-100 text-green-700 border border-green-300'
-        if (level >= 5) return 'bg-emerald-100 text-emerald-700 border border-emerald-300'
-        if (level >= 4) return 'bg-orange-100 text-orange-700 border border-orange-300'
-        if (level >= 3) return 'bg-amber-100 text-amber-700 border border-amber-300'
-        if (level >= 2) return 'bg-cyan-100 text-cyan-700 border border-cyan-300'
-        if (level >= 1) return 'bg-blue-100 text-blue-700 border border-blue-300'
-        return 'bg-gray-100 text-gray-600 border border-gray-300'
-    }
-
-    // Helper: ICP tier styling
-    const getIcpStyle = (tier) => {
-        switch (tier) {
-            case 'A': return 'bg-emerald-100 text-emerald-700 border-emerald-300'
-            case 'B': return 'bg-blue-100 text-blue-700 border-blue-300'
-            case 'C': return 'bg-gray-100 text-gray-600 border-gray-300'
-            default: return 'bg-gray-100 text-gray-600 border-gray-300'
-        }
-    }
-
-    // Extract lead data (handle both direct and nested structures)
-    const leadData = lead?.leads || lead
-    const cadenceStage = leadData?.cadence_stage || ''
-    const icpTier = leadData?.qualification_tier || leadData?.icp_score || 'C'
-    const totalInteractions = leadData?.total_interactions_count || leadData?.total_interactions || 0
-    const lastInteractionDate = leadData?.last_interaction_date
-    const hasAiSuggestions = (leadData?.ai_suggested_replies?.length || 0) > 0
-    const nome = leadData?.nome || 'Lead'
-    const headline = leadData?.headline || leadData?.empresa || ''
-    const avatarUrl = leadData?.avatar_url
-
-    return (
-        <div
-            className="bg-white rounded-xl border border-gray-200 p-3 cursor-pointer hover:bg-gray-50 hover:border-gray-300 hover:shadow-md transition-all group"
-            onClick={() => onClick(lead)}
-        >
-            {/* Top Row: Avatar + Name + Score */}
-            <div className="flex items-start gap-3">
-                {/* Avatar */}
-                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-gray-200 to-gray-300 flex items-center justify-center overflow-hidden shrink-0 border border-gray-200">
-                    {avatarUrl ? (
-                        <img src={avatarUrl} alt={nome} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                    ) : (
-                        <span className="text-sm font-bold text-gray-500">{nome?.charAt(0) || '?'}</span>
-                    )}
-                </div>
-
-                {/* Name + Headline */}
-                <div className="flex-1 min-w-0">
-                    <h4 className="font-semibold text-gray-800 text-sm truncate">{nome}</h4>
-                    <p className="text-xs text-gray-500 truncate">{headline || '—'}</p>
-                </div>
-
-                {/* Cadence Stage Badge */}
-                {cadenceStage && (
-                    <div className={`${getCadenceStyle(cadenceStage)} text-[10px] font-bold px-2 py-0.5 rounded-lg shrink-0`}>
-                        {cadenceStage}
-                    </div>
-                )}
-            </div>
-
-            {/* Bottom Row: Meta Info */}
-            <div className="flex items-center justify-between mt-3 pt-2 border-t border-gray-100">
-                {/* ICP Badge */}
-                <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${getIcpStyle(icpTier)}`}>
-                    ICP {icpTier}
-                </span>
-
-                {/* Interaction Count */}
-                <div className="flex items-center gap-1 text-gray-500 text-xs">
-                    <MessageCircle size={12} />
-                    <span>{totalInteractions}</span>
-                </div>
-
-                {/* Time Since */}
-                <div className="flex items-center gap-1 text-gray-500 text-xs">
-                    <Clock size={12} />
-                    <span>{getTimeSince(lastInteractionDate)}</span>
-                </div>
-
-                {/* AI Ready Indicator */}
-                {hasAiSuggestions && (
-                    <div className="text-amber-500" title="Sugestões de IA prontas">
-                        <Zap size={14} />
-                    </div>
-                )}
-            </div>
-        </div>
-    )
-}
-
-export default KanbanLeadCard
-
-
-======================================================
-==== ARQUIVO: src\components\KanbanColumn.jsx
-======================================================
-
+## File: src\components\KanbanColumn.jsx
+```javascript
 import React from 'react'
 
 /**
@@ -2885,12 +3158,10 @@ const KanbanColumn = ({ title, icon, count = 0, color = 'bg-slate-500', children
 }
 
 export default KanbanColumn
+```
 
-
-======================================================
-==== ARQUIVO: src\components\KanbanLeadCard.jsx
-======================================================
-
+## File: src\components\KanbanLeadCard.jsx
+```javascript
 import React from 'react'
 import { Clock, MessageCircle, ExternalLink, Zap } from 'lucide-react'
 
@@ -2993,12 +3264,10 @@ const KanbanLeadCard = ({ lead, onClick }) => {
 }
 
 export default KanbanLeadCard
+```
 
-
-======================================================
-==== ARQUIVO: src\components\LeadDetailModal.jsx
-======================================================
-
+## File: src\components\LeadDetailModal.jsx
+```javascript
 import React, { useState, useEffect } from 'react'
 import { supabase } from '../services/supabaseClient'
 import {
@@ -3393,12 +3662,10 @@ const LeadDetailModal = ({ lead, campaignLead, onClose }) => {
 }
 
 export default LeadDetailModal
+```
 
-
-======================================================
-==== ARQUIVO: src\components\MissionCard.jsx
-======================================================
-
+## File: src\components\MissionCard.jsx
+```javascript
 import React from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
@@ -3543,946 +3810,10 @@ const MissionCard = ({ task, isHighPriority = false }) => {
 }
 
 export default MissionCard
+```
 
-
-======================================================
-==== ARQUIVO: src\components\pipeline\LeadDetailModal.jsx
-======================================================
-
-import React, { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { supabase } from '../../services/supabaseClient'
-import { X, Star, MessageCircle, Briefcase, MapPin, Target } from 'lucide-react'
-
-const STAGES = [
-    { id: 'Frio', label: 'Cold' },
-    { id: 'Engajado', label: 'Engaged' },
-    { id: 'Qualificado', label: 'Qualified' },
-    { id: 'Agendado', label: 'Scheduled' },
-    { id: 'Proposta', label: 'Proposal' },
-    { id: 'Ganho', label: 'Won' },
-    { id: 'Perdido', label: 'Lost' }
-]
-
-// ICP color map
-const ICP_COLOR = { A: '#10b981', B: '#f59e0b', C: '#ef4444' }
-
-
-// Cadence color map
-const CAD_COLOR = { G1: '#3b82f6', G2: '#3b82f6', G3: '#f59e0b', G4: '#ef4444', G5: '#ef4444' }
-const CAD_LABEL = { G1: 'First Contact', G2: 'Second Touch', G3: 'Follow-up', G4: 'Urgency', G5: 'Last Contact' }
-
-// SVG arc gauge — renders a partial arc from bottom-left to bottom-right (220° sweep)
-const ArcGauge = ({ color }) => {
-    const r = 36
-    const cx = 52
-    const cy = 52
-    const startAngle = 145
-    const endAngle = 35
-    // Full track arc
-    const toRad = (d) => (d * Math.PI) / 180
-    const polar = (angle, radius) => ({
-        x: cx + radius * Math.cos(toRad(angle)),
-        y: cy + radius * Math.sin(toRad(angle)),
-    })
-    const trackStart = polar(startAngle, r)
-    const trackEnd = polar(endAngle, r)
-    const trackD = `M ${trackStart.x} ${trackStart.y} A ${r} ${r} 0 1 1 ${trackEnd.x} ${trackEnd.y}`
-
-    return (
-        <svg width={cx * 2} height={cy * 2 - 18} viewBox={`0 0 ${cx * 2} ${cy * 2 - 10}`} style={{ display: 'block' }}>
-            {/* Track */}
-            <path d={trackD} fill="none" stroke="#e5e7eb" strokeWidth={5} strokeLinecap="round" />
-            {/* Value arc (always same end point, just styled) */}
-            <path d={trackD} fill="none" stroke={color} strokeWidth={5} strokeLinecap="round"
-                strokeDasharray="80 200" />
-        </svg>
-    )
-}
-
-const MetricColumn = ({ label, value, color, sub }) => (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '20px 0 8px' }}>
-        <div style={{ position: 'relative', width: 104, height: 56 }}>
-            <ArcGauge color={color} />
-            <span style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -30%)', fontSize: '22px', fontWeight: 800, color }}>
-                {value}
-            </span>
-        </div>
-        <span style={{ marginTop: '6px', fontSize: '10px', fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.07em' }}>{label}</span>
-        {sub && <span style={{ fontSize: '11px', fontWeight: 600, color, marginTop: '2px' }}>{sub}</span>}
-    </div>
-)
-
-const ReasoningRow = ({ question, text }) => {
-    if (!text) return null
-    return (
-        <div style={{ padding: '12px 14px', borderRadius: '8px', border: '1px solid #e5e7eb', background: '#fff', fontSize: '13px', color: '#374151', lineHeight: 1.5 }}>
-            <strong style={{ color: '#111827' }}>{question}</strong>{' '}{text}
-        </div>
-    )
-}
-
-const LeadDetailModal = ({ lead, onClose, onLeadUpdated }) => {
-    const navigate = useNavigate()
-    const [tier, setTier] = useState(lead?.tier || 0)
-    const [proposalValue, setProposalValue] = useState(lead?.proposal_value || '')
-    const [crmStage, setCrmStage] = useState(lead?.crm_stage || '')
-    const [saving, setSaving] = useState(false)
-
-    useEffect(() => {
-        if (lead) {
-            setTier(lead.tier || 0)
-            setProposalValue(lead.proposal_value || '')
-            setCrmStage(lead.crm_stage || '')
-        }
-    }, [lead])
-
-    if (!lead) return null
-
-    const save = async (field, value) => {
-        setSaving(true)
-        try {
-            await supabase.from('leads').update({ [field]: value }).eq('id', lead.id)
-            if (onLeadUpdated) onLeadUpdated({ ...lead, [field]: value })
-        } catch (err) {
-            console.error('[LeadDetail] Error updating:', err)
-        } finally {
-            setSaving(false)
-        }
-    }
-
-    const handleTier = (val) => { setTier(val); save('tier', val) }
-    const handleProposal = () => { save('proposal_value', parseFloat(proposalValue) || 0) }
-    const handleStage = (val) => { setCrmStage(val); save('crm_stage', val || null) }
-    const goToInbox = () => navigate(`/sales/inbox?leadId=${lead.id}`)
-
-    const icpScore = lead.icp_score || '—'
-    const cadStage = lead.cadence_stage || '—'
-    const icpColor = ICP_COLOR[lead.icp_score] || '#6b7280'
-    const cadColor = CAD_COLOR[lead.cadence_stage] || '#6b7280'
-    const cadSub = CAD_LABEL[lead.cadence_stage] || null
-
-    return (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={onClose}>
-            <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(3px)' }} />
-            <div
-                onClick={e => e.stopPropagation()}
-                style={{ position: 'relative', width: '520px', maxHeight: '92vh', overflowY: 'auto', borderRadius: '14px', overflow: 'hidden', boxShadow: '0 24px 64px rgba(0,0,0,0.2)', border: '1px solid #e5e7eb' }}
-            >
-                {/* ── DARK HEADER ── */}
-                <div style={{ background: '#1e2433', padding: '24px 24px 20px', position: 'relative' }}>
-                    <button onClick={onClose} style={{ position: 'absolute', top: 14, right: 14, background: 'none', border: 'none', cursor: 'pointer', color: '#9ca3af' }}>
-                        <X size={20} />
-                    </button>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-                        <div style={{ width: 56, height: 56, borderRadius: '50%', border: '2px solid rgba(255,255,255,0.2)', overflow: 'hidden', flexShrink: 0, background: '#374151', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px', fontWeight: 700, color: '#fff' }}>
-                            {lead.avatar_url ? <img src={lead.avatar_url} alt={lead.nome} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : lead.nome?.charAt(0)?.toUpperCase() || '?'}
-                        </div>
-                        <div style={{ minWidth: 0 }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <h2 style={{ fontSize: '18px', fontWeight: 700, color: '#fff', margin: 0 }}>{lead.nome || 'No Name'}</h2>
-                                {lead.linkedin_profile_url && (
-                                    <a href={lead.linkedin_profile_url} target="_blank" rel="noopener noreferrer" style={{ color: '#60a5fa', flexShrink: 0 }}>
-                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /><polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" /></svg>
-                                    </a>
-                                )}
-                            </div>
-                            {lead.headline && (
-                                <p style={{ fontSize: '12px', color: '#9ca3af', margin: '4px 0 0', display: 'flex', alignItems: 'center', gap: '5px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                    <Briefcase size={11} /> {lead.headline}
-                                </p>
-                            )}
-                            {lead.empresa && (
-                                <p style={{ fontSize: '12px', color: '#6b7280', margin: '3px 0 0', display: 'flex', alignItems: 'center', gap: '5px' }}>
-                                    <MapPin size={11} /> {lead.empresa}
-                                </p>
-                            )}
-                        </div>
-                    </div>
-                </div>
-
-                {/* ── WHITE BODY ── */}
-                <div style={{ background: '#fff' }}>
-                    {/* 3-column metrics */}
-                    <div style={{ display: 'flex', borderBottom: '1px solid #f3f4f6' }}>
-                        <MetricColumn label="ICP Qualification" value={icpScore} color={icpColor} />
-                        <div style={{ width: '1px', background: '#f3f4f6', margin: '16px 0' }} />
-                        <MetricColumn label="Interactions" value={lead.total_interactions_count ?? 0} color={lead.total_interactions_count > 0 ? '#ff4d00' : '#ef4444'} />
-                        <div style={{ width: '1px', background: '#f3f4f6', margin: '16px 0' }} />
-                        <MetricColumn label="Cadence" value={cadStage} color={cadColor} sub={cadSub} />
-                    </div>
-
-                    {/* Reasoning rows */}
-                    <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '10px', borderBottom: '1px solid #f3f4f6' }}>
-                        <ReasoningRow question={`Why ICP ${icpScore}?`} text={lead.icp_reason} />
-                        <ReasoningRow question={`Cadence Level (${cadStage}):`} text={lead.stage_reasoning} />
-                    </div>
-
-                    {/* CRM Actions */}
-                    <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '18px' }}>
-                        {/* Tier */}
-                        <div>
-                            <label style={{ fontSize: '12px', fontWeight: 600, color: '#374151', display: 'block', marginBottom: '6px' }}>Priority (Tier)</label>
-                            <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
-                                {[1, 2, 3, 4, 5].map(i => (
-                                    <button key={i} onClick={() => handleTier(i)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px' }}>
-                                        <Star size={22} style={i <= tier ? { color: '#f59e0b', fill: '#f59e0b' } : { color: '#e5e7eb', fill: '#e5e7eb' }} />
-                                    </button>
-                                ))}
-                                {tier > 0 && <button onClick={() => handleTier(0)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '11px', color: '#9ca3af', marginLeft: '6px' }}>Clear</button>}
-                            </div>
-                        </div>
-
-                        {/* Proposal */}
-                        <div>
-                            <label style={{ fontSize: '12px', fontWeight: 600, color: '#374151', display: 'block', marginBottom: '6px' }}>Proposal Value ($)</label>
-                            <input
-                                type="number"
-                                step="0.01"
-                                placeholder="0,00"
-                                value={proposalValue}
-                                onChange={e => setProposalValue(e.target.value)}
-                                onBlur={handleProposal}
-                                style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #d1d5db', fontSize: '14px', color: '#111827', outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit' }}
-                            />
-                        </div>
-
-                        {/* Stage */}
-                        <div>
-                            <label style={{ fontSize: '12px', fontWeight: 600, color: '#374151', display: 'block', marginBottom: '6px' }}>
-                                <Target size={12} style={{ display: 'inline', verticalAlign: 'middle', marginRight: '4px' }} />
-                                Funnel Stage
-                            </label>
-                            <select
-                                value={crmStage}
-                                onChange={e => handleStage(e.target.value)}
-                                style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #d1d5db', fontSize: '14px', color: '#111827', background: '#fff', outline: 'none', fontFamily: 'inherit', cursor: 'pointer' }}
-                            >
-                                <option value="">— No stage —</option>
-                                {STAGES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
-                            </select>
-                        </div>
-                    </div>
-
-                    {/* Footer */}
-                    <div style={{ padding: '0 20px 20px', display: 'flex', gap: '10px' }}>
-                        <button
-                            onClick={goToInbox}
-                            style={{ flex: 1, padding: '11px', borderRadius: '8px', fontSize: '14px', fontWeight: 700, background: '#ff4d00', color: '#fff', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
-                        >
-                            <MessageCircle size={16} /> Go to Inbox
-                        </button>
-                        <button onClick={onClose} style={{ padding: '11px 20px', borderRadius: '8px', fontSize: '14px', fontWeight: 600, background: '#f9fafb', color: '#374151', border: '1px solid #e5e7eb', cursor: 'pointer' }}>
-                            Close
-                        </button>
-                    </div>
-                </div>
-
-                {saving && (
-                    <div style={{ position: 'absolute', top: 14, left: '50%', transform: 'translateX(-50%)', fontSize: '11px', fontWeight: 600, color: '#ff4d00', background: '#fff3ee', padding: '4px 12px', borderRadius: '6px', border: '1px solid #ffd4c2', zIndex: 3 }}>
-                        Saving...
-                    </div>
-                )}
-            </div>
-        </div>
-    )
-}
-
-export default LeadDetailModal
-
-
-======================================================
-==== ARQUIVO: src\components\pipeline\PipelineColumn.jsx
-======================================================
-
-import React from 'react'
-import { useDroppable } from '@dnd-kit/core'
-import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
-import PipelineLeadCard from './PipelineLeadCard'
-import { DollarSign } from 'lucide-react'
-
-const ACCENTS = {
-    Frio: { dot: '#94a3b8', iconBg: '#f1f5f9', iconColor: '#64748b' },
-    Engajado: { dot: '#3b82f6', iconBg: '#eff6ff', iconColor: '#3b82f6' },
-    Qualificado: { dot: '#f59e0b', iconBg: '#fffbeb', iconColor: '#f59e0b' },
-    Agendado: { dot: '#8b5cf6', iconBg: '#f5f3ff', iconColor: '#8b5cf6' },
-    Proposta: { dot: '#ff4d00', iconBg: '#fff3ee', iconColor: '#ff4d00' },
-    Ganho: { dot: '#10b981', iconBg: '#ecfdf5', iconColor: '#10b981' },
-    Perdido: { dot: '#ef4444', iconBg: '#fff1f2', iconColor: '#ef4444' },
-}
-
-const PipelineColumn = ({ id, title, icon: Icon, leads, onCardClick, onRemoveLead }) => { // eslint-disable-line no-unused-vars
-    const { setNodeRef, isOver } = useDroppable({ id })
-    const accent = ACCENTS[id] || ACCENTS.Frio
-    const totalProposal = leads.reduce((sum, l) => sum + (parseFloat(l.proposal_value) || 0), 0)
-
-    return (
-        <div style={{ display: 'flex', flexDirection: 'column', width: '280px', minWidth: '280px', flexShrink: 0 }}>
-            {/* Header */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', background: '#fff', borderRadius: '8px 8px 0 0', border: '1px solid #e5e7eb', borderBottom: 'none', borderLeft: `3px solid ${accent.dot}` }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <div style={{ width: 26, height: 26, borderRadius: '6px', background: accent.iconBg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <Icon size={13} style={{ color: accent.iconColor }} />
-                    </div>
-                    <span style={{ fontSize: '13px', fontWeight: 700, color: '#111827' }}>{title}</span>
-                    <span style={{ fontSize: '11px', fontWeight: 600, padding: '1px 8px', borderRadius: '999px', background: '#f3f4f6', color: '#6b7280' }}>{leads.length}</span>
-                </div>
-                {totalProposal > 0 && (
-                    <span style={{ display: 'flex', alignItems: 'center', gap: '2px', fontSize: '11px', fontWeight: 700, color: '#10b981' }}>
-                        <DollarSign size={10} /> {totalProposal.toLocaleString('en-US', { maximumFractionDigits: 0 })}
-                    </span>
-                )}
-            </div>
-
-            {/* Drop zone */}
-            <div
-                ref={setNodeRef}
-                style={{
-                    flex: 1, overflowY: 'auto', padding: '6px', display: 'flex', flexDirection: 'column', gap: '6px',
-                    borderRadius: '0 0 8px 8px', border: '1px solid #e5e7eb', borderTop: 'none',
-                    borderLeft: isOver ? `3px solid ${accent.dot}` : '1px solid #e5e7eb',
-                    background: isOver ? accent.iconBg : '#f9fafb',
-                    minHeight: '120px', maxHeight: 'calc(100vh - 320px)',
-                    transition: 'all 0.15s', scrollbarWidth: 'thin', scrollbarColor: '#d1d5db transparent',
-                }}
-            >
-                <SortableContext items={leads.map(l => l.id)} strategy={verticalListSortingStrategy}>
-                    {leads.map(lead => <PipelineLeadCard key={lead.id} lead={lead} onClick={onCardClick} onRemove={onRemoveLead} />)}
-                </SortableContext>
-                {leads.length === 0 && (
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '60px', fontSize: '12px', color: '#d1d5db' }}>Arraste leads aqui</div>
-                )}
-            </div>
-        </div>
-    )
-}
-
-export default PipelineColumn
-
-
-======================================================
-==== ARQUIVO: src\components\pipeline\PipelineKanbanBoard.jsx
-======================================================
-
-import React, { useState, useCallback } from 'react'
-import {
-    DndContext,
-    DragOverlay,
-    PointerSensor,
-    useSensor,
-    useSensors,
-    closestCorners,
-} from '@dnd-kit/core'
-import { Snowflake, Zap, Target, Calendar, FileText, Trophy, XCircle } from 'lucide-react'
-import PipelineColumn from './PipelineColumn'
-import PipelineLeadCard from './PipelineLeadCard'
-import { supabase } from '../../services/supabaseClient'
-
-const STAGES = [
-    { id: 'Frio', title: 'Cold', icon: Snowflake },
-    { id: 'Engajado', title: 'Engaged', icon: Zap },
-    { id: 'Qualificado', title: 'Qualified', icon: Target },
-    { id: 'Agendado', title: 'Scheduled', icon: Calendar },
-    { id: 'Proposta', title: 'Proposal', icon: FileText },
-    { id: 'Ganho', title: 'Won', icon: Trophy },
-    { id: 'Perdido', title: 'Lost', icon: XCircle },
-]
-
-const PipelineKanbanBoard = ({ leads, setLeads, onCardClick }) => {
-    const [activeId, setActiveId] = useState(null)
-
-    const sensors = useSensors(
-        useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
-    )
-
-    const leadsById = Object.fromEntries(leads.map(l => [l.id, l]))
-    const activeLead = activeId ? leadsById[activeId] : null
-
-    const groupedLeads = {}
-    STAGES.forEach(s => { groupedLeads[s.id] = [] })
-    leads.forEach(lead => {
-        const stage = lead.crm_stage || 'Frio'
-        if (groupedLeads[stage]) groupedLeads[stage].push(lead)
-        else groupedLeads['Frio'].push(lead)
-    })
-
-    const findStageByLeadId = useCallback((leadId) => {
-        for (const lead of leads) {
-            if (lead.id === leadId) return lead.crm_stage || 'Frio'
-        }
-        return null
-    }, [leads])
-
-    const handleDragStart = useCallback((event) => {
-        setActiveId(event.active.id)
-    }, [])
-
-    const handleDragOver = useCallback((event) => {
-        const { active, over } = event
-        if (!over) return
-        const activeLeadId = active.id
-        const overId = over.id
-        const sourceStage = findStageByLeadId(activeLeadId)
-        const targetStage = STAGES.find(s => s.id === overId) ? overId : findStageByLeadId(overId)
-        if (!sourceStage || !targetStage || sourceStage === targetStage) return
-        setLeads(prev => prev.map(l => l.id === activeLeadId ? { ...l, crm_stage: targetStage } : l))
-    }, [setLeads, findStageByLeadId])
-
-    const handleDragEnd = useCallback(async (event) => {
-        const { active } = event
-        const leadId = active.id
-        const lead = leads.find(l => l.id === leadId)
-        setActiveId(null)
-        if (!lead) return
-        try {
-            await supabase.from('leads').update({ crm_stage: lead.crm_stage }).eq('id', leadId)
-        } catch (err) {
-            console.error('[Pipeline] Error updating crm_stage:', err)
-        }
-    }, [leads])
-
-    const handleRemoveLead = useCallback(async (leadId) => {
-        // Optimistic update: remove immediately from local state
-        setLeads(prev => prev.filter(l => l.id !== leadId))
-        try {
-            await supabase.from('leads').update({ crm_stage: null }).eq('id', leadId)
-        } catch (err) {
-            console.error('[Pipeline] Error removing lead from funnel:', err)
-            // If it fails, re-fetch would be ideal but we don't have access to fetchFunnelLeads here
-            // The parent (PipelinePage) re-fetches on next mount / manual refresh
-        }
-    }, [setLeads])
-
-    return (
-        <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={handleDragStart} onDragOver={handleDragOver} onDragEnd={handleDragEnd}>
-            <div style={{ display: 'flex', gap: '10px', overflowX: 'auto', paddingBottom: '10px', height: '100%', scrollbarWidth: 'thin', scrollbarColor: '#e5e7eb transparent' }}>
-                {STAGES.map(stage => (
-                    <PipelineColumn
-                        key={stage.id}
-                        id={stage.id}
-                        title={stage.title}
-                        icon={stage.icon}
-                        leads={groupedLeads[stage.id]}
-                        onCardClick={onCardClick}
-                        onRemoveLead={handleRemoveLead}
-                    />
-                ))}
-            </div>
-            <DragOverlay>
-                {activeLead ? (
-                    <div style={{ transform: 'rotate(2deg) scale(1.03)', boxShadow: '0 8px 24px rgba(0,0,0,0.15)', borderRadius: '8px' }}>
-                        <PipelineLeadCard lead={activeLead} />
-                    </div>
-                ) : null}
-            </DragOverlay>
-        </DndContext>
-    )
-}
-
-export default PipelineKanbanBoard
-
-
-======================================================
-==== ARQUIVO: src\components\pipeline\PipelineKanbanFilters.jsx
-======================================================
-
-import React from 'react'
-import { Search, Star, DollarSign } from 'lucide-react'
-
-const btn = (active) => ({
-    padding: '5px 11px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, lineHeight: 1,
-    border: active ? '1.5px solid #ff4d00' : '1px solid #d1d5db',
-    background: active ? '#fff3ee' : '#fff', color: active ? '#ff4d00' : '#6b7280', cursor: 'pointer',
-})
-
-const PipelineKanbanFilters = ({ filters, setFilters }) => {
-    return (
-        <div className="flex flex-wrap items-center gap-3" style={{ padding: '10px 16px', background: '#fff', border: '1px solid #e5e7eb', borderRadius: '10px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
-            {/* Search */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: '6px', padding: '4px 10px', minWidth: '200px' }}>
-                <Search size={14} style={{ color: '#9ca3af' }} />
-                <input
-                    type="text"
-                    placeholder="Buscar por nome..."
-                    value={filters.search || ''}
-                    onChange={e => setFilters(p => ({ ...p, search: e.target.value }))}
-                    style={{ border: 'none', background: 'transparent', outline: 'none', fontSize: '13px', color: '#111827', width: '100%', padding: '2px 0', fontFamily: 'inherit' }}
-                />
-            </div>
-
-            <div style={{ width: '1px', height: '22px', background: '#e5e7eb', flexShrink: 0 }} />
-
-            {/* Tier filter */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <Star size={13} style={{ color: '#f59e0b' }} />
-                <span style={{ fontSize: '11px', color: '#9ca3af', fontWeight: 600, textTransform: 'uppercase' }}>Tier:</span>
-                {[1, 2, 3, 4, 5].map(t => (
-                    <button
-                        key={t}
-                        onClick={() => setFilters(p => ({ ...p, tier: p.tier === t ? null : t }))}
-                        style={btn(filters.tier === t)}
-                    >
-                        {t}★
-                    </button>
-                ))}
-            </div>
-
-            <div style={{ width: '1px', height: '22px', background: '#e5e7eb', flexShrink: 0 }} />
-
-            {/* Proposal toggle */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <DollarSign size={13} style={{ color: '#10b981' }} />
-                <button
-                    onClick={() => setFilters(p => ({ ...p, hasProposal: !p.hasProposal }))}
-                    style={btn(filters.hasProposal)}
-                >
-                    Com proposta
-                </button>
-            </div>
-        </div>
-    )
-}
-
-export default PipelineKanbanFilters
-
-
-======================================================
-==== ARQUIVO: src\components\pipeline\PipelineLeadCard.jsx
-======================================================
-
-import React, { useState } from 'react'
-import { useSortable } from '@dnd-kit/sortable'
-import { CSS } from '@dnd-kit/utilities'
-import { Star, DollarSign, MessageSquare, AlertTriangle, X, CheckCircle2, MoreVertical, Calendar, Phone, Mail, Building2, ExternalLink } from 'lucide-react'
-import SafeImage from '../SafeImage' // adjust path to components
-
-const STAGE_THEMES = {
-    A: { background: '#ecfdf5', color: '#059669', border: '1px solid #a7f3d0' },
-    B: { background: '#fffbeb', color: '#d97706', border: '1px solid #fde68a' },
-    C: { background: '#f9fafb', color: '#6b7280', border: '1px solid #e5e7eb' },
-}
-
-const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000
-
-const isFollowupOverdue = (lead) => {
-    if (!lead.last_task_completed_at || lead.has_engaged) return false
-    return new Date(lead.last_task_completed_at).getTime() < Date.now() - SEVEN_DAYS_MS
-}
-
-const PipelineLeadCard = ({ lead, onClick, onRemove }) => {
-    const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: lead.id })
-    const [isHovered, setIsHovered] = useState(false)
-    const [isRemoving, setIsRemoving] = useState(false)
-
-    const style = {
-        transform: CSS.Transform.toString(transform),
-        transition,
-        opacity: isDragging || isRemoving ? 0.5 : 1,
-        zIndex: isDragging ? 50 : 'auto',
-    }
-
-    const proposalValue = parseFloat(lead.proposal_value) || 0
-    const interactionCount = lead.total_interactions_count || 0
-    const icpScore = lead.icp_score || 'C'
-    const cadenceStage = lead.cadence_stage || ''
-    const icp = STAGE_THEMES[icpScore] || STAGE_THEMES.C
-    const tier = lead.tier || 0
-
-    const followupOverdue = isFollowupOverdue(lead)
-
-    const handleClick = () => {
-        if (isDragging) return
-        if (onClick) onClick(lead)
-    }
-
-    const handleRemove = (e) => {
-        e.stopPropagation() // prevent card click / drag from firing
-        if (isRemoving) return
-        setIsRemoving(true)
-        if (onRemove) onRemove(lead.id)
-    }
-
-    return (
-        <div
-            ref={setNodeRef}
-            style={{
-                ...style,
-                background: '#fff',
-                border: isDragging ? '1.5px solid #ff4d00' : '1px solid #e5e7eb',
-                borderRadius: '8px',
-                padding: '10px 12px',
-                cursor: 'grab',
-                boxShadow: isDragging ? '0 4px 16px rgba(0,0,0,0.12)' : '0 1px 3px rgba(0,0,0,0.05)',
-                position: 'relative', // needed for the remove button positioning
-            }}
-            onMouseEnter={e => { if (!isDragging) { e.currentTarget.style.borderColor = '#d1d5db'; setIsHovered(true) } }}
-            onMouseLeave={e => { if (!isDragging) { e.currentTarget.style.borderColor = '#e5e7eb'; setIsHovered(false) } }}
-            {...attributes}
-            {...listeners}
-            onClick={handleClick}
-        >
-            {/* Remove from funnel button — shown on hover, top-right corner */}
-            {isHovered && !isDragging && (
-                <button
-                    onPointerDown={e => e.stopPropagation()} // stop dnd-kit from hijacking the click
-                    onClick={handleRemove}
-                    title="Remove from Funnel"
-                    style={{
-                        position: 'absolute', top: '6px', right: '6px',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        width: '20px', height: '20px', borderRadius: '4px',
-                        background: '#fef2f2', border: '1px solid #fecaca',
-                        cursor: 'pointer', padding: 0, zIndex: 10,
-                        transition: 'all 0.15s',
-                    }}
-                    onMouseEnter={e => { e.currentTarget.style.background = '#ef4444'; e.currentTarget.style.borderColor = '#ef4444' }}
-                    onMouseLeave={e => { e.currentTarget.style.background = '#fef2f2'; e.currentTarget.style.borderColor = '#fecaca' }}
-                >
-                    <X size={11} style={{ color: '#ef4444', pointerEvents: 'none' }}
-                        onMouseEnter={e => { e.currentTarget.style.color = '#fff' }}
-                        onMouseLeave={e => { e.currentTarget.style.color = '#ef4444' }}
-                    />
-                </button>
-            )}
-            {/* Follow-up overdue badge — shown at top for immediate visibility */}
-            {followupOverdue && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '7px', padding: '3px 7px', borderRadius: '5px', background: '#fff3ee', border: '1px solid #ffd4c2', width: 'fit-content' }}>
-                    <AlertTriangle size={11} style={{ color: '#ff4d00', flexShrink: 0 }} />
-                    <span style={{ fontSize: '10px', fontWeight: 700, color: '#ff4d00', letterSpacing: '0.02em' }}>Follow-up</span>
-                </div>
-            )}
-
-            {/* Name + Empresa */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
-                <div style={{ width: 30, height: 30, borderRadius: '50%', background: '#f3f4f6', border: '1px solid #e5e7eb', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', flexShrink: 0, fontSize: '11px', fontWeight: 700, color: '#6b7280' }}>
-                    <SafeImage
-                        src={lead.avatar_url}
-                        alt={lead.nome}
-                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                        fallbackText={lead.nome?.charAt(0)?.toUpperCase()}
-                    />
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{ fontSize: '13px', fontWeight: 600, color: '#111827', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{lead.nome || 'No Name'}</p>
-                    {lead.empresa && <p style={{ fontSize: '11px', color: '#9ca3af', margin: '1px 0 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{lead.empresa}</p>}
-                </div>
-            </div>
-
-            {/* Tags row */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '5px', flexWrap: 'wrap' }}>
-                <span title={lead.icp_reason || ''} style={{ fontSize: '10px', fontWeight: 700, padding: '2px 6px', borderRadius: '4px', cursor: lead.icp_reason ? 'help' : 'default', ...icp }}>ICP {icpScore}</span>
-
-                {cadenceStage && (
-                    <span title={lead.stage_reasoning || ''} style={{ fontSize: '10px', fontWeight: 700, padding: '2px 6px', borderRadius: '4px', cursor: lead.stage_reasoning ? 'help' : 'default', background: '#eff6ff', color: '#2563eb', border: '1px solid #bfdbfe' }}>{cadenceStage}</span>
-                )}
-
-                {tier > 0 && (
-                    <span style={{ display: 'flex', gap: '1px' }}>
-                        {[1, 2, 3, 4, 5].map(i => <Star key={i} size={10} style={i <= tier ? { color: '#f59e0b', fill: '#f59e0b' } : { color: '#e5e7eb', fill: '#e5e7eb' }} />)}
-                    </span>
-                )}
-
-                {proposalValue > 0 && (
-                    <span style={{ display: 'flex', alignItems: 'center', gap: '2px', fontSize: '10px', fontWeight: 700, color: '#059669' }}>
-                        <DollarSign size={10} /> {proposalValue.toLocaleString('en-US', { maximumFractionDigits: 0 })}
-                    </span>
-                )}
-
-                {interactionCount > 0 && (
-                    <span style={{ display: 'flex', alignItems: 'center', gap: '2px', fontSize: '10px', color: '#9ca3af' }}>
-                        <MessageSquare size={9} /> {interactionCount}
-                    </span>
-                )}
-
-                {lead.has_engaged && (
-                    <span style={{ fontSize: '9px', fontWeight: 700, padding: '1px 5px', borderRadius: '4px', background: '#fff3ee', color: '#ff4d00', border: '1px solid #ffd4c2' }}>Replied</span>
-                )}
-            </div>
-        </div>
-    )
-}
-
-export default PipelineLeadCard
-
-
-======================================================
-==== ARQUIVO: src\components\pipeline\PipelineTable.jsx
-======================================================
-
-import React, { useState, useMemo } from 'react'
-import { ChevronUp, ChevronDown, ChevronsUpDown, ArrowRightToLine, CheckSquare, Square, MinusSquare } from 'lucide-react'
-
-const PAGE_SIZE = 50
-
-const TH = { fontSize: '11px', fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em', padding: '10px 12px', borderBottom: '2px solid #e5e7eb', background: '#f9fafb', whiteSpace: 'nowrap', cursor: 'pointer', userSelect: 'none', position: 'sticky', top: 0, zIndex: 2 }
-const TD = { fontSize: '13px', color: '#111827', padding: '10px 12px', borderBottom: '1px solid #f3f4f6', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '200px' }
-const ICP_BG = { A: '#ecfdf5', B: '#fffbeb', C: '#f3f4f6' }
-const ICP_COLOR = { A: '#059669', B: '#d97706', C: '#6b7280' }
-
-// Custom sort value mappers — return a numeric rank so sort is meaningful
-const ICP_RANK = { A: 0, B: 1, C: 2 }          // asc → A first (best first)
-const CAD_RANK = { G1: 1, G2: 2, G3: 3, G4: 4, G5: 5 } // desc → G5 first (most advanced first)
-
-const getSortValue = (lead, field) => {
-    if (field === 'icp_score') return ICP_RANK[lead.icp_score] ?? 99
-    if (field === 'cadence_stage') return CAD_RANK[lead.cadence_stage] ?? 0
-    if (field === 'total_interactions_count') return lead.total_interactions_count ?? 0
-    const v = lead[field]
-    if (v == null) return ''
-    if (typeof v === 'string') return v.toLowerCase()
-    return v
-}
-
-const SortIcon = ({ field, sortField, sortDir }) => {
-    if (sortField !== field) return <ChevronsUpDown size={12} style={{ color: '#d1d5db' }} />
-    return sortDir === 'asc' ? <ChevronUp size={12} style={{ color: '#ff4d00' }} /> : <ChevronDown size={12} style={{ color: '#ff4d00' }} />
-}
-
-const PipelineTable = ({ leads, onOpenLead, onMoveToFunnel }) => {
-    const [selected, setSelected] = useState(new Set())
-    const [sortField, setSortField] = useState('nome')
-    const [sortDir, setSortDir] = useState('asc')
-    const [page, setPage] = useState(0)
-
-    // Columns — defaultDir controls direction on FIRST click
-    const columns = [
-        { key: 'nome', label: 'Name', w: '180px', defaultDir: 'asc' },
-        { key: 'empresa', label: 'Company', w: '150px', defaultDir: 'asc' },
-        { key: 'icp_score', label: 'ICP', w: '60px', defaultDir: 'asc' }, // A first
-        { key: 'cadence_stage', label: 'Cadence', w: '80px', defaultDir: 'desc' }, // G5 first
-        { key: 'total_interactions_count', label: 'Interactions', w: '90px', defaultDir: 'desc' }, // highest first
-        { key: 'has_engaged', label: 'Engaged?', w: '80px', defaultDir: 'desc' },
-        { key: 'tier', label: 'Tier', w: '50px', defaultDir: 'desc' },
-        { key: 'proposal_value', label: 'Proposal', w: '100px', defaultDir: 'desc' },
-        { key: 'crm_stage', label: 'Stage', w: '90px', defaultDir: 'asc' },
-    ]
-
-    const toggleSort = (field) => {
-        if (sortField === field) {
-            setSortDir(d => d === 'asc' ? 'desc' : 'asc')
-        } else {
-            const col = columns.find(c => c.key === field)
-            setSortField(field)
-            setSortDir(col?.defaultDir || 'asc')
-        }
-        setPage(0)
-    }
-
-    const sorted = useMemo(() => {
-        // Deduplicate by ID (paginated fetch may produce overlapping rows)
-        const unique = [...new Map(leads.map(l => [l.id, l])).values()]
-        unique.sort((a, b) => {
-            const va = getSortValue(a, sortField)
-            const vb = getSortValue(b, sortField)
-            if (va < vb) return sortDir === 'asc' ? -1 : 1
-            if (va > vb) return sortDir === 'asc' ? 1 : -1
-            return 0
-        })
-        return unique
-    }, [leads, sortField, sortDir])
-
-    const totalPages = Math.ceil(sorted.length / PAGE_SIZE)
-    const pageLeads = sorted.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
-
-    const allOnPageSelected = pageLeads.length > 0 && pageLeads.every(l => selected.has(l.id))
-    const someOnPageSelected = pageLeads.some(l => selected.has(l.id))
-
-    const toggleAll = () => {
-        if (allOnPageSelected) {
-            setSelected(prev => { const n = new Set(prev); pageLeads.forEach(l => n.delete(l.id)); return n })
-        } else {
-            setSelected(prev => { const n = new Set(prev); pageLeads.forEach(l => n.add(l.id)); return n })
-        }
-    }
-
-    const toggleOne = (id) => {
-        setSelected(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })
-    }
-
-    const handleMoveToFunnel = () => {
-        if (selected.size === 0) return
-        onMoveToFunnel([...selected])
-        setSelected(new Set())
-    }
-
-    return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', flex: 1, minHeight: 0 }}>
-            {/* Bulk action bar */}
-            {selected.size > 0 && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '8px 16px', background: '#fff3ee', border: '1px solid #ffd4c2', borderRadius: '8px' }}>
-                    <span style={{ fontSize: '13px', fontWeight: 600, color: '#111827' }}>
-                        {selected.size} lead{selected.size > 1 ? 's' : ''} selected
-                    </span>
-                    <button
-                        onClick={handleMoveToFunnel}
-                        style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 14px', borderRadius: '6px', fontSize: '12px', fontWeight: 700, background: '#ff4d00', color: '#fff', border: 'none', cursor: 'pointer' }}
-                    >
-                        <ArrowRightToLine size={14} /> Move to Funnel
-                    </button>
-                </div>
-            )}
-
-            {/* Table */}
-            <div style={{ flex: 1, overflow: 'auto', borderRadius: '8px', border: '1px solid #e5e7eb', background: '#fff' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
-                    <thead>
-                        <tr>
-                            <th style={{ ...TH, width: '40px', cursor: 'default' }} onClick={toggleAll}>
-                                {allOnPageSelected ? <CheckSquare size={16} style={{ color: '#ff4d00' }} /> : someOnPageSelected ? <MinusSquare size={16} style={{ color: '#ff4d00' }} /> : <Square size={16} style={{ color: '#d1d5db' }} />}
-                            </th>
-                            {columns.map(col => (
-                                <th key={col.key} style={{ ...TH, width: col.w }} onClick={() => toggleSort(col.key)}>
-                                    <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                        {col.label} <SortIcon field={col.key} sortField={sortField} sortDir={sortDir} />
-                                    </span>
-                                </th>
-                            ))}
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {pageLeads.map(lead => {
-                            const isSelected = selected.has(lead.id)
-                            return (
-                                <tr
-                                    key={lead.id}
-                                    style={{ cursor: 'pointer', transition: 'background 0.1s', background: isSelected ? '#fff7f3' : '#fff' }}
-                                    onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = '#fafafa' }}
-                                    onMouseLeave={e => { e.currentTarget.style.background = isSelected ? '#fff7f3' : '#fff' }}
-                                >
-                                    <td style={{ ...TD, width: '40px' }} onClick={() => toggleOne(lead.id)}>
-                                        {isSelected ? <CheckSquare size={16} style={{ color: '#ff4d00' }} /> : <Square size={16} style={{ color: '#d1d5db' }} />}
-                                    </td>
-                                    <td style={{ ...TD, fontWeight: 600, color: '#111827', cursor: 'pointer' }} onClick={() => onOpenLead(lead)}>
-                                        {lead.nome || '—'}
-                                    </td>
-                                    <td style={{ ...TD, color: '#6b7280' }} onClick={() => onOpenLead(lead)}>{lead.empresa || '—'}</td>
-                                    <td style={TD} onClick={() => onOpenLead(lead)}>
-                                        <span title={lead.icp_reason || ''} style={{ fontSize: '10px', fontWeight: 700, padding: '2px 7px', borderRadius: '4px', background: ICP_BG[lead.icp_score] || '#f3f4f6', color: ICP_COLOR[lead.icp_score] || '#6b7280', border: '1px solid transparent', cursor: lead.icp_reason ? 'help' : 'default' }}>
-                                            {lead.icp_score || '—'}
-                                        </span>
-                                    </td>
-                                    <td style={{ ...TD, color: '#6b7280' }} onClick={() => onOpenLead(lead)} title={lead.stage_reasoning || ''}>{lead.cadence_stage || '—'}</td>
-                                    <td style={{ ...TD, textAlign: 'center' }} onClick={() => onOpenLead(lead)}>{lead.total_interactions_count || 0}</td>
-                                    <td style={{ ...TD, textAlign: 'center' }} onClick={() => onOpenLead(lead)}>
-                                        {lead.has_engaged ? <span style={{ color: '#059669', fontWeight: 700, fontSize: '11px' }}>Yes</span> : <span style={{ color: '#d1d5db', fontSize: '11px' }}>No</span>}
-                                    </td>
-                                    <td style={{ ...TD, textAlign: 'center' }} onClick={() => onOpenLead(lead)}>{lead.tier || '—'}</td>
-                                    <td style={TD} onClick={() => onOpenLead(lead)}>
-                                        {parseFloat(lead.proposal_value) > 0 ? (
-                                            <span style={{ fontSize: '12px', fontWeight: 600, color: '#059669' }}>${parseFloat(lead.proposal_value).toLocaleString('en-US', { minimumFractionDigits: 0 })}</span>
-                                        ) : <span style={{ color: '#d1d5db' }}>—</span>}
-                                    </td>
-                                    <td style={TD} onClick={() => onOpenLead(lead)}>
-                                        {lead.crm_stage ? <span style={{ fontSize: '11px', fontWeight: 600, padding: '2px 7px', borderRadius: '4px', background: '#f3f4f6', color: '#374151' }}>{lead.crm_stage}</span> : <span style={{ color: '#d1d5db' }}>—</span>}
-                                    </td>
-                                </tr>
-                            )
-                        })}
-                        {pageLeads.length === 0 && (
-                            <tr><td colSpan={10} style={{ ...TD, textAlign: 'center', color: '#9ca3af', padding: '40px' }}>No leads found</td></tr>
-                        )}
-                    </tbody>
-                </table>
-            </div>
-
-            {/* Pagination */}
-            {totalPages > 1 && (
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 4px' }}>
-                    <span style={{ fontSize: '12px', color: '#9ca3af' }}>
-                        {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, sorted.length)} of {sorted.length}
-                    </span>
-                    <div style={{ display: 'flex', gap: '6px' }}>
-                        <button disabled={page === 0} onClick={() => setPage(p => p - 1)} style={{ padding: '4px 10px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, border: '1px solid #e5e7eb', background: '#fff', color: page === 0 ? '#d1d5db' : '#374151', cursor: page === 0 ? 'default' : 'pointer' }}>Previous</button>
-                        <button disabled={page >= totalPages - 1} onClick={() => setPage(p => p + 1)} style={{ padding: '4px 10px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, border: '1px solid #e5e7eb', background: '#fff', color: page >= totalPages - 1 ? '#d1d5db' : '#374151', cursor: page >= totalPages - 1 ? 'default' : 'pointer' }}>Next</button>
-                    </div>
-                </div>
-            )}
-        </div>
-    )
-}
-
-export default PipelineTable
-
-
-======================================================
-==== ARQUIVO: src\components\pipeline\PipelineTableFilters.jsx
-======================================================
-
-import React from 'react'
-import { Filter, X, Search } from 'lucide-react'
-
-const btn = (active) => ({
-    padding: '5px 11px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, lineHeight: 1,
-    border: active ? '1.5px solid #ff4d00' : '1px solid #d1d5db',
-    background: active ? '#fff3ee' : '#fff', color: active ? '#ff4d00' : '#6b7280', cursor: 'pointer',
-})
-const label = { fontSize: '11px', color: '#9ca3af', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }
-const sep = () => ({ width: '1px', height: '22px', background: '#e5e7eb', flexShrink: 0 })
-const inp = { width: '56px', padding: '5px 8px', fontSize: '12px', borderRadius: '6px', border: '1px solid #d1d5db', background: '#fff', color: '#111827', outline: 'none' }
-
-const PipelineTableFilters = ({ filters, setFilters }) => {
-    const toggle = (key, val) => setFilters(p => {
-        const arr = p[key] || []
-        return { ...p, [key]: arr.includes(val) ? arr.filter(v => v !== val) : [...arr, val] }
-    })
-
-    const hasActive = !!filters.search || filters.icp?.length > 0 || filters.cadence?.length > 0 || filters.engagement !== 'all' || filters.minInteractions > 0 || filters.maxInteractions < 9999 || filters.hasProposal !== 'all'
-    const clear = () => setFilters({ search: '', icp: [], cadence: [], engagement: 'all', minInteractions: 0, maxInteractions: 9999, hasProposal: 'all' })
-
-    return (
-        <div className="flex flex-wrap items-center gap-3" style={{ padding: '10px 16px', background: '#fff', border: '1px solid #e5e7eb', borderRadius: '10px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
-            {/* Search */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: '6px', padding: '4px 10px', minWidth: '180px' }}>
-                <Search size={13} style={{ color: '#9ca3af', flexShrink: 0 }} />
-                <input
-                    type="text"
-                    placeholder="Search by name..."
-                    value={filters.search || ''}
-                    onChange={e => setFilters(p => ({ ...p, search: e.target.value }))}
-                    style={{ border: 'none', background: 'transparent', outline: 'none', fontSize: '13px', color: '#111827', width: '100%', fontFamily: 'inherit' }}
-                />
-            </div>
-            <div style={sep()} />
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#9ca3af' }}><Filter size={13} /><span style={label}>Filters</span></div>
-            <div style={sep()} />
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <span style={label}>ICP:</span>
-                {['A', 'B', 'C'].map(v => <button key={v} onClick={() => toggle('icp', v)} style={btn(filters.icp?.includes(v))}>{v}</button>)}
-            </div>
-            <div style={sep()} />
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <span style={label}>Cadence:</span>
-                {['G1', 'G2', 'G3', 'G4', 'G5'].map(v => <button key={v} onClick={() => toggle('cadence', v)} style={btn(filters.cadence?.includes(v))}>{v}</button>)}
-            </div>
-            <div style={sep()} />
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <span style={label}>Engagement:</span>
-                {[{ v: 'all', l: 'All' }, { v: 'engaged', l: 'Replied' }, { v: 'ignored', l: 'Ignored' }].map(o => <button key={o.v} onClick={() => setFilters(p => ({ ...p, engagement: o.v }))} style={btn(filters.engagement === o.v)}>{o.l}</button>)}
-            </div>
-            <div style={sep()} />
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <span style={label}>Proposal:</span>
-                {[{ v: 'all', l: 'All' }, { v: 'with', l: 'With' }, { v: 'without', l: 'Without' }].map(o => <button key={o.v} onClick={() => setFilters(p => ({ ...p, hasProposal: o.v }))} style={btn(filters.hasProposal === o.v)}>{o.l}</button>)}
-            </div>
-            <div style={sep()} />
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <span style={label}>Interactions:</span>
-                <input type="number" min="0" placeholder="Min" value={filters.minInteractions === 0 ? '' : filters.minInteractions} onChange={e => setFilters(p => ({ ...p, minInteractions: parseInt(e.target.value) || 0 }))} style={inp} />
-                <span style={{ color: '#d1d5db', fontSize: '12px' }}>—</span>
-                <input type="number" min="0" placeholder="Max" value={filters.maxInteractions >= 9999 ? '' : filters.maxInteractions} onChange={e => setFilters(p => ({ ...p, maxInteractions: parseInt(e.target.value) || 9999 }))} style={inp} />
-            </div>
-            {hasActive && (<><div style={sep()} /><button onClick={clear} style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '5px 11px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, background: '#fff1f2', border: '1px solid #fecaca', color: '#ef4444', cursor: 'pointer' }}><X size={12} /> Clear</button></>)}
-        </div>
-    )
-}
-
-export default PipelineTableFilters
-
-
-======================================================
-==== ARQUIVO: src\components\SafeImage.jsx
-======================================================
-
+## File: src\components\SafeImage.jsx
+```javascript
 import React, { useState } from 'react'
 
 const SafeImage = ({ src, alt, fallbackText, className, style, containerClassName = '' }) => {
@@ -4509,12 +3840,10 @@ const SafeImage = ({ src, alt, fallbackText, className, style, containerClassNam
 }
 
 export default SafeImage
+```
 
-
-======================================================
-==== ARQUIVO: src\components\SalesCockpit.jsx
-======================================================
-
+## File: src\components\SalesCockpit.jsx
+```javascript
 import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../services/supabaseClient'
@@ -4653,6 +3982,7 @@ const SalesCockpit = () => {
                 supabase
                     .from('tasks')
                     .select('*, lead:leads!inner(id, client_id, nome, empresa, headline, linkedin_profile_url, cadence_stage, total_interactions_count, avatar_url)')
+                    .eq('client_id', selectedClientId)
                     .eq('leads.client_id', selectedClientId)
                     .neq('leads.is_blacklisted', true)
                     .eq('status', 'PENDING')
@@ -4662,6 +3992,7 @@ const SalesCockpit = () => {
                 supabase
                     .from('tasks')
                     .select('id, leads!inner(client_id)', { count: 'exact' })
+                    .eq('client_id', selectedClientId)
                     .eq('leads.client_id', selectedClientId)
                     .neq('leads.is_blacklisted', true)
                     .eq('status', 'COMPLETED')
@@ -4670,6 +4001,7 @@ const SalesCockpit = () => {
                 supabase
                     .from('tasks')
                     .select('*, lead:leads!inner(id, client_id, nome, empresa, headline, linkedin_profile_url, cadence_stage, total_interactions_count, avatar_url)')
+                    .eq('client_id', selectedClientId)
                     .eq('leads.client_id', selectedClientId)
                     .neq('leads.is_blacklisted', true)
                     .eq('status', 'PENDING')
@@ -5251,12 +4583,10 @@ const TaskCard = ({ task, themeKey, completing, onComplete, onExecute, onLeadCli
 }
 
 export default SalesCockpit
+```
 
-
-======================================================
-==== ARQUIVO: src\components\SchedulePostModal.jsx
-======================================================
-
+## File: src\components\SchedulePostModal.jsx
+```javascript
 import React, { useState } from 'react'
 import { CalendarClock, X, Loader2, CheckCircle2 } from 'lucide-react'
 import { supabase } from '../services/supabaseClient'
@@ -5360,12 +4690,10 @@ const SchedulePostModal = ({ post, onClose, onSuccess }) => {
 }
 
 export default SchedulePostModal
+```
 
-
-======================================================
-==== ARQUIVO: src\components\Skeleton.jsx
-======================================================
-
+## File: src\components\Skeleton.jsx
+```javascript
 import React from 'react'
 
 export const Skeleton = ({ className }) => (
@@ -5399,22 +4727,33 @@ export const HeroTaskCardSkeleton = () => (
         </div>
     </div>
 )
+```
 
-
-======================================================
-==== ARQUIVO: src\components\StrategicContextCard.jsx
-======================================================
-
+## File: src\components\StrategicContextCard.jsx
+```javascript
 import React, { useState } from 'react'
-import { ShieldAlert, Brain, Radio, Target, TrendingUp, Loader2, Sparkles } from 'lucide-react'
+import { ShieldAlert, Brain, Radio, Target, TrendingUp, Loader2, Sparkles, RefreshCw } from 'lucide-react'
 
 // Cadence level configurations
 const CADENCE_LEVELS = {
-    G1: { label: 'Frio', desc: 'Lead acabou de ser abordado. Sem conexão emocional ainda.', color: 'from-slate-400 to-slate-500', bg: 'bg-slate-50', border: 'border-slate-200', text: 'text-slate-600', percent: 20 },
-    G2: { label: 'Receptivo', desc: 'Lead reconhece você e está aberto a ouvir.', color: 'from-blue-400 to-blue-500', bg: 'bg-blue-50', border: 'border-blue-200', text: 'text-blue-600', percent: 40 },
-    G3: { label: 'Contextualizado', desc: 'Lead entende sua proposta e está avaliando.', color: 'from-amber-400 to-amber-500', bg: 'bg-amber-50', border: 'border-amber-200', text: 'text-amber-700', percent: 60 },
-    G4: { label: 'Interessado', desc: 'Lead demonstra interesse ativo. Engajamento crescente.', color: 'from-orange-400 to-orange-500', bg: 'bg-orange-50', border: 'border-orange-200', text: 'text-orange-600', percent: 80 },
-    G5: { label: 'Quente', desc: 'Lead confia em você. Pronto para ação de conversão.', color: 'from-emerald-400 to-emerald-500', bg: 'bg-emerald-50', border: 'border-emerald-200', text: 'text-emerald-700', percent: 100 },
+    G1: { label: 'Cold', desc: 'Lead just approached. No emotional connection yet.', color: 'from-slate-400 to-slate-500', bg: 'bg-slate-50', border: 'border-slate-200', text: 'text-slate-600', percent: 20 },
+    G2: { label: 'Receptive', desc: 'Lead recognizes you and is open to listening.', color: 'from-blue-400 to-blue-500', bg: 'bg-blue-50', border: 'border-blue-200', text: 'text-blue-600', percent: 40 },
+    G3: { label: 'Contextualized', desc: 'Lead understands your proposal and is evaluating.', color: 'from-amber-400 to-amber-500', bg: 'bg-amber-50', border: 'border-amber-200', text: 'text-amber-700', percent: 60 },
+    G4: { label: 'Interested', desc: 'Lead shows active interest. Increasing engagement.', color: 'from-orange-400 to-orange-500', bg: 'bg-orange-50', border: 'border-orange-200', text: 'text-orange-600', percent: 80 },
+    G5: { label: 'Hot', desc: 'Lead trusts you. Ready for conversion action.', color: 'from-emerald-400 to-emerald-500', bg: 'bg-emerald-50', border: 'border-emerald-200', text: 'text-emerald-700', percent: 100 },
+}
+
+const getTimeAgo = (dateStr) => {
+    if (!dateStr) return null;
+    const diffMs = Date.now() - new Date(dateStr).getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMins / 60);
+    const diffDays = Math.floor(diffHours / 24);
+
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins} min ago`;
+    if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
+    return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
 }
 
 const getCadenceConfig = (level) => {
@@ -5423,19 +4762,29 @@ const getCadenceConfig = (level) => {
     return CADENCE_LEVELS[key] || CADENCE_LEVELS['G1']
 }
 
-const StrategicContextCard = ({ lead, isIcebreaker = false }) => {
+const StrategicContextCard = ({ lead, isIcebreaker = false, ...props }) => {
     const [showTooltip, setShowTooltip] = useState(false)
 
     if (!lead) return null
 
-    const cadenceLevel = lead.last_cadence_level
-    const signal = lead.last_signal_detected
-    const psychological = lead.last_psychological_factor
-    const forbidden = lead.last_forbidden_action
-    const strategy = lead.last_strategy_used
+    // Extra Fields
+    const isAnalyzing = props.isAnalyzing
+    const onAnalyzeNow = props.onAnalyzeNow
+    const forbidden = null // You can map this if needed
 
-    // If ALL fields are null → show "awaiting analysis" state
-    const hasAnyData = cadenceLevel || signal || psychological || forbidden || strategy
+    // Base Strategic Columns mapping
+    const cadenceLevel = lead?.cadence_stage
+    const signal = lead?.stage_reasoning
+    const strategy = lead?.next_action
+    const psychological = null // Not provided in new db schema
+    
+    // Map the boolean column ready_for_analysis as an indicator that analysis has run 
+    // We will use updated_at or another timestamp if available, but for now we can just check if data exists
+    // The timestamp will be "Updated" text without a date if we don't have analyzed_at, or we can use lead?.updated_at
+    const analyzedAt = lead?.updated_at || lead?.last_interaction_date || null;
+
+    // Derived states
+    const hasAnyData = !!(cadenceLevel || signal || psychological || forbidden || strategy)
 
     if (!hasAnyData) {
         return (
@@ -5444,23 +4793,43 @@ const StrategicContextCard = ({ lead, isIcebreaker = false }) => {
                     <div className="w-6 h-6 rounded-lg bg-primary/20 flex items-center justify-center">
                         <TrendingUp size={14} className="text-primary" />
                     </div>
-                    <h4 className="text-xs font-bold text-primary uppercase tracking-wider">Raio-X da Negociação</h4>
+                    <h4 className="text-xs font-bold text-primary uppercase tracking-wider">Negotiation X-Ray</h4>
                 </div>
                 <div className="flex flex-col items-center justify-center py-6 gap-3">
-                    {isIcebreaker ? (
+                    {isAnalyzing ? (
+                        <>
+                            <div className="relative">
+                                <div className="absolute inset-0 rounded-full bg-primary/10 animate-ping" />
+                                <Loader2 size={24} className="text-primary animate-spin relative" />
+                            </div>
+                            <p className="text-xs text-primary font-medium text-center leading-relaxed">
+                                Analyzing history...
+                            </p>
+                            <p className="text-[10px] text-gray-400 text-center">This might take a few seconds.</p>
+                        </>
+                    ) : isIcebreaker ? (
                         <>
                             <Sparkles size={24} className="text-amber-400/70" />
                             <p className="text-xs text-gray-400 text-center leading-relaxed">
-                                Gere o Icebreaker para ativar<br />a análise estratégica.
+                                Generate the Icebreaker to activate<br />the strategic analysis.
                             </p>
                         </>
                     ) : (
                         <>
                             <Loader2 size={24} className="text-gray-500 animate-spin" />
                             <p className="text-xs text-gray-500 text-center leading-relaxed">
-                                Aguardando Análise da IA...<br />
-                                <span className="text-gray-600">Disponível após o próximo processamento.</span>
+                                Awaiting AI Analysis...<br />
+                                <span className="text-gray-600">Available after the next processing.</span>
                             </p>
+                            {onAnalyzeNow && (
+                                <button
+                                    onClick={onAnalyzeNow}
+                                    className="mt-1 inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-primary/10 hover:bg-primary/20 border border-primary/30 text-primary text-[11px] font-bold transition-all hover:shadow-md hover:shadow-primary/10 active:scale-[0.97]"
+                                >
+                                    <RefreshCw size={12} />
+                                    Analyze Now
+                                </button>
+                            )}
                         </>
                     )}
                 </div>
@@ -5478,9 +4847,37 @@ const StrategicContextCard = ({ lead, isIcebreaker = false }) => {
                     <div className="w-6 h-6 rounded-lg bg-primary/20 flex items-center justify-center">
                         <TrendingUp size={14} className="text-primary" />
                     </div>
-                    <h4 className="text-xs font-bold text-primary uppercase tracking-wider">Raio-X da Negociação</h4>
+                    <h4 className="text-xs font-bold text-primary uppercase tracking-wider">Negotiation X-Ray</h4>
+                </div>
+
+                {/* Timestamp and Refresh button */}
+                <div className="flex items-center gap-3">
+                    {analyzedAt && !isAnalyzing && (
+                        <span className="text-[10px] text-gray-400 font-medium whitespace-nowrap">
+                            Updated {getTimeAgo(analyzedAt)}
+                        </span>
+                    )}
+
+                    {onAnalyzeNow && (
+                        <button
+                            onClick={onAnalyzeNow}
+                            disabled={isAnalyzing}
+                            title="Re-analyze lead"
+                            className="p-1.5 rounded-lg text-gray-400 hover:text-primary hover:bg-primary/10 border border-transparent hover:border-primary/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex shrink-0"
+                        >
+                            <RefreshCw size={14} className={isAnalyzing ? 'animate-spin' : ''} />
+                        </button>
+                    )}
                 </div>
             </div>
+
+            {/* Loading overlay when re-analyzing */}
+            {isAnalyzing && (
+                <div className="flex items-center gap-2 rounded-lg bg-primary/5 border border-primary/20 px-3 py-2">
+                    <Loader2 size={12} className="text-primary animate-spin shrink-0" />
+                    <span className="text-[11px] text-primary font-medium">Re-analyzing history...</span>
+                </div>
+            )}
 
             {/* A. Cadence Level Badge */}
             {config && (
@@ -5539,7 +4936,7 @@ const StrategicContextCard = ({ lead, isIcebreaker = false }) => {
                 <div className="rounded-xl bg-red-50 border border-red-200 p-3 space-y-1.5">
                     <div className="flex items-center gap-2">
                         <ShieldAlert size={14} className="text-red-500 shrink-0" />
-                        <span className="text-[10px] font-bold uppercase tracking-widest text-red-500">Zona de Perigo</span>
+                        <span className="text-[10px] font-bold uppercase tracking-widest text-red-500">Danger Zone</span>
                     </div>
                     <p className="text-xs text-red-600 leading-relaxed font-medium pl-[22px]">
                         {forbidden}
@@ -5550,13 +4947,13 @@ const StrategicContextCard = ({ lead, isIcebreaker = false }) => {
             {/* C. Lead Analysis (Signal + Psychological) */}
             {(signal || psychological) && (
                 <div className="rounded-xl bg-gray-50 border border-gray-200 p-3 space-y-2.5">
-                    <span className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Análise do Lead</span>
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Lead Analysis</span>
 
                     {signal && (
                         <div className="flex items-start gap-2">
                             <Radio size={13} className="text-cyan-600 mt-0.5 shrink-0" />
                             <div>
-                                <span className="text-[9px] uppercase tracking-widest text-cyan-600 font-bold">Sinal Detectado</span>
+                                <span className="text-[9px] uppercase tracking-widest text-cyan-600 font-bold">Detected Signal</span>
                                 <p className="text-xs text-gray-600 leading-relaxed">{signal}</p>
                             </div>
                         </div>
@@ -5566,7 +4963,7 @@ const StrategicContextCard = ({ lead, isIcebreaker = false }) => {
                         <div className="flex items-start gap-2">
                             <Brain size={13} className="text-fuchsia-600 mt-0.5 shrink-0" />
                             <div>
-                                <span className="text-[9px] uppercase tracking-widest text-fuchsia-600 font-bold">Fator Psicológico</span>
+                                <span className="text-[9px] uppercase tracking-widest text-fuchsia-600 font-bold">Psychological Factor</span>
                                 <p className="text-xs text-gray-600 leading-relaxed">{psychological}</p>
                             </div>
                         </div>
@@ -5579,7 +4976,7 @@ const StrategicContextCard = ({ lead, isIcebreaker = false }) => {
                 <div className="rounded-xl bg-orange-50 border border-orange-200 p-3 space-y-1.5">
                     <div className="flex items-center gap-2">
                         <Target size={14} className="text-primary shrink-0" />
-                        <span className="text-[10px] font-bold uppercase tracking-widest text-primary/80">Tática Recomendada</span>
+                        <span className="text-[10px] font-bold uppercase tracking-widest text-primary/80">Recommended Tactic</span>
                     </div>
                     <p className="text-xs text-gray-700 leading-relaxed pl-[22px]">
                         {strategy}
@@ -5591,12 +4988,10 @@ const StrategicContextCard = ({ lead, isIcebreaker = false }) => {
 }
 
 export default StrategicContextCard
+```
 
-
-======================================================
-==== ARQUIVO: src\components\SystemStatusHelpModal.jsx
-======================================================
-
+## File: src\components\SystemStatusHelpModal.jsx
+```javascript
 import React from 'react'
 import { X, RefreshCw, History, Info } from 'lucide-react'
 
@@ -5675,19 +5070,17 @@ const SystemStatusHelpModal = ({ isOpen, onClose }) => {
 }
 
 export default SystemStatusHelpModal
+```
 
-
-======================================================
-==== ARQUIVO: src\components\UnifiedLeadModal.jsx
-======================================================
-
+## File: src\components\UnifiedLeadModal.jsx
+```javascript
 import React, { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../services/supabaseClient'
 import {
     X, Briefcase, MapPin, ExternalLink, Star, Target,
-    MessageCircle, DollarSign, Calendar, UserPlus, UserCheck,
-    ChevronDown, ChevronUp, Bell, Clock, Kanban
+    MessageCircle, DollarSign, UserPlus, UserCheck,
+    ChevronDown, ChevronUp, Bell, Clock, Kanban, FileText
 } from 'lucide-react'
 
 // ── Color Maps ────────────────────────────────────────────────────────────────
@@ -5758,7 +5151,10 @@ const UnifiedLeadModal = ({ lead, onClose, onLeadUpdated, showPipelineFields = f
     const [customInterval, setCustomInterval] = useState('')
     const [showCustomInterval, setShowCustomInterval] = useState(false)
     const [followupUntilResponded, setFollowupUntilResponded] = useState(lead?.followup_until_responded !== false)
+    const [showFollowupSettings, setShowFollowupSettings] = useState(false)
+    const [observations, setObservations] = useState(lead?.observations || '')
     const [enrichedData, setEnrichedData] = useState(null)
+    const [lastReceivedMsg, setLastReceivedMsg] = useState(null)
 
     // Pipeline-only state
     const [tier, setTier] = useState(lead?.tier || 0)
@@ -5768,20 +5164,32 @@ const UnifiedLeadModal = ({ lead, onClose, onLeadUpdated, showPipelineFields = f
     const fetchEnriched = useCallback(async () => {
         if (!lead?.id) return
         try {
-            const { data } = await supabase
-                .from('leads')
-                .select('cadence_stage, icp_reason, stage_reasoning, conversation_summary, is_followup, followup_interval_days, followup_started_at, followup_until_responded, proposal_value, tier, crm_stage, created_at, total_interactions_count')
-                .eq('id', lead.id)
-                .single()
+            const [{ data }, { data: lastMsg }] = await Promise.all([
+                supabase
+                    .from('leads')
+                    .select('cadence_stage, icp_reason, stage_reasoning, conversation_summary, is_followup, followup_interval_days, followup_started_at, followup_until_responded, proposal_value, tier, crm_stage, created_at, total_interactions_count, observations')
+                    .eq('id', lead.id)
+                    .single(),
+                supabase
+                    .from('interactions')
+                    .select('interaction_date')
+                    .eq('lead_id', lead.id)
+                    .eq('is_sender', false)
+                    .order('interaction_date', { ascending: false })
+                    .limit(1)
+                    .maybeSingle()
+            ])
             if (data) {
                 setEnrichedData(data)
                 setIsFollowup(data.is_followup || false)
                 setFollowupInterval(data.followup_interval_days || 7)
                 setFollowupUntilResponded(data.followup_until_responded !== false)
                 setProposalValue(data.proposal_value || '')
+                setObservations(data.observations || '')
                 setTier(data.tier || 0)
                 setCrmStage(data.crm_stage || '')
             }
+            setLastReceivedMsg(lastMsg || null)
         } catch (err) {
             console.error('[UnifiedLeadModal] fetch error:', err)
         }
@@ -5799,6 +5207,7 @@ const UnifiedLeadModal = ({ lead, onClose, onLeadUpdated, showPipelineFields = f
             setIsFollowup(lead.is_followup || false)
             setFollowupInterval(lead.followup_interval_days || 7)
             setFollowupUntilResponded(lead.followup_until_responded !== false)
+            setObservations(lead.observations || '')
         }
     }, [lead])
 
@@ -5819,6 +5228,10 @@ const UnifiedLeadModal = ({ lead, onClose, onLeadUpdated, showPipelineFields = f
     }
 
     // ── Handlers ─────────────────────────────────────────────────────────────
+
+    const handleObservationsBlur = () => {
+        save('observations', observations)
+    }
 
     const handleFollowupToggle = () => {
         const next = !isFollowup
@@ -5874,9 +5287,6 @@ const UnifiedLeadModal = ({ lead, onClose, onLeadUpdated, showPipelineFields = f
     const icpConfig = ICP_CONFIG[lead.icp_score] || { color: '#6b7280', bg: 'bg-slate-50', border: 'border-slate-200', text: 'text-slate-500', label: icpScore }
 
     const cadStage = enrichedData?.cadence_stage || lead.cadence_stage || '—'
-    const cadColor = CAD_COLOR[cadStage] || '#6b7280'
-    const cadLabel = CAD_LABEL[cadStage] || null
-
     const interactionCount = enrichedData?.total_interactions_count ?? lead.total_interactions_count ?? 0
     const interactionColor = interactionCount > 5 ? 'text-emerald-500' : interactionCount > 0 ? 'text-amber-500' : 'text-red-400'
     const interactionBg = interactionCount > 5 ? 'bg-emerald-50' : interactionCount > 0 ? 'bg-amber-50' : 'bg-red-50'
@@ -5885,10 +5295,20 @@ const UnifiedLeadModal = ({ lead, onClose, onLeadUpdated, showPipelineFields = f
     const cadText = cadStage.startsWith?.('G') ? (parseInt(cadStage.slice(1)) >= 4 ? 'text-orange-500' : 'text-blue-500') : 'text-slate-500'
     const cadBg = cadStage.startsWith?.('G') ? (parseInt(cadStage.slice(1)) >= 4 ? 'bg-orange-50' : 'bg-blue-50') : 'bg-slate-50'
     const cadBorder = cadStage.startsWith?.('G') ? (parseInt(cadStage.slice(1)) >= 4 ? 'border-orange-200' : 'border-blue-200') : 'border-slate-200'
+    const cadLabel = CAD_LABEL[cadStage] || null
 
     const icpReason = enrichedData?.icp_reason || lead.icp_reason || null
     const stageReasoning = enrichedData?.stage_reasoning || lead.stage_reasoning || null
-    const connectionDate = enrichedData?.created_at || lead.created_at
+
+    // Days since last received message
+    const getDaysAgo = (dateStr) => {
+        if (!dateStr) return null
+        const diff = Date.now() - new Date(dateStr).getTime()
+        const days = Math.floor(diff / 86400000)
+        if (days === 0) return 'Today'
+        if (days === 1) return '1 day ago'
+        return `${days} days ago`
+    }
 
     // ── Render ───────────────────────────────────────────────────────────────
 
@@ -5995,17 +5415,23 @@ const UnifiedLeadModal = ({ lead, onClose, onLeadUpdated, showPipelineFields = f
                     {/* ── Info Row: Connection Date + Proposal ── */}
                     <div className="px-5 py-4 border-b border-slate-100">
                         <div className="grid grid-cols-2 gap-3">
-                            {/* Connection Date */}
+                            {/* Last Received Message */}
                             <div>
                                 <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-1 mb-1.5">
-                                    <Calendar size={11} /> Connection Date
+                                    <Clock size={11} /> Last Msg. Received
                                 </label>
-                                <span className="text-sm font-medium text-slate-700">
-                                    {connectionDate
-                                        ? new Date(connectionDate).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })
-                                        : '—'
-                                    }
-                                </span>
+                                {lastReceivedMsg?.interaction_date ? (
+                                    <div>
+                                        <span className="text-sm font-bold text-slate-700 block">
+                                            {getDaysAgo(lastReceivedMsg.interaction_date)}
+                                        </span>
+                                        <span className="text-[11px] text-slate-400">
+                                            {new Date(lastReceivedMsg.interaction_date).toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                        </span>
+                                    </div>
+                                ) : (
+                                    <span className="text-sm text-slate-400">None</span>
+                                )}
                             </div>
 
                             {/* Proposal Value */}
@@ -6024,6 +5450,20 @@ const UnifiedLeadModal = ({ lead, onClose, onLeadUpdated, showPipelineFields = f
                                 />
                             </div>
                         </div>
+                    </div>
+
+                    {/* Observations */}
+                    <div className="px-5 py-4 border-b border-slate-100">
+                        <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-1 mb-1.5">
+                            <FileText size={11} /> Observations
+                        </label>
+                        <textarea
+                            value={observations}
+                            onChange={e => setObservations(e.target.value)}
+                            onBlur={handleObservationsBlur}
+                            placeholder="Escreva detalhes importantes, dores da empresa, notas confidenciais..."
+                            className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm text-slate-700 bg-white outline-none focus:border-orange-300 focus:ring-1 focus:ring-orange-200 resize-y min-h-[80px] custom-scrollbar transition"
+                        />
                     </div>
 
                     {/* ── Pipeline-Only Fields ── */}
@@ -6071,75 +5511,88 @@ const UnifiedLeadModal = ({ lead, onClose, onLeadUpdated, showPipelineFields = f
 
                     {/* Follow-up config panel — shown when active */}
                     {isFollowup && (
-                        <div className="px-5 py-3 border-b border-slate-200 space-y-3">
-                            <div className="flex items-center gap-2 mb-1">
-                                <Bell size={13} className="text-orange-500" />
-                                <span className="text-[11px] font-bold text-slate-600 uppercase tracking-wider">Follow-up Settings</span>
-                            </div>
+                        <div className="px-5 py-3 border-b border-slate-200">
+                            {/* Accordion Header */}
+                            <button
+                                onClick={() => setShowFollowupSettings(!showFollowupSettings)}
+                                className="w-full flex items-center justify-between"
+                            >
+                                <div className="flex items-center gap-2">
+                                    <Bell size={13} className="text-orange-500" />
+                                    <span className="text-[11px] font-bold text-slate-600 uppercase tracking-wider">Follow-up Settings</span>
+                                </div>
+                                {showFollowupSettings ? <ChevronUp size={14} className="text-slate-400" /> : <ChevronDown size={14} className="text-slate-400" />}
+                            </button>
 
-                            {/* Interval selector */}
-                            <div>
-                                <p className="text-[11px] text-slate-400 mb-2">Contact every:</p>
-                                <div className="flex items-center gap-1.5 flex-wrap">
-                                    {[3, 7, 14].map(d => (
+                            {/* Accordion Body */}
+                            {showFollowupSettings && (
+                                <div className="mt-3 space-y-3">
+                                    {/* Interval selector */}
+                                    <div>
+                                        <p className="text-[11px] text-slate-400 mb-2">Contact every:</p>
+                                        <div className="flex items-center gap-1.5 flex-wrap">
+                                            {[3, 7, 14].map(d => (
+                                                <button
+                                                    key={d}
+                                                    onClick={() => handleIntervalChange(d)}
+                                                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${followupInterval === d && !showCustomInterval
+                                                        ? 'bg-orange-500 text-white border-orange-500 shadow-sm'
+                                                        : 'bg-white text-slate-600 border-slate-200 hover:border-orange-300'
+                                                        }`}
+                                                >
+                                                    {d}d
+                                                </button>
+                                            ))}
+                                            <button
+                                                onClick={() => setShowCustomInterval(!showCustomInterval)}
+                                                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${showCustomInterval || (![3, 7, 14].includes(followupInterval))
+                                                    ? 'bg-orange-500 text-white border-orange-500'
+                                                    : 'bg-white text-slate-600 border-slate-200 hover:border-orange-300'
+                                                    }`}
+                                            >
+                                                Custom
+                                            </button>
+                                            {showCustomInterval && (
+                                                <div className="flex items-center gap-1">
+                                                    <input
+                                                        type="number"
+                                                        min="1"
+                                                        max="90"
+                                                        placeholder="days"
+                                                        value={customInterval}
+                                                        onChange={e => setCustomInterval(e.target.value)}
+                                                        className="w-16 px-2 py-1.5 rounded-lg border border-slate-200 text-xs outline-none focus:border-orange-300"
+                                                    />
+                                                    <button
+                                                        onClick={handleCustomIntervalSave}
+                                                        className="px-2 py-1.5 rounded-lg bg-orange-500 text-white text-xs font-bold hover:bg-orange-600 transition"
+                                                    >OK</button>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* Until responded toggle */}
+                                    <div className="flex items-center gap-2">
                                         <button
-                                            key={d}
-                                            onClick={() => handleIntervalChange(d)}
-                                            className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${followupInterval === d && !showCustomInterval
-                                                ? 'bg-orange-500 text-white border-orange-500 shadow-sm'
-                                                : 'bg-white text-slate-600 border-slate-200 hover:border-orange-300'
+                                            type="button"
+                                            onClick={handleUntilRespondedToggle}
+                                            className={`relative inline-flex shrink-0 items-center w-9 h-5 rounded-full transition-colors ${followupUntilResponded ? 'bg-orange-500' : 'bg-slate-200'
                                                 }`}
                                         >
-                                            {d}d
+                                            <span className={`inline-block w-4 h-4 rounded-full bg-white shadow transition-transform ${followupUntilResponded ? 'translate-x-[18px]' : 'translate-x-[2px]'
+                                                }`} />
                                         </button>
-                                    ))}
-                                    <button
-                                        onClick={() => setShowCustomInterval(!showCustomInterval)}
-                                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${showCustomInterval || (![3, 7, 14].includes(followupInterval))
-                                            ? 'bg-orange-500 text-white border-orange-500'
-                                            : 'bg-white text-slate-600 border-slate-200 hover:border-orange-300'
-                                            }`}
-                                    >
-                                        Custom
-                                    </button>
-                                    {showCustomInterval && (
-                                        <div className="flex items-center gap-1">
-                                            <input
-                                                type="number"
-                                                min="1"
-                                                max="90"
-                                                placeholder="days"
-                                                value={customInterval}
-                                                onChange={e => setCustomInterval(e.target.value)}
-                                                className="w-16 px-2 py-1.5 rounded-lg border border-slate-200 text-xs outline-none focus:border-orange-300"
-                                            />
-                                            <button
-                                                onClick={handleCustomIntervalSave}
-                                                className="px-2 py-1.5 rounded-lg bg-orange-500 text-white text-xs font-bold hover:bg-orange-600 transition"
-                                            >OK</button>
-                                        </div>
-                                    )}
+                                        <span className="text-xs text-slate-600">Stop when lead replies</span>
+                                    </div>
+
+                                    {/* Summary line */}
+                                    <p className="text-[10px] text-slate-400 italic">
+                                        <Clock size={10} className="inline mr-1" />
+                                        Contacting every <strong className="text-slate-600">{followupInterval} days</strong>{followupUntilResponded ? ', until they reply' : ''}.
+                                    </p>
                                 </div>
-                            </div>
-
-                            {/* Until responded toggle */}
-                            <div className="flex items-center gap-2">
-                                <button
-                                    onClick={handleUntilRespondedToggle}
-                                    className={`relative w-9 h-5 rounded-full transition-colors ${followupUntilResponded ? 'bg-orange-500' : 'bg-slate-200'
-                                        }`}
-                                >
-                                    <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${followupUntilResponded ? 'translate-x-4' : 'translate-x-0.5'
-                                        }`} />
-                                </button>
-                                <span className="text-xs text-slate-600">Stop when lead replies</span>
-                            </div>
-
-                            {/* Summary line */}
-                            <p className="text-[10px] text-slate-400 italic">
-                                <Clock size={10} className="inline mr-1" />
-                                Contacting every <strong className="text-slate-600">{followupInterval} days</strong>{followupUntilResponded ? ', until they reply' : ''}.
-                            </p>
+                            )}
                         </div>
                     )}
 
@@ -6191,12 +5644,1096 @@ const UnifiedLeadModal = ({ lead, onClose, onLeadUpdated, showPipelineFields = f
 }
 
 export default UnifiedLeadModal
+```
+
+## File: src\components\kanban\KanbanColumn.jsx
+```javascript
+import React from 'react'
+
+/**
+ * KanbanColumn - A reusable column component for the Kanban board
+ * @param {string} title - Column title
+ * @param {string} icon - Emoji icon for the column
+ * @param {number} count - Number of items in the column
+ * @param {string} colorClass - Tailwind color class for the header accent
+ * @param {React.ReactNode} children - Lead cards to render
+ */
+const KanbanColumn = ({ title, icon, count = 0, colorClass = 'bg-slate-500', children }) => {
+    return (
+        <div className="flex flex-col bg-white/5 backdrop-blur-lg rounded-2xl border border-white/10 shadow-lg min-w-[300px] max-w-[320px] h-full">
+            {/* Column Header */}
+            <div className={`flex items-center justify-between px-4 py-3 border-b border-gray-200 rounded-t-2xl`}>
+                <div className="flex items-center gap-2">
+                    <span className="text-lg">{icon}</span>
+                    <h3 className="font-bold text-gray-800 text-sm">{title}</h3>
+                </div>
+                <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold text-white ${colorClass}`}>
+                    {count}
+                </span>
+            </div>
+
+            {/* Scrollable Card List */}
+            <div className="flex-1 overflow-y-auto p-3 space-y-2 max-h-[calc(100vh-320px)] custom-scrollbar">
+                {children}
+                {count === 0 && (
+                    <div className="text-center py-8 text-gray-500 text-sm italic">
+                        Nenhum lead aqui
+                    </div>
+                )}
+            </div>
+        </div>
+    )
+}
+
+export default KanbanColumn
+```
+
+## File: src\components\kanban\KanbanLeadCard.jsx
+```javascript
+import React from 'react'
+import { MessageCircle, Clock, Zap } from 'lucide-react'
+
+/**
+ * KanbanLeadCard - A compact lead card for the Kanban board
+ * @param {Object} lead - Lead data object
+ * @param {Function} onClick - Click handler
+ */
+const KanbanLeadCard = ({ lead, onClick }) => {
+    // Helper: Time since last interaction
+    const getTimeSince = (dateString) => {
+        if (!dateString) return '—'
+        const now = new Date()
+        const date = new Date(dateString)
+        const diffMs = now - date
+        const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
+        const diffDays = Math.floor(diffHours / 24)
+
+        if (diffDays > 0) return `${diffDays}d`
+        if (diffHours > 0) return `${diffHours}h`
+        return 'agora'
+    }
+
+    // Helper: Cadence stage styling (trust-gradient based on level)
+    const getCadenceStyle = (stage) => {
+        const match = stage?.toString().match(/(\d+)/)
+        const level = match ? parseInt(match[1], 10) : 0
+
+        if (level >= 7) return 'bg-yellow-100 text-yellow-700 border border-yellow-300'
+        if (level >= 6) return 'bg-green-100 text-green-700 border border-green-300'
+        if (level >= 5) return 'bg-emerald-100 text-emerald-700 border border-emerald-300'
+        if (level >= 4) return 'bg-orange-100 text-orange-700 border border-orange-300'
+        if (level >= 3) return 'bg-amber-100 text-amber-700 border border-amber-300'
+        if (level >= 2) return 'bg-cyan-100 text-cyan-700 border border-cyan-300'
+        if (level >= 1) return 'bg-blue-100 text-blue-700 border border-blue-300'
+        return 'bg-gray-100 text-gray-600 border border-gray-300'
+    }
+
+    // Helper: ICP tier styling
+    const getIcpStyle = (tier) => {
+        switch (tier) {
+            case 'A': return 'bg-emerald-100 text-emerald-700 border-emerald-300'
+            case 'B': return 'bg-blue-100 text-blue-700 border-blue-300'
+            case 'C': return 'bg-gray-100 text-gray-600 border-gray-300'
+            default: return 'bg-gray-100 text-gray-600 border-gray-300'
+        }
+    }
+
+    // Extract lead data (handle both direct and nested structures)
+    const leadData = lead?.leads || lead
+    const cadenceStage = leadData?.cadence_stage || ''
+    const icpTier = leadData?.qualification_tier || leadData?.icp_score || 'C'
+    const totalInteractions = leadData?.total_interactions_count || leadData?.total_interactions || 0
+    const lastInteractionDate = leadData?.last_interaction_date
+    const hasAiSuggestions = (leadData?.ai_suggested_replies?.length || 0) > 0
+    const nome = leadData?.nome || 'Lead'
+    const headline = leadData?.headline || leadData?.empresa || ''
+    const avatarUrl = leadData?.avatar_url
+
+    return (
+        <div
+            className="bg-white rounded-xl border border-gray-200 p-3 cursor-pointer hover:bg-gray-50 hover:border-gray-300 hover:shadow-md transition-all group"
+            onClick={() => onClick(lead)}
+        >
+            {/* Top Row: Avatar + Name + Score */}
+            <div className="flex items-start gap-3">
+                {/* Avatar */}
+                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-gray-200 to-gray-300 flex items-center justify-center overflow-hidden shrink-0 border border-gray-200">
+                    {avatarUrl ? (
+                        <img src={avatarUrl} alt={nome} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                    ) : (
+                        <span className="text-sm font-bold text-gray-500">{nome?.charAt(0) || '?'}</span>
+                    )}
+                </div>
+
+                {/* Name + Headline */}
+                <div className="flex-1 min-w-0">
+                    <h4 className="font-semibold text-gray-800 text-sm truncate">{nome}</h4>
+                    <p className="text-xs text-gray-500 truncate">{headline || '—'}</p>
+                </div>
+
+                {/* Cadence Stage Badge */}
+                {cadenceStage && (
+                    <div className={`${getCadenceStyle(cadenceStage)} text-[10px] font-bold px-2 py-0.5 rounded-lg shrink-0`}>
+                        {cadenceStage}
+                    </div>
+                )}
+            </div>
+
+            {/* Bottom Row: Meta Info */}
+            <div className="flex items-center justify-between mt-3 pt-2 border-t border-gray-100">
+                {/* ICP Badge */}
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${getIcpStyle(icpTier)}`}>
+                    ICP {icpTier}
+                </span>
+
+                {/* Interaction Count */}
+                <div className="flex items-center gap-1 text-gray-500 text-xs">
+                    <MessageCircle size={12} />
+                    <span>{totalInteractions}</span>
+                </div>
+
+                {/* Time Since */}
+                <div className="flex items-center gap-1 text-gray-500 text-xs">
+                    <Clock size={12} />
+                    <span>{getTimeSince(lastInteractionDate)}</span>
+                </div>
+
+                {/* AI Ready Indicator */}
+                {hasAiSuggestions && (
+                    <div className="text-amber-500" title="Sugestões de IA prontas">
+                        <Zap size={14} />
+                    </div>
+                )}
+            </div>
+        </div>
+    )
+}
+
+export default KanbanLeadCard
+```
+
+## File: src\components\pipeline\LeadDetailModal.jsx
+```javascript
+import React, { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { supabase } from '../../services/supabaseClient'
+import { X, Star, MessageCircle, Briefcase, MapPin, Target } from 'lucide-react'
+
+const STAGES = [
+    { id: 'Frio', label: 'Cold' },
+    { id: 'Engajado', label: 'Engaged' },
+    { id: 'Qualificado', label: 'Qualified' },
+    { id: 'Agendado', label: 'Scheduled' },
+    { id: 'Proposta', label: 'Proposal' },
+    { id: 'Ganho', label: 'Won' },
+    { id: 'Perdido', label: 'Lost' }
+]
+
+// ICP color map
+const ICP_COLOR = { A: '#10b981', B: '#f59e0b', C: '#ef4444' }
 
 
-======================================================
-==== ARQUIVO: src\contexts\AuthContext.jsx
-======================================================
+// Cadence color map
+const CAD_COLOR = { G1: '#3b82f6', G2: '#3b82f6', G3: '#f59e0b', G4: '#ef4444', G5: '#ef4444' }
+const CAD_LABEL = { G1: 'First Contact', G2: 'Second Touch', G3: 'Follow-up', G4: 'Urgency', G5: 'Last Contact' }
 
+// SVG arc gauge — renders a partial arc from bottom-left to bottom-right (220° sweep)
+const ArcGauge = ({ color }) => {
+    const r = 36
+    const cx = 52
+    const cy = 52
+    const startAngle = 145
+    const endAngle = 35
+    // Full track arc
+    const toRad = (d) => (d * Math.PI) / 180
+    const polar = (angle, radius) => ({
+        x: cx + radius * Math.cos(toRad(angle)),
+        y: cy + radius * Math.sin(toRad(angle)),
+    })
+    const trackStart = polar(startAngle, r)
+    const trackEnd = polar(endAngle, r)
+    const trackD = `M ${trackStart.x} ${trackStart.y} A ${r} ${r} 0 1 1 ${trackEnd.x} ${trackEnd.y}`
+
+    return (
+        <svg width={cx * 2} height={cy * 2 - 18} viewBox={`0 0 ${cx * 2} ${cy * 2 - 10}`} style={{ display: 'block' }}>
+            {/* Track */}
+            <path d={trackD} fill="none" stroke="#e5e7eb" strokeWidth={5} strokeLinecap="round" />
+            {/* Value arc (always same end point, just styled) */}
+            <path d={trackD} fill="none" stroke={color} strokeWidth={5} strokeLinecap="round"
+                strokeDasharray="80 200" />
+        </svg>
+    )
+}
+
+const MetricColumn = ({ label, value, color, sub }) => (
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '20px 0 8px' }}>
+        <div style={{ position: 'relative', width: 104, height: 56 }}>
+            <ArcGauge color={color} />
+            <span style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -30%)', fontSize: '22px', fontWeight: 800, color }}>
+                {value}
+            </span>
+        </div>
+        <span style={{ marginTop: '6px', fontSize: '10px', fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.07em' }}>{label}</span>
+        {sub && <span style={{ fontSize: '11px', fontWeight: 600, color, marginTop: '2px' }}>{sub}</span>}
+    </div>
+)
+
+const ReasoningRow = ({ question, text }) => {
+    if (!text) return null
+    return (
+        <div style={{ padding: '12px 14px', borderRadius: '8px', border: '1px solid #e5e7eb', background: '#fff', fontSize: '13px', color: '#374151', lineHeight: 1.5 }}>
+            <strong style={{ color: '#111827' }}>{question}</strong>{' '}{text}
+        </div>
+    )
+}
+
+const LeadDetailModal = ({ lead, onClose, onLeadUpdated }) => {
+    const navigate = useNavigate()
+    const [tier, setTier] = useState(lead?.tier || 0)
+    const [proposalValue, setProposalValue] = useState(lead?.proposal_value || '')
+    const [crmStage, setCrmStage] = useState(lead?.crm_stage || '')
+    const [saving, setSaving] = useState(false)
+
+    useEffect(() => {
+        if (lead) {
+            setTier(lead.tier || 0)
+            setProposalValue(lead.proposal_value || '')
+            setCrmStage(lead.crm_stage || '')
+        }
+    }, [lead])
+
+    if (!lead) return null
+
+    const save = async (field, value) => {
+        setSaving(true)
+        try {
+            await supabase.from('leads').update({ [field]: value }).eq('id', lead.id)
+            if (onLeadUpdated) onLeadUpdated({ ...lead, [field]: value })
+        } catch (err) {
+            console.error('[LeadDetail] Error updating:', err)
+        } finally {
+            setSaving(false)
+        }
+    }
+
+    const handleTier = (val) => { setTier(val); save('tier', val) }
+    const handleProposal = () => { save('proposal_value', parseFloat(proposalValue) || 0) }
+    const handleStage = (val) => { setCrmStage(val); save('crm_stage', val || null) }
+    const goToInbox = () => navigate(`/sales/inbox?leadId=${lead.id}`)
+
+    const icpScore = lead.icp_score || '—'
+    const cadStage = lead.cadence_stage || '—'
+    const icpColor = ICP_COLOR[lead.icp_score] || '#6b7280'
+    const cadColor = CAD_COLOR[lead.cadence_stage] || '#6b7280'
+    const cadSub = CAD_LABEL[lead.cadence_stage] || null
+
+    return (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={onClose}>
+            <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(3px)' }} />
+            <div
+                onClick={e => e.stopPropagation()}
+                style={{ position: 'relative', width: '520px', maxHeight: '92vh', overflowY: 'auto', borderRadius: '14px', overflow: 'hidden', boxShadow: '0 24px 64px rgba(0,0,0,0.2)', border: '1px solid #e5e7eb' }}
+            >
+                {/* ── DARK HEADER ── */}
+                <div style={{ background: '#1e2433', padding: '24px 24px 20px', position: 'relative' }}>
+                    <button onClick={onClose} style={{ position: 'absolute', top: 14, right: 14, background: 'none', border: 'none', cursor: 'pointer', color: '#9ca3af' }}>
+                        <X size={20} />
+                    </button>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                        <div style={{ width: 56, height: 56, borderRadius: '50%', border: '2px solid rgba(255,255,255,0.2)', overflow: 'hidden', flexShrink: 0, background: '#374151', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px', fontWeight: 700, color: '#fff' }}>
+                            {lead.avatar_url ? <img src={lead.avatar_url} alt={lead.nome} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : lead.nome?.charAt(0)?.toUpperCase() || '?'}
+                        </div>
+                        <div style={{ minWidth: 0 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <h2 style={{ fontSize: '18px', fontWeight: 700, color: '#fff', margin: 0 }}>{lead.nome || 'No Name'}</h2>
+                                {lead.linkedin_profile_url && (
+                                    <a href={lead.linkedin_profile_url} target="_blank" rel="noopener noreferrer" style={{ color: '#60a5fa', flexShrink: 0 }}>
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /><polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" /></svg>
+                                    </a>
+                                )}
+                            </div>
+                            {lead.headline && (
+                                <p style={{ fontSize: '12px', color: '#9ca3af', margin: '4px 0 0', display: 'flex', alignItems: 'center', gap: '5px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                    <Briefcase size={11} /> {lead.headline}
+                                </p>
+                            )}
+                            {lead.empresa && (
+                                <p style={{ fontSize: '12px', color: '#6b7280', margin: '3px 0 0', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                    <MapPin size={11} /> {lead.empresa}
+                                </p>
+                            )}
+                        </div>
+                    </div>
+                </div>
+
+                {/* ── WHITE BODY ── */}
+                <div style={{ background: '#fff' }}>
+                    {/* 3-column metrics */}
+                    <div style={{ display: 'flex', borderBottom: '1px solid #f3f4f6' }}>
+                        <MetricColumn label="ICP Qualification" value={icpScore} color={icpColor} />
+                        <div style={{ width: '1px', background: '#f3f4f6', margin: '16px 0' }} />
+                        <MetricColumn label="Interactions" value={lead.total_interactions_count ?? 0} color={lead.total_interactions_count > 0 ? '#ff4d00' : '#ef4444'} />
+                        <div style={{ width: '1px', background: '#f3f4f6', margin: '16px 0' }} />
+                        <MetricColumn label="Cadence" value={cadStage} color={cadColor} sub={cadSub} />
+                    </div>
+
+                    {/* Reasoning rows */}
+                    <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '10px', borderBottom: '1px solid #f3f4f6' }}>
+                        <ReasoningRow question={`Why ICP ${icpScore}?`} text={lead.icp_reason} />
+                        <ReasoningRow question={`Cadence Level (${cadStage}):`} text={lead.stage_reasoning} />
+                    </div>
+
+                    {/* CRM Actions */}
+                    <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '18px' }}>
+                        {/* Tier */}
+                        <div>
+                            <label style={{ fontSize: '12px', fontWeight: 600, color: '#374151', display: 'block', marginBottom: '6px' }}>Priority (Tier)</label>
+                            <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                                {[1, 2, 3, 4, 5].map(i => (
+                                    <button key={i} onClick={() => handleTier(i)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px' }}>
+                                        <Star size={22} style={i <= tier ? { color: '#f59e0b', fill: '#f59e0b' } : { color: '#e5e7eb', fill: '#e5e7eb' }} />
+                                    </button>
+                                ))}
+                                {tier > 0 && <button onClick={() => handleTier(0)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '11px', color: '#9ca3af', marginLeft: '6px' }}>Clear</button>}
+                            </div>
+                        </div>
+
+                        {/* Proposal */}
+                        <div>
+                            <label style={{ fontSize: '12px', fontWeight: 600, color: '#374151', display: 'block', marginBottom: '6px' }}>Proposal Value ($)</label>
+                            <input
+                                type="number"
+                                step="0.01"
+                                placeholder="0,00"
+                                value={proposalValue}
+                                onChange={e => setProposalValue(e.target.value)}
+                                onBlur={handleProposal}
+                                style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #d1d5db', fontSize: '14px', color: '#111827', outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit' }}
+                            />
+                        </div>
+
+                        {/* Stage */}
+                        <div>
+                            <label style={{ fontSize: '12px', fontWeight: 600, color: '#374151', display: 'block', marginBottom: '6px' }}>
+                                <Target size={12} style={{ display: 'inline', verticalAlign: 'middle', marginRight: '4px' }} />
+                                Funnel Stage
+                            </label>
+                            <select
+                                value={crmStage}
+                                onChange={e => handleStage(e.target.value)}
+                                style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #d1d5db', fontSize: '14px', color: '#111827', background: '#fff', outline: 'none', fontFamily: 'inherit', cursor: 'pointer' }}
+                            >
+                                <option value="">— No stage —</option>
+                                {STAGES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+                            </select>
+                        </div>
+                    </div>
+
+                    {/* Footer */}
+                    <div style={{ padding: '0 20px 20px', display: 'flex', gap: '10px' }}>
+                        <button
+                            onClick={goToInbox}
+                            style={{ flex: 1, padding: '11px', borderRadius: '8px', fontSize: '14px', fontWeight: 700, background: '#ff4d00', color: '#fff', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+                        >
+                            <MessageCircle size={16} /> Go to Inbox
+                        </button>
+                        <button onClick={onClose} style={{ padding: '11px 20px', borderRadius: '8px', fontSize: '14px', fontWeight: 600, background: '#f9fafb', color: '#374151', border: '1px solid #e5e7eb', cursor: 'pointer' }}>
+                            Close
+                        </button>
+                    </div>
+                </div>
+
+                {saving && (
+                    <div style={{ position: 'absolute', top: 14, left: '50%', transform: 'translateX(-50%)', fontSize: '11px', fontWeight: 600, color: '#ff4d00', background: '#fff3ee', padding: '4px 12px', borderRadius: '6px', border: '1px solid #ffd4c2', zIndex: 3 }}>
+                        Saving...
+                    </div>
+                )}
+            </div>
+        </div>
+    )
+}
+
+export default LeadDetailModal
+```
+
+## File: src\components\pipeline\PipelineColumn.jsx
+```javascript
+import React from 'react'
+import { useDroppable } from '@dnd-kit/core'
+import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
+import PipelineLeadCard from './PipelineLeadCard'
+import { DollarSign } from 'lucide-react'
+
+const ACCENTS = {
+    Frio: { dot: '#94a3b8', iconBg: '#f1f5f9', iconColor: '#64748b' },
+    Engajado: { dot: '#3b82f6', iconBg: '#eff6ff', iconColor: '#3b82f6' },
+    Qualificado: { dot: '#f59e0b', iconBg: '#fffbeb', iconColor: '#f59e0b' },
+    Agendado: { dot: '#8b5cf6', iconBg: '#f5f3ff', iconColor: '#8b5cf6' },
+    Proposta: { dot: '#ff4d00', iconBg: '#fff3ee', iconColor: '#ff4d00' },
+    Ganho: { dot: '#10b981', iconBg: '#ecfdf5', iconColor: '#10b981' },
+    Perdido: { dot: '#ef4444', iconBg: '#fff1f2', iconColor: '#ef4444' },
+}
+
+const PipelineColumn = ({ id, title, icon: Icon, leads, onCardClick, onRemoveLead }) => { // eslint-disable-line no-unused-vars
+    const { setNodeRef, isOver } = useDroppable({ id })
+    const accent = ACCENTS[id] || ACCENTS.Frio
+    const totalProposal = leads.reduce((sum, l) => sum + (parseFloat(l.proposal_value) || 0), 0)
+
+    return (
+        <div style={{ display: 'flex', flexDirection: 'column', width: '280px', minWidth: '280px', flexShrink: 0 }}>
+            {/* Header */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', background: '#fff', borderRadius: '8px 8px 0 0', border: '1px solid #e5e7eb', borderBottom: 'none', borderLeft: `3px solid ${accent.dot}` }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <div style={{ width: 26, height: 26, borderRadius: '6px', background: accent.iconBg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <Icon size={13} style={{ color: accent.iconColor }} />
+                    </div>
+                    <span style={{ fontSize: '13px', fontWeight: 700, color: '#111827' }}>{title}</span>
+                    <span style={{ fontSize: '11px', fontWeight: 600, padding: '1px 8px', borderRadius: '999px', background: '#f3f4f6', color: '#6b7280' }}>{leads.length}</span>
+                </div>
+                {totalProposal > 0 && (
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '2px', fontSize: '11px', fontWeight: 700, color: '#10b981' }}>
+                        <DollarSign size={10} /> {totalProposal.toLocaleString('en-US', { maximumFractionDigits: 0 })}
+                    </span>
+                )}
+            </div>
+
+            {/* Drop zone */}
+            <div
+                ref={setNodeRef}
+                style={{
+                    flex: 1, overflowY: 'auto', padding: '6px', display: 'flex', flexDirection: 'column', gap: '6px',
+                    borderRadius: '0 0 8px 8px', border: '1px solid #e5e7eb', borderTop: 'none',
+                    borderLeft: isOver ? `3px solid ${accent.dot}` : '1px solid #e5e7eb',
+                    background: isOver ? accent.iconBg : '#f9fafb',
+                    minHeight: '120px', maxHeight: 'calc(100vh - 320px)',
+                    transition: 'all 0.15s', scrollbarWidth: 'thin', scrollbarColor: '#d1d5db transparent',
+                }}
+            >
+                <SortableContext items={leads.map(l => l.id)} strategy={verticalListSortingStrategy}>
+                    {leads.map(lead => <PipelineLeadCard key={lead.id} lead={lead} onClick={onCardClick} onRemove={onRemoveLead} />)}
+                </SortableContext>
+                {leads.length === 0 && (
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '60px', fontSize: '12px', color: '#d1d5db' }}>Arraste leads aqui</div>
+                )}
+            </div>
+        </div>
+    )
+}
+
+export default PipelineColumn
+```
+
+## File: src\components\pipeline\PipelineKanbanBoard.jsx
+```javascript
+import React, { useState, useCallback } from 'react'
+import {
+    DndContext,
+    DragOverlay,
+    PointerSensor,
+    useSensor,
+    useSensors,
+    closestCorners,
+} from '@dnd-kit/core'
+import { Snowflake, Zap, Target, Calendar, FileText, Trophy, XCircle } from 'lucide-react'
+import PipelineColumn from './PipelineColumn'
+import PipelineLeadCard from './PipelineLeadCard'
+import { supabase } from '../../services/supabaseClient'
+
+const STAGES = [
+    { id: 'Frio', title: 'Cold', icon: Snowflake },
+    { id: 'Engajado', title: 'Engaged', icon: Zap },
+    { id: 'Qualificado', title: 'Qualified', icon: Target },
+    { id: 'Agendado', title: 'Scheduled', icon: Calendar },
+    { id: 'Proposta', title: 'Proposal', icon: FileText },
+    { id: 'Ganho', title: 'Won', icon: Trophy },
+    { id: 'Perdido', title: 'Lost', icon: XCircle },
+]
+
+const PipelineKanbanBoard = ({ leads, setLeads, onCardClick }) => {
+    const [activeId, setActiveId] = useState(null)
+
+    const sensors = useSensors(
+        useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
+    )
+
+    const leadsById = Object.fromEntries(leads.map(l => [l.id, l]))
+    const activeLead = activeId ? leadsById[activeId] : null
+
+    const groupedLeads = {}
+    STAGES.forEach(s => { groupedLeads[s.id] = [] })
+    leads.forEach(lead => {
+        const stage = lead.crm_stage || 'Frio'
+        if (groupedLeads[stage]) groupedLeads[stage].push(lead)
+        else groupedLeads['Frio'].push(lead)
+    })
+
+    const findStageByLeadId = useCallback((leadId) => {
+        for (const lead of leads) {
+            if (lead.id === leadId) return lead.crm_stage || 'Frio'
+        }
+        return null
+    }, [leads])
+
+    const handleDragStart = useCallback((event) => {
+        setActiveId(event.active.id)
+    }, [])
+
+    const handleDragOver = useCallback((event) => {
+        const { active, over } = event
+        if (!over) return
+        const activeLeadId = active.id
+        const overId = over.id
+        const sourceStage = findStageByLeadId(activeLeadId)
+        const targetStage = STAGES.find(s => s.id === overId) ? overId : findStageByLeadId(overId)
+        if (!sourceStage || !targetStage || sourceStage === targetStage) return
+        setLeads(prev => prev.map(l => l.id === activeLeadId ? { ...l, crm_stage: targetStage } : l))
+    }, [setLeads, findStageByLeadId])
+
+    const handleDragEnd = useCallback(async (event) => {
+        const { active } = event
+        const leadId = active.id
+        const lead = leads.find(l => l.id === leadId)
+        setActiveId(null)
+        if (!lead) return
+        try {
+            await supabase.from('leads').update({ crm_stage: lead.crm_stage }).eq('id', leadId)
+        } catch (err) {
+            console.error('[Pipeline] Error updating crm_stage:', err)
+        }
+    }, [leads])
+
+    const handleRemoveLead = useCallback(async (leadId) => {
+        // Optimistic update: remove immediately from local state
+        setLeads(prev => prev.filter(l => l.id !== leadId))
+        try {
+            await supabase.from('leads').update({ crm_stage: null }).eq('id', leadId)
+        } catch (err) {
+            console.error('[Pipeline] Error removing lead from funnel:', err)
+            // If it fails, re-fetch would be ideal but we don't have access to fetchFunnelLeads here
+            // The parent (PipelinePage) re-fetches on next mount / manual refresh
+        }
+    }, [setLeads])
+
+    return (
+        <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={handleDragStart} onDragOver={handleDragOver} onDragEnd={handleDragEnd}>
+            <div style={{ display: 'flex', gap: '10px', overflowX: 'auto', paddingBottom: '10px', height: '100%', scrollbarWidth: 'thin', scrollbarColor: '#e5e7eb transparent' }}>
+                {STAGES.map(stage => (
+                    <PipelineColumn
+                        key={stage.id}
+                        id={stage.id}
+                        title={stage.title}
+                        icon={stage.icon}
+                        leads={groupedLeads[stage.id]}
+                        onCardClick={onCardClick}
+                        onRemoveLead={handleRemoveLead}
+                    />
+                ))}
+            </div>
+            <DragOverlay>
+                {activeLead ? (
+                    <div style={{ transform: 'rotate(2deg) scale(1.03)', boxShadow: '0 8px 24px rgba(0,0,0,0.15)', borderRadius: '8px' }}>
+                        <PipelineLeadCard lead={activeLead} />
+                    </div>
+                ) : null}
+            </DragOverlay>
+        </DndContext>
+    )
+}
+
+export default PipelineKanbanBoard
+```
+
+## File: src\components\pipeline\PipelineKanbanFilters.jsx
+```javascript
+import React from 'react'
+import { Search, Star, DollarSign } from 'lucide-react'
+
+const btn = (active) => ({
+    padding: '5px 11px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, lineHeight: 1,
+    border: active ? '1.5px solid #ff4d00' : '1px solid #d1d5db',
+    background: active ? '#fff3ee' : '#fff', color: active ? '#ff4d00' : '#6b7280', cursor: 'pointer',
+})
+
+const PipelineKanbanFilters = ({ filters, setFilters }) => {
+    return (
+        <div className="flex flex-wrap items-center gap-3" style={{ padding: '10px 16px', background: '#fff', border: '1px solid #e5e7eb', borderRadius: '10px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+            {/* Search */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: '6px', padding: '4px 10px', minWidth: '200px' }}>
+                <Search size={14} style={{ color: '#9ca3af' }} />
+                <input
+                    type="text"
+                    placeholder="Buscar por nome..."
+                    value={filters.search || ''}
+                    onChange={e => setFilters(p => ({ ...p, search: e.target.value }))}
+                    style={{ border: 'none', background: 'transparent', outline: 'none', fontSize: '13px', color: '#111827', width: '100%', padding: '2px 0', fontFamily: 'inherit' }}
+                />
+            </div>
+
+            <div style={{ width: '1px', height: '22px', background: '#e5e7eb', flexShrink: 0 }} />
+
+            {/* Tier filter */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <Star size={13} style={{ color: '#f59e0b' }} />
+                <span style={{ fontSize: '11px', color: '#9ca3af', fontWeight: 600, textTransform: 'uppercase' }}>Tier:</span>
+                {[1, 2, 3, 4, 5].map(t => (
+                    <button
+                        key={t}
+                        onClick={() => setFilters(p => ({ ...p, tier: p.tier === t ? null : t }))}
+                        style={btn(filters.tier === t)}
+                    >
+                        {t}★
+                    </button>
+                ))}
+            </div>
+
+            <div style={{ width: '1px', height: '22px', background: '#e5e7eb', flexShrink: 0 }} />
+
+            {/* Proposal toggle */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <DollarSign size={13} style={{ color: '#10b981' }} />
+                <button
+                    onClick={() => setFilters(p => ({ ...p, hasProposal: !p.hasProposal }))}
+                    style={btn(filters.hasProposal)}
+                >
+                    Com proposta
+                </button>
+            </div>
+        </div>
+    )
+}
+
+export default PipelineKanbanFilters
+```
+
+## File: src\components\pipeline\PipelineLeadCard.jsx
+```javascript
+import React, { useState } from 'react'
+import { useSortable } from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
+import { Star, DollarSign, MessageSquare, AlertTriangle, X, CheckCircle2, MoreVertical, Calendar, Phone, Mail, Building2, ExternalLink } from 'lucide-react'
+import SafeImage from '../SafeImage' // adjust path to components
+
+const STAGE_THEMES = {
+    A: { background: '#ecfdf5', color: '#059669', border: '1px solid #a7f3d0' },
+    B: { background: '#fffbeb', color: '#d97706', border: '1px solid #fde68a' },
+    C: { background: '#f9fafb', color: '#6b7280', border: '1px solid #e5e7eb' },
+}
+
+const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000
+
+const isFollowupOverdue = (lead) => {
+    if (!lead.last_task_completed_at || lead.has_engaged) return false
+    return new Date(lead.last_task_completed_at).getTime() < Date.now() - SEVEN_DAYS_MS
+}
+
+const PipelineLeadCard = ({ lead, onClick, onRemove }) => {
+    const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: lead.id })
+    const [isHovered, setIsHovered] = useState(false)
+    const [isRemoving, setIsRemoving] = useState(false)
+
+    const style = {
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging || isRemoving ? 0.5 : 1,
+        zIndex: isDragging ? 50 : 'auto',
+    }
+
+    const proposalValue = parseFloat(lead.proposal_value) || 0
+    const interactionCount = lead.total_interactions_count || 0
+    const icpScore = lead.icp_score || 'C'
+    const cadenceStage = lead.cadence_stage || ''
+    const icp = STAGE_THEMES[icpScore] || STAGE_THEMES.C
+    const tier = lead.tier || 0
+
+    const followupOverdue = isFollowupOverdue(lead)
+
+    const handleClick = () => {
+        if (isDragging) return
+        if (onClick) onClick(lead)
+    }
+
+    const handleRemove = (e) => {
+        e.stopPropagation() // prevent card click / drag from firing
+        if (isRemoving) return
+        setIsRemoving(true)
+        if (onRemove) onRemove(lead.id)
+    }
+
+    return (
+        <div
+            ref={setNodeRef}
+            style={{
+                ...style,
+                background: '#fff',
+                border: isDragging ? '1.5px solid #ff4d00' : '1px solid #e5e7eb',
+                borderRadius: '8px',
+                padding: '10px 12px',
+                cursor: 'grab',
+                boxShadow: isDragging ? '0 4px 16px rgba(0,0,0,0.12)' : '0 1px 3px rgba(0,0,0,0.05)',
+                position: 'relative', // needed for the remove button positioning
+            }}
+            onMouseEnter={e => { if (!isDragging) { e.currentTarget.style.borderColor = '#d1d5db'; setIsHovered(true) } }}
+            onMouseLeave={e => { if (!isDragging) { e.currentTarget.style.borderColor = '#e5e7eb'; setIsHovered(false) } }}
+            {...attributes}
+            {...listeners}
+            onClick={handleClick}
+        >
+            {/* Remove from funnel button — shown on hover, top-right corner */}
+            {isHovered && !isDragging && (
+                <button
+                    onPointerDown={e => e.stopPropagation()} // stop dnd-kit from hijacking the click
+                    onClick={handleRemove}
+                    title="Remove from Funnel"
+                    style={{
+                        position: 'absolute', top: '6px', right: '6px',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        width: '20px', height: '20px', borderRadius: '4px',
+                        background: '#fef2f2', border: '1px solid #fecaca',
+                        cursor: 'pointer', padding: 0, zIndex: 10,
+                        transition: 'all 0.15s',
+                    }}
+                    onMouseEnter={e => { e.currentTarget.style.background = '#ef4444'; e.currentTarget.style.borderColor = '#ef4444' }}
+                    onMouseLeave={e => { e.currentTarget.style.background = '#fef2f2'; e.currentTarget.style.borderColor = '#fecaca' }}
+                >
+                    <X size={11} style={{ color: '#ef4444', pointerEvents: 'none' }}
+                        onMouseEnter={e => { e.currentTarget.style.color = '#fff' }}
+                        onMouseLeave={e => { e.currentTarget.style.color = '#ef4444' }}
+                    />
+                </button>
+            )}
+            {/* Follow-up overdue badge — shown at top for immediate visibility */}
+            {followupOverdue && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '7px', padding: '3px 7px', borderRadius: '5px', background: '#fff3ee', border: '1px solid #ffd4c2', width: 'fit-content' }}>
+                    <AlertTriangle size={11} style={{ color: '#ff4d00', flexShrink: 0 }} />
+                    <span style={{ fontSize: '10px', fontWeight: 700, color: '#ff4d00', letterSpacing: '0.02em' }}>Follow-up</span>
+                </div>
+            )}
+
+            {/* Name + Empresa */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                <div style={{ width: 30, height: 30, borderRadius: '50%', background: '#f3f4f6', border: '1px solid #e5e7eb', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', flexShrink: 0, fontSize: '11px', fontWeight: 700, color: '#6b7280' }}>
+                    <SafeImage
+                        src={lead.avatar_url}
+                        alt={lead.nome}
+                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                        fallbackText={lead.nome?.charAt(0)?.toUpperCase()}
+                    />
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ fontSize: '13px', fontWeight: 600, color: '#111827', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{lead.nome || 'No Name'}</p>
+                    {lead.empresa && <p style={{ fontSize: '11px', color: '#9ca3af', margin: '1px 0 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{lead.empresa}</p>}
+                </div>
+            </div>
+
+            {/* Tags row */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '5px', flexWrap: 'wrap' }}>
+                <span title={lead.icp_reason || ''} style={{ fontSize: '10px', fontWeight: 700, padding: '2px 6px', borderRadius: '4px', cursor: lead.icp_reason ? 'help' : 'default', ...icp }}>ICP {icpScore}</span>
+
+                {cadenceStage && (
+                    <span title={lead.stage_reasoning || ''} style={{ fontSize: '10px', fontWeight: 700, padding: '2px 6px', borderRadius: '4px', cursor: lead.stage_reasoning ? 'help' : 'default', background: '#eff6ff', color: '#2563eb', border: '1px solid #bfdbfe' }}>{cadenceStage}</span>
+                )}
+
+                {tier > 0 && (
+                    <span style={{ display: 'flex', gap: '1px' }}>
+                        {[1, 2, 3, 4, 5].map(i => <Star key={i} size={10} style={i <= tier ? { color: '#f59e0b', fill: '#f59e0b' } : { color: '#e5e7eb', fill: '#e5e7eb' }} />)}
+                    </span>
+                )}
+
+                {proposalValue > 0 && (
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '2px', fontSize: '10px', fontWeight: 700, color: '#059669' }}>
+                        <DollarSign size={10} /> {proposalValue.toLocaleString('en-US', { maximumFractionDigits: 0 })}
+                    </span>
+                )}
+
+                {interactionCount > 0 && (
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '2px', fontSize: '10px', color: '#9ca3af' }}>
+                        <MessageSquare size={9} /> {interactionCount}
+                    </span>
+                )}
+
+                {lead.has_engaged && (
+                    <span style={{ fontSize: '9px', fontWeight: 700, padding: '1px 5px', borderRadius: '4px', background: '#fff3ee', color: '#ff4d00', border: '1px solid #ffd4c2' }}>Replied</span>
+                )}
+            </div>
+        </div>
+    )
+}
+
+export default PipelineLeadCard
+```
+
+## File: src\components\pipeline\PipelineTable.jsx
+```javascript
+import React, { useState, useMemo } from 'react'
+import { ChevronUp, ChevronDown, ChevronsUpDown, ArrowRightToLine, CheckSquare, Square, MinusSquare } from 'lucide-react'
+
+const PAGE_SIZE = 50
+
+const TH = { fontSize: '11px', fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em', padding: '10px 12px', borderBottom: '2px solid #e5e7eb', background: '#f9fafb', whiteSpace: 'nowrap', cursor: 'pointer', userSelect: 'none', position: 'sticky', top: 0, zIndex: 2 }
+const TD = { fontSize: '13px', color: '#111827', padding: '10px 12px', borderBottom: '1px solid #f3f4f6', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '200px' }
+const ICP_BG = { A: '#ecfdf5', B: '#fffbeb', C: '#f3f4f6' }
+const ICP_COLOR = { A: '#059669', B: '#d97706', C: '#6b7280' }
+
+// Custom sort value mappers — return a numeric rank so sort is meaningful
+const ICP_RANK = { A: 0, B: 1, C: 2 }          // asc → A first (best first)
+const CAD_RANK = { G1: 1, G2: 2, G3: 3, G4: 4, G5: 5 } // desc → G5 first (most advanced first)
+
+const getSortValue = (lead, field) => {
+    if (field === 'icp_score') return ICP_RANK[lead.icp_score] ?? 99
+    if (field === 'cadence_stage') return CAD_RANK[lead.cadence_stage] ?? 0
+    if (field === 'total_interactions_count') return lead.total_interactions_count ?? 0
+    const v = lead[field]
+    if (v == null) return ''
+    if (typeof v === 'string') return v.toLowerCase()
+    return v
+}
+
+const SortIcon = ({ field, sortField, sortDir }) => {
+    if (sortField !== field) return <ChevronsUpDown size={12} style={{ color: '#d1d5db' }} />
+    return sortDir === 'asc' ? <ChevronUp size={12} style={{ color: '#ff4d00' }} /> : <ChevronDown size={12} style={{ color: '#ff4d00' }} />
+}
+
+const PipelineTable = ({ leads, onOpenLead, onMoveToFunnel }) => {
+    const [selected, setSelected] = useState(new Set())
+    const [sortField, setSortField] = useState('nome')
+    const [sortDir, setSortDir] = useState('asc')
+    const [page, setPage] = useState(0)
+
+    // Columns — defaultDir controls direction on FIRST click
+    const columns = [
+        { key: 'nome', label: 'Name', w: '180px', defaultDir: 'asc' },
+        { key: 'empresa', label: 'Company', w: '150px', defaultDir: 'asc' },
+        { key: 'icp_score', label: 'ICP', w: '60px', defaultDir: 'asc' }, // A first
+        { key: 'cadence_stage', label: 'Cadence', w: '80px', defaultDir: 'desc' }, // G5 first
+        { key: 'total_interactions_count', label: 'Interactions', w: '90px', defaultDir: 'desc' }, // highest first
+        { key: 'has_engaged', label: 'Engaged?', w: '80px', defaultDir: 'desc' },
+        { key: 'tier', label: 'Tier', w: '50px', defaultDir: 'desc' },
+        { key: 'proposal_value', label: 'Proposal', w: '100px', defaultDir: 'desc' },
+        { key: 'crm_stage', label: 'Stage', w: '90px', defaultDir: 'asc' },
+    ]
+
+    const toggleSort = (field) => {
+        if (sortField === field) {
+            setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+        } else {
+            const col = columns.find(c => c.key === field)
+            setSortField(field)
+            setSortDir(col?.defaultDir || 'asc')
+        }
+        setPage(0)
+    }
+
+    const sorted = useMemo(() => {
+        // Deduplicate by ID (paginated fetch may produce overlapping rows)
+        const unique = [...new Map(leads.map(l => [l.id, l])).values()]
+        unique.sort((a, b) => {
+            const va = getSortValue(a, sortField)
+            const vb = getSortValue(b, sortField)
+            if (va < vb) return sortDir === 'asc' ? -1 : 1
+            if (va > vb) return sortDir === 'asc' ? 1 : -1
+            return 0
+        })
+        return unique
+    }, [leads, sortField, sortDir])
+
+    const totalPages = Math.ceil(sorted.length / PAGE_SIZE)
+    const pageLeads = sorted.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
+
+    const allOnPageSelected = pageLeads.length > 0 && pageLeads.every(l => selected.has(l.id))
+    const someOnPageSelected = pageLeads.some(l => selected.has(l.id))
+
+    const toggleAll = () => {
+        if (allOnPageSelected) {
+            setSelected(prev => { const n = new Set(prev); pageLeads.forEach(l => n.delete(l.id)); return n })
+        } else {
+            setSelected(prev => { const n = new Set(prev); pageLeads.forEach(l => n.add(l.id)); return n })
+        }
+    }
+
+    const toggleOne = (id) => {
+        setSelected(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })
+    }
+
+    const handleMoveToFunnel = () => {
+        if (selected.size === 0) return
+        onMoveToFunnel([...selected])
+        setSelected(new Set())
+    }
+
+    return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', flex: 1, minHeight: 0 }}>
+            {/* Bulk action bar */}
+            {selected.size > 0 && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '8px 16px', background: '#fff3ee', border: '1px solid #ffd4c2', borderRadius: '8px' }}>
+                    <span style={{ fontSize: '13px', fontWeight: 600, color: '#111827' }}>
+                        {selected.size} lead{selected.size > 1 ? 's' : ''} selected
+                    </span>
+                    <button
+                        onClick={handleMoveToFunnel}
+                        style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 14px', borderRadius: '6px', fontSize: '12px', fontWeight: 700, background: '#ff4d00', color: '#fff', border: 'none', cursor: 'pointer' }}
+                    >
+                        <ArrowRightToLine size={14} /> Move to Funnel
+                    </button>
+                </div>
+            )}
+
+            {/* Table */}
+            <div style={{ flex: 1, overflow: 'auto', borderRadius: '8px', border: '1px solid #e5e7eb', background: '#fff' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                    <thead>
+                        <tr>
+                            <th style={{ ...TH, width: '40px', cursor: 'default' }} onClick={toggleAll}>
+                                {allOnPageSelected ? <CheckSquare size={16} style={{ color: '#ff4d00' }} /> : someOnPageSelected ? <MinusSquare size={16} style={{ color: '#ff4d00' }} /> : <Square size={16} style={{ color: '#d1d5db' }} />}
+                            </th>
+                            {columns.map(col => (
+                                <th key={col.key} style={{ ...TH, width: col.w }} onClick={() => toggleSort(col.key)}>
+                                    <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                        {col.label} <SortIcon field={col.key} sortField={sortField} sortDir={sortDir} />
+                                    </span>
+                                </th>
+                            ))}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {pageLeads.map(lead => {
+                            const isSelected = selected.has(lead.id)
+                            return (
+                                <tr
+                                    key={lead.id}
+                                    style={{ cursor: 'pointer', transition: 'background 0.1s', background: isSelected ? '#fff7f3' : '#fff' }}
+                                    onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = '#fafafa' }}
+                                    onMouseLeave={e => { e.currentTarget.style.background = isSelected ? '#fff7f3' : '#fff' }}
+                                >
+                                    <td style={{ ...TD, width: '40px' }} onClick={() => toggleOne(lead.id)}>
+                                        {isSelected ? <CheckSquare size={16} style={{ color: '#ff4d00' }} /> : <Square size={16} style={{ color: '#d1d5db' }} />}
+                                    </td>
+                                    <td style={{ ...TD, fontWeight: 600, color: '#111827', cursor: 'pointer' }} onClick={() => onOpenLead(lead)}>
+                                        {lead.nome || '—'}
+                                    </td>
+                                    <td style={{ ...TD, color: '#6b7280' }} onClick={() => onOpenLead(lead)}>{lead.empresa || '—'}</td>
+                                    <td style={TD} onClick={() => onOpenLead(lead)}>
+                                        <span title={lead.icp_reason || ''} style={{ fontSize: '10px', fontWeight: 700, padding: '2px 7px', borderRadius: '4px', background: ICP_BG[lead.icp_score] || '#f3f4f6', color: ICP_COLOR[lead.icp_score] || '#6b7280', border: '1px solid transparent', cursor: lead.icp_reason ? 'help' : 'default' }}>
+                                            {lead.icp_score || '—'}
+                                        </span>
+                                    </td>
+                                    <td style={{ ...TD, color: '#6b7280' }} onClick={() => onOpenLead(lead)} title={lead.stage_reasoning || ''}>{lead.cadence_stage || '—'}</td>
+                                    <td style={{ ...TD, textAlign: 'center' }} onClick={() => onOpenLead(lead)}>{lead.total_interactions_count || 0}</td>
+                                    <td style={{ ...TD, textAlign: 'center' }} onClick={() => onOpenLead(lead)}>
+                                        {lead.has_engaged ? <span style={{ color: '#059669', fontWeight: 700, fontSize: '11px' }}>Yes</span> : <span style={{ color: '#d1d5db', fontSize: '11px' }}>No</span>}
+                                    </td>
+                                    <td style={{ ...TD, textAlign: 'center' }} onClick={() => onOpenLead(lead)}>{lead.tier || '—'}</td>
+                                    <td style={TD} onClick={() => onOpenLead(lead)}>
+                                        {parseFloat(lead.proposal_value) > 0 ? (
+                                            <span style={{ fontSize: '12px', fontWeight: 600, color: '#059669' }}>${parseFloat(lead.proposal_value).toLocaleString('en-US', { minimumFractionDigits: 0 })}</span>
+                                        ) : <span style={{ color: '#d1d5db' }}>—</span>}
+                                    </td>
+                                    <td style={TD} onClick={() => onOpenLead(lead)}>
+                                        {lead.crm_stage ? <span style={{ fontSize: '11px', fontWeight: 600, padding: '2px 7px', borderRadius: '4px', background: '#f3f4f6', color: '#374151' }}>{lead.crm_stage}</span> : <span style={{ color: '#d1d5db' }}>—</span>}
+                                    </td>
+                                </tr>
+                            )
+                        })}
+                        {pageLeads.length === 0 && (
+                            <tr><td colSpan={10} style={{ ...TD, textAlign: 'center', color: '#9ca3af', padding: '40px' }}>No leads found</td></tr>
+                        )}
+                    </tbody>
+                </table>
+            </div>
+
+            {/* Pagination */}
+            {totalPages > 1 && (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 4px' }}>
+                    <span style={{ fontSize: '12px', color: '#9ca3af' }}>
+                        {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, sorted.length)} of {sorted.length}
+                    </span>
+                    <div style={{ display: 'flex', gap: '6px' }}>
+                        <button disabled={page === 0} onClick={() => setPage(p => p - 1)} style={{ padding: '4px 10px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, border: '1px solid #e5e7eb', background: '#fff', color: page === 0 ? '#d1d5db' : '#374151', cursor: page === 0 ? 'default' : 'pointer' }}>Previous</button>
+                        <button disabled={page >= totalPages - 1} onClick={() => setPage(p => p + 1)} style={{ padding: '4px 10px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, border: '1px solid #e5e7eb', background: '#fff', color: page >= totalPages - 1 ? '#d1d5db' : '#374151', cursor: page >= totalPages - 1 ? 'default' : 'pointer' }}>Next</button>
+                    </div>
+                </div>
+            )}
+        </div>
+    )
+}
+
+export default PipelineTable
+```
+
+## File: src\components\pipeline\PipelineTableFilters.jsx
+```javascript
+import React from 'react'
+import { Filter, X, Search } from 'lucide-react'
+
+const btn = (active) => ({
+    padding: '5px 11px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, lineHeight: 1,
+    border: active ? '1.5px solid #ff4d00' : '1px solid #d1d5db',
+    background: active ? '#fff3ee' : '#fff', color: active ? '#ff4d00' : '#6b7280', cursor: 'pointer',
+})
+const label = { fontSize: '11px', color: '#9ca3af', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }
+const sep = () => ({ width: '1px', height: '22px', background: '#e5e7eb', flexShrink: 0 })
+const inp = { width: '56px', padding: '5px 8px', fontSize: '12px', borderRadius: '6px', border: '1px solid #d1d5db', background: '#fff', color: '#111827', outline: 'none' }
+
+const PipelineTableFilters = ({ filters, setFilters }) => {
+    const toggle = (key, val) => setFilters(p => {
+        const arr = p[key] || []
+        return { ...p, [key]: arr.includes(val) ? arr.filter(v => v !== val) : [...arr, val] }
+    })
+
+    const hasActive = !!filters.search || filters.icp?.length > 0 || filters.cadence?.length > 0 || filters.engagement !== 'all' || filters.minInteractions > 0 || filters.maxInteractions < 9999 || filters.hasProposal !== 'all'
+    const clear = () => setFilters({ search: '', icp: [], cadence: [], engagement: 'all', minInteractions: 0, maxInteractions: 9999, hasProposal: 'all' })
+
+    return (
+        <div className="flex flex-wrap items-center gap-3" style={{ padding: '10px 16px', background: '#fff', border: '1px solid #e5e7eb', borderRadius: '10px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+            {/* Search */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: '6px', padding: '4px 10px', minWidth: '180px' }}>
+                <Search size={13} style={{ color: '#9ca3af', flexShrink: 0 }} />
+                <input
+                    type="text"
+                    placeholder="Search by name..."
+                    value={filters.search || ''}
+                    onChange={e => setFilters(p => ({ ...p, search: e.target.value }))}
+                    style={{ border: 'none', background: 'transparent', outline: 'none', fontSize: '13px', color: '#111827', width: '100%', fontFamily: 'inherit' }}
+                />
+            </div>
+            <div style={sep()} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#9ca3af' }}><Filter size={13} /><span style={label}>Filters</span></div>
+            <div style={sep()} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span style={label}>ICP:</span>
+                {['A', 'B', 'C'].map(v => <button key={v} onClick={() => toggle('icp', v)} style={btn(filters.icp?.includes(v))}>{v}</button>)}
+            </div>
+            <div style={sep()} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span style={label}>Cadence:</span>
+                {['G1', 'G2', 'G3', 'G4', 'G5'].map(v => <button key={v} onClick={() => toggle('cadence', v)} style={btn(filters.cadence?.includes(v))}>{v}</button>)}
+            </div>
+            <div style={sep()} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span style={label}>Engagement:</span>
+                {[{ v: 'all', l: 'All' }, { v: 'engaged', l: 'Replied' }, { v: 'ignored', l: 'Ignored' }].map(o => <button key={o.v} onClick={() => setFilters(p => ({ ...p, engagement: o.v }))} style={btn(filters.engagement === o.v)}>{o.l}</button>)}
+            </div>
+            <div style={sep()} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span style={label}>Proposal:</span>
+                {[{ v: 'all', l: 'All' }, { v: 'with', l: 'With' }, { v: 'without', l: 'Without' }].map(o => <button key={o.v} onClick={() => setFilters(p => ({ ...p, hasProposal: o.v }))} style={btn(filters.hasProposal === o.v)}>{o.l}</button>)}
+            </div>
+            <div style={sep()} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span style={label}>Interactions:</span>
+                <input type="number" min="0" placeholder="Min" value={filters.minInteractions === 0 ? '' : filters.minInteractions} onChange={e => setFilters(p => ({ ...p, minInteractions: parseInt(e.target.value) || 0 }))} style={inp} />
+                <span style={{ color: '#d1d5db', fontSize: '12px' }}>—</span>
+                <input type="number" min="0" placeholder="Max" value={filters.maxInteractions >= 9999 ? '' : filters.maxInteractions} onChange={e => setFilters(p => ({ ...p, maxInteractions: parseInt(e.target.value) || 9999 }))} style={inp} />
+            </div>
+            {hasActive && (<><div style={sep()} /><button onClick={clear} style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '5px 11px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, background: '#fff1f2', border: '1px solid #fecaca', color: '#ef4444', cursor: 'pointer' }}><X size={12} /> Clear</button></>)}
+        </div>
+    )
+}
+
+export default PipelineTableFilters
+```
+
+## File: src\contexts\AuthContext.jsx
+```javascript
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { supabase } from '../services/supabaseClient';
@@ -6368,12 +6905,10 @@ export const AuthProvider = ({ children }) => {
         </AuthContext.Provider>
     );
 };
+```
 
-
-======================================================
-==== ARQUIVO: src\contexts\ClientAuthContext.jsx
-======================================================
-
+## File: src\contexts\ClientAuthContext.jsx
+```javascript
 import React, { createContext, useContext, useState, useEffect } from 'react'
 import { supabase } from '../services/supabaseClient'
 
@@ -6505,12 +7040,10 @@ export const ClientAuthProvider = ({ children }) => {
         </ClientAuthContext.Provider>
     )
 }
+```
 
-
-======================================================
-==== ARQUIVO: src\contexts\ClientSelectionContext.jsx
-======================================================
-
+## File: src\contexts\ClientSelectionContext.jsx
+```javascript
 import React, { createContext, useContext, useState, useEffect } from 'react'
 
 const ClientSelectionContext = createContext()
@@ -6551,12 +7084,10 @@ export const ClientSelectionProvider = ({ children }) => {
         </ClientSelectionContext.Provider>
     )
 }
+```
 
-
-======================================================
-==== ARQUIVO: src\contexts\LanguageContext.jsx
-======================================================
-
+## File: src\contexts\LanguageContext.jsx
+```javascript
 import React, { createContext, useState, useContext } from 'react'
 
 const LanguageContext = createContext()
@@ -6637,12 +7168,10 @@ export const LanguageProvider = ({ children }) => {
 }
 
 export const useLanguage = () => useContext(LanguageContext)
+```
 
-
-======================================================
-==== ARQUIVO: src\hooks\useNotifications.js
-======================================================
-
+## File: src\hooks\useNotifications.js
+```javascript
 import { useRef, useCallback, useEffect } from 'react'
 
 // Minimal "ping" notification sound as base64 WAV (200ms soft chime)
@@ -6711,296 +7240,28 @@ export function useNotifications() {
 
     return { notify, playSound }
 }
+```
 
-
-======================================================
-==== ARQUIVO: src\index.css
-======================================================
-
-/* Google Fonts - Plus Jakarta Sans */
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,200..800;1,200..800&display=swap');
-
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
-:root {
-  /* Brand Typography */
-  --font-main: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
-
-  /* Color Palette - OBSIDIAN GLASS THEME */
-  --color-bg: #030303;
-  /* Deep Void */
-  --color-surface: rgba(255, 255, 255, 0.03);
-  --color-surface-hover: rgba(255, 255, 255, 0.06);
-  --color-glass-border: rgba(255, 255, 255, 0.08);
-  --color-glass-shine: rgba(255, 255, 255, 0.15);
-
-  /* Text Colors */
-  --color-text-heading: #ffffff;
-  /* White */
-  --color-text-body: #94a3b8;
-  /* Slate 400 */
-  --color-text-muted: #64748b;
-  /* Slate 500 */
-  --color-text-highlight: #e2e8f0;
-  /* Slate 200 */
-
-  /* Brand Colors */
-  --color-primary: #ff4d00;
-  /* Signal Orange */
-  --color-primary-glow: rgba(255, 77, 0, 0.4);
-  --color-primary-dim: rgba(255, 77, 0, 0.1);
-
-  /* Status Colors */
-  --color-success: #10b981;
-  --color-success-glow: rgba(16, 185, 129, 0.4);
-  --color-danger: #ef4444;
-  --color-danger-glow: rgba(239, 68, 68, 0.4);
-
-  /* Spacing & Radii */
-  --radius-sm: 4px;
-  /* Sharp/Tech */
-  --radius-md: 8px;
-  /* Standard */
-  --radius-lg: 16px;
-  /* Floating panels */
-  --radius-full: 9999px;
-
-  /* Animation */
-  --ease-spring: cubic-bezier(0.175, 0.885, 0.32, 1.275);
-}
-
-/* Global Reset & Base */
-body {
-  margin: 0;
-  min-width: 320px;
-  min-height: 100vh;
-  font-family: var(--font-main);
-  background-color: var(--color-bg);
-  /* Deep mesh gradient background */
-  background-image:
-    radial-gradient(circle at 15% 50%, rgba(255, 77, 0, 0.08), transparent 25%),
-    radial-gradient(circle at 85% 30%, rgba(77, 77, 255, 0.05), transparent 25%);
-  color: var(--color-text-body);
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  line-height: 1.6;
-  overflow-x: hidden;
-}
-
-/* Headings */
-h1,
-h2,
-h3,
-h4,
-h5,
-h6 {
-  color: var(--color-text-heading);
-  font-weight: 700;
-  margin-top: 0;
-  letter-spacing: -0.025em;
-  /* Tighter for modern look */
-}
-
-/* GLASS UTILITIES - The Core of the Design */
-
-.glass-panel {
-  background: var(--color-surface);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid var(--color-glass-border);
-  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
-}
-
-.glass-panel-hover:hover {
-  background: var(--color-surface-hover);
-  border-color: var(--color-glass-shine);
-  box-shadow: 0 0 15px rgba(255, 255, 255, 0.05);
-  transition: all 0.3s ease;
-}
-
-/* Primary Button - Neo-Glass */
-.btn-primary {
-  position: relative;
-  background: var(--color-primary);
-  color: white;
-  border: none;
-  padding: 0.75rem 1.5rem;
-  border-radius: var(--radius-sm);
-  font-weight: 600;
-  font-size: 0.9rem;
-  letter-spacing: 0.01em;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  overflow: hidden;
-  transition: all 0.2s var(--ease-spring);
-  box-shadow: 0 0 20px var(--color-primary-glow);
-  z-index: 1;
-}
-
-/* Internal glass sheen for button */
-.btn-primary::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: -100%;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(90deg,
-      transparent,
-      rgba(255, 255, 255, 0.2),
-      transparent);
-  transition: 0.5s;
-  z-index: -1;
-}
-
-.btn-primary:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 0 30px var(--color-primary-glow);
-}
-
-.btn-primary:hover::before {
-  left: 100%;
-}
-
-/* Inputs - Glass Style */
-input,
-select,
-textarea {
-  font-family: inherit;
-  background-color: rgba(255, 255, 255, 0.03);
-  /* Extremely transparent */
-  border: 1px solid var(--color-glass-border);
-  border-radius: var(--radius-sm);
-  padding: 0.75rem 1rem;
-  font-size: 0.95rem;
-  color: var(--color-text-heading);
-  transition: all 0.2s;
-  outline: none;
-  backdrop-filter: blur(4px);
-}
-
-input:focus,
-select:focus,
-textarea:focus {
-  background-color: rgba(255, 255, 255, 0.05);
-  border-color: var(--color-primary);
-  box-shadow: 0 0 0 1px var(--color-primary), 0 0 15px var(--color-primary-dim);
-}
-
-input::placeholder {
-  color: var(--color-text-muted);
-}
-
-/* Scrollbar - Light & Slim */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-
-::-webkit-scrollbar-track {
-  background: #f1f5f9;
-}
-
-::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-  border-radius: 3px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: var(--color-primary);
-}
-
-/* Utility: Text Gradients */
-.text-gradient {
-  background: linear-gradient(135deg, #fff 0%, #94a3b8 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-}
-
-.text-gradient-primary {
-  background: linear-gradient(135deg, #ff4d00 0%, #ff8800 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-}
-
-/* Table overrides for Glass look */
-/* We'll use these in the component updates, but defining base here helps */
-
-/* Animations */
-@keyframes float {
-  0% {
-    transform: translateY(0px);
-  }
-
-  50% {
-    transform: translateY(-10px);
-  }
-
-  100% {
-    transform: translateY(0px);
-  }
-}
-
-.animate-float {
-  animation: float 6s ease-in-out infinite;
-}
-
-======================================================
-==== ARQUIVO: src\lib\utils.js
-======================================================
-
+## File: src\lib\utils.js
+```javascript
 import { clsx } from "clsx"
 import { twMerge } from "tailwind-merge"
 
 export function cn(...inputs) {
     return twMerge(clsx(inputs))
 }
+```
 
-
-======================================================
-==== ARQUIVO: src\main.jsx
-======================================================
-
-import { StrictMode } from 'react'
-import { createRoot } from 'react-dom/client'
-import './index.css'
-import App from './App.jsx'
-
-console.log('Main starting...')
-window.mainLoaded = true
-
-import ErrorBoundary from './components/ErrorBoundary'
-
-import { LanguageProvider } from './contexts/LanguageContext'
-
-createRoot(document.getElementById('root')).render(
-  <StrictMode>
-    <ErrorBoundary>
-      <LanguageProvider>
-        <App />
-      </LanguageProvider>
-    </ErrorBoundary>
-  </StrictMode>,
-)
-
-
-======================================================
-==== ARQUIVO: src\pages\AdminPanel.css
-======================================================
-
+## File: src\pages\AdminPanel.css
+```css
 /* 
   DEPRECATED: Styles have been moved to Tailwind classes in AdminPanel.jsx and index.css
   as part of the Obsidian Glass visual overhaul.
 */
+```
 
-======================================================
-==== ARQUIVO: src\pages\AdminPanel.jsx
-======================================================
-
+## File: src\pages\AdminPanel.jsx
+```javascript
 import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../services/supabaseClient'
@@ -7083,7 +7344,11 @@ const AdminPanel = () => {
                 .eq('status', 'COMPLETED')
                 .gte('completed_at', `${dateStr}T00:00:00`)
 
-            if (selectedClientId) doneQuery = doneQuery.eq('leads.client_id', selectedClientId)
+            if (selectedClientId) {
+                doneQuery = doneQuery
+                    .eq('client_id', selectedClientId)
+                    .eq('leads.client_id', selectedClientId)
+            }
 
             // 2. Pending Tasks (Top 30 for today, same as Cockpit)
             let pendingQuery = supabase
@@ -7095,7 +7360,11 @@ const AdminPanel = () => {
                 .order('created_at', { ascending: true })
                 .limit(30)
 
-            if (selectedClientId) pendingQuery = pendingQuery.eq('leads.client_id', selectedClientId)
+            if (selectedClientId) {
+                pendingQuery = pendingQuery
+                    .eq('client_id', selectedClientId)
+                    .eq('leads.client_id', selectedClientId)
+            }
 
             // 3. Radar Leads (Responding/Hot)
             let radarQuery = supabase
@@ -7629,12 +7898,10 @@ const RadarLeadCard = ({ lead, onLeadClick }) => {
 }
 
 export default AdminPanel
+```
 
-
-======================================================
-==== ARQUIVO: src\pages\BlacklistPage.jsx
-======================================================
-
+## File: src\pages\BlacklistPage.jsx
+```javascript
 import React, { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../services/supabaseClient'
 import { useClientSelection } from '../contexts/ClientSelectionContext'
@@ -8141,21 +8408,18 @@ const BlacklistPage = () => {
 }
 
 export default BlacklistPage
+```
 
-
-======================================================
-==== ARQUIVO: src\pages\ClientDashboard.css
-======================================================
-
+## File: src\pages\ClientDashboard.css
+```css
 /* 
   DEPRECATED: Styles have been moved to Tailwind classes in ClientDashboard.jsx
   as part of the Obsidian Glass visual overhaul.
 */
+```
 
-======================================================
-==== ARQUIVO: src\pages\ClientDashboard.jsx
-======================================================
-
+## File: src\pages\ClientDashboard.jsx
+```javascript
 import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../services/supabaseClient'
@@ -8291,12 +8555,10 @@ const ClientDashboard = () => {
 }
 
 export default ClientDashboard
+```
 
-
-======================================================
-==== ARQUIVO: src\pages\ClientInsightsPage.jsx
-======================================================
-
+## File: src\pages\ClientInsightsPage.jsx
+```javascript
 import React, { useState, useEffect, useRef } from 'react'
 import { useClientAuth } from '../contexts/ClientAuthContext'
 import { supabase } from '../services/supabaseClient'
@@ -9046,12 +9308,10 @@ const ClientInsightsPage = () => {
 }
 
 export default ClientInsightsPage
+```
 
-
-======================================================
-==== ARQUIVO: src\pages\ClientLoginPage.jsx
-======================================================
-
+## File: src\pages\ClientLoginPage.jsx
+```javascript
 import React, { useState } from 'react'
 import { supabase } from '../services/supabaseClient'
 import { useNavigate } from 'react-router-dom'
@@ -9283,12 +9543,10 @@ const ClientLoginPage = () => {
 }
 
 export default ClientLoginPage
+```
 
-
-======================================================
-==== ARQUIVO: src\pages\ClientPortal.css
-======================================================
-
+## File: src\pages\ClientPortal.css
+```css
 .client-container {
     min-height: 100vh;
     background-color: #f3f4f6;
@@ -9613,11 +9871,10 @@ export default ClientLoginPage
     border-radius: 4px;
     margin-bottom: 0.5rem;
 }
+```
 
-======================================================
-==== ARQUIVO: src\pages\ClientPortal.jsx
-======================================================
-
+## File: src\pages\ClientPortal.jsx
+```javascript
 
 import React, { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
@@ -9832,12 +10089,10 @@ const ClientPortal = () => {
 }
 
 export default ClientPortal
+```
 
-
-======================================================
-==== ARQUIVO: src\pages\ClientsPage.jsx
-======================================================
-
+## File: src\pages\ClientsPage.jsx
+```javascript
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../services/supabaseClient';
 import { useAuth } from '../contexts/AuthContext'; // Import Auth
@@ -10487,12 +10742,10 @@ export default function ClientsPage() {
         </div>
     );
 }
+```
 
-
-======================================================
-==== ARQUIVO: src\pages\ConnectionRequestsPage.jsx
-======================================================
-
+## File: src\pages\ConnectionRequestsPage.jsx
+```javascript
 import React from 'react'
 import ConnectionRequests from '../components/ConnectionRequests'
 import { Link2 } from 'lucide-react'
@@ -10526,12 +10779,10 @@ const ConnectionRequestsPage = () => {
 }
 
 export default ConnectionRequestsPage
+```
 
-
-======================================================
-==== ARQUIVO: src\pages\ContentLibraryPage.jsx
-======================================================
-
+## File: src\pages\ContentLibraryPage.jsx
+```javascript
 import React, { useState, useEffect } from 'react'
 import { supabase } from '../services/supabaseClient'
 import { useAuth } from '../contexts/AuthContext'
@@ -10931,12 +11182,10 @@ const ContentLibraryPage = () => {
 }
 
 export default ContentLibraryPage
+```
 
-
-======================================================
-==== ARQUIVO: src\pages\IdeasPage.css
-======================================================
-
+## File: src\pages\IdeasPage.css
+```css
 .ideas-page-container {
     padding: 2rem;
     height: 100%;
@@ -11116,11 +11365,10 @@ export default ContentLibraryPage
     justify-content: flex-end;
     gap: 1rem;
 }
+```
 
-======================================================
-==== ARQUIVO: src\pages\IdeasPage.jsx
-======================================================
-
+## File: src\pages\IdeasPage.jsx
+```javascript
 
 import React, { useState, useEffect } from 'react'
 import { supabase } from '../services/supabaseClient'
@@ -11533,12 +11781,10 @@ const IdeasPage = () => {
 }
 
 export default IdeasPage
+```
 
-
-======================================================
-==== ARQUIVO: src\pages\LeadsPage.css
-======================================================
-
+## File: src\pages\LeadsPage.css
+```css
 /* LeadsPage.css */
 
 .leads-container {
@@ -11876,11 +12122,10 @@ export default IdeasPage
     font-weight: 700;
     text-transform: uppercase;
 }
+```
 
-======================================================
-==== ARQUIVO: src\pages\LeadsPage.jsx
-======================================================
-
+## File: src\pages\LeadsPage.jsx
+```javascript
 import React, { useState, useEffect } from 'react'
 import { supabase } from '../services/supabaseClient'
 import { useLanguage } from '../contexts/LanguageContext'
@@ -12232,12 +12477,10 @@ const LeadDetailsDrawer = ({ lead, onClose, onStatusChange }) => {
 }
 
 export default LeadsPage
+```
 
-
-======================================================
-==== ARQUIVO: src\pages\LinkedInEngagementPage.jsx
-======================================================
-
+## File: src\pages\LinkedInEngagementPage.jsx
+```javascript
 import React, { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../services/supabaseClient'
 import { useClientSelection } from '../contexts/ClientSelectionContext'
@@ -12718,12 +12961,10 @@ const LinkedInEngagementPage = () => {
 }
 
 export default LinkedInEngagementPage
+```
 
-
-======================================================
-==== ARQUIVO: src\pages\ListDetailsPage.jsx
-======================================================
-
+## File: src\pages\ListDetailsPage.jsx
+```javascript
 import React, { useState, useEffect } from 'react'
 import { supabase } from '../services/supabaseClient'
 import { useParams, useNavigate } from 'react-router-dom'
@@ -13003,12 +13244,10 @@ const ListDetailsPage = () => {
 }
 
 export default ListDetailsPage
+```
 
-
-======================================================
-==== ARQUIVO: src\pages\ListsPage.jsx
-======================================================
-
+## File: src\pages\ListsPage.jsx
+```javascript
 import React, { useState, useEffect } from 'react'
 import { supabase } from '../services/supabaseClient'
 import { useNavigate } from 'react-router-dom'
@@ -13407,21 +13646,18 @@ const ListsPage = () => {
 }
 
 export default ListsPage
+```
 
-
-======================================================
-==== ARQUIVO: src\pages\Login.css
-======================================================
-
+## File: src\pages\Login.css
+```css
 /* 
   DEPRECATED: Styles have been moved to Tailwind classes in Login.jsx
   as part of the Obsidian Glass visual overhaul.
 */
+```
 
-======================================================
-==== ARQUIVO: src\pages\Login.jsx
-======================================================
-
+## File: src\pages\Login.jsx
+```javascript
 import React, { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
@@ -13633,12 +13869,10 @@ const Login = () => {
 };
 
 export default Login;
+```
 
-
-======================================================
-==== ARQUIVO: src\pages\MissionsPage.jsx
-======================================================
-
+## File: src\pages\MissionsPage.jsx
+```javascript
 import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../services/supabaseClient'
@@ -13857,6 +14091,7 @@ const MissionsPage = () => {
                 supabase
                     .from('tasks')
                     .select('*, lead:leads!inner(id, client_id, nome, empresa, headline, avatar_url, icp_score, cadence_stage, has_engaged, last_task_completed_at, total_interactions_count, linkedin_profile_url, crm_stage)')
+                    .eq('client_id', selectedClientId)
                     .eq('leads.client_id', selectedClientId)
                     .neq('leads.is_blacklisted', true)
                     .eq('status', 'PENDING')
@@ -13866,6 +14101,7 @@ const MissionsPage = () => {
                 supabase
                     .from('tasks')
                     .select('id, leads!inner(client_id)', { count: 'exact' })
+                    .eq('client_id', selectedClientId)
                     .eq('leads.client_id', selectedClientId)
                     .neq('leads.is_blacklisted', true)
                     .eq('status', 'COMPLETED')
@@ -13874,6 +14110,7 @@ const MissionsPage = () => {
                 supabase
                     .from('tasks')
                     .select('*, lead:leads!inner(id, client_id, nome, empresa, headline, avatar_url, icp_score, cadence_stage, has_engaged, last_task_completed_at, total_interactions_count, linkedin_profile_url, crm_stage)')
+                    .eq('client_id', selectedClientId)
                     .eq('leads.client_id', selectedClientId)
                     .neq('leads.is_blacklisted', true)
                     .eq('status', 'PENDING')
@@ -14210,12 +14447,10 @@ const MissionsPage = () => {
 }
 
 export default MissionsPage
+```
 
-
-======================================================
-==== ARQUIVO: src\pages\NetworkDashboard.jsx
-======================================================
-
+## File: src\pages\NetworkDashboard.jsx
+```javascript
 import React, { useState, useEffect, useRef } from 'react'
 import { supabase } from '../services/supabaseClient'
 import { useClientSelection } from '../contexts/ClientSelectionContext'
@@ -14305,6 +14540,7 @@ const NetworkDashboard = () => {
     const [messageDraft, setMessageDraft] = useState('')
     const [isAddLeadsModalOpen, setIsAddLeadsModalOpen] = useState(false)
     const [syncLoading, setSyncLoading] = useState(false)
+    const [emergencySyncLoading, setEmergencySyncLoading] = useState(false)
     const [clientSyncTimestamp, setClientSyncTimestamp] = useState(null) // from clients.last_sync_timestamp
 
     // Bulk History Import State (legacy queue kept for backward compat)
@@ -14665,6 +14901,40 @@ const NetworkDashboard = () => {
             setNotification({ message: 'Error starting enrichment queue.', type: 'error' })
         } finally {
             setEnrichmentLoading(false)
+            setTimeout(() => setNotification(null), 5000)
+        }
+    }
+
+    const handleEmergencySync = async () => {
+        if (!selectedClientId) return
+        setEmergencySyncLoading(true)
+
+        try {
+            const response = await fetch('https://n8n-n8n-start.kfocge.easypanel.host/webhook/emergency-sync', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    client_id: selectedClientId
+                })
+            })
+
+            if (response.ok) {
+                setNotification({
+                    message: "Sincronização iniciada! As novas conexões aparecerão aqui em instantes.",
+                    type: 'success'
+                })
+            } else {
+                throw new Error('Webhook failed')
+            }
+
+        } catch (error) {
+            console.error('Emergency sync error:', error)
+            setNotification({
+                message: "Erro ao iniciar sincronização de emergência.",
+                type: 'error'
+            })
+        } finally {
+            setEmergencySyncLoading(false)
             setTimeout(() => setNotification(null), 5000)
         }
     }
@@ -15508,6 +15778,22 @@ const NetworkDashboard = () => {
                             </div>
 
                             <button
+                                onClick={handleEmergencySync}
+                                disabled={emergencySyncLoading}
+                                className={`flex items-center gap-2 px-4 py-2.5 rounded-lg border font-semibold text-sm transition-all ${emergencySyncLoading
+                                    ? 'bg-slate-50 text-slate-400 cursor-not-allowed border-slate-200'
+                                    : 'bg-white text-slate-600 border-slate-200 hover:border-orange-200 hover:text-orange-600 hover:bg-orange-50'
+                                    }`}
+                            >
+                                {emergencySyncLoading ? (
+                                    <Loader2 size={16} className="animate-spin" />
+                                ) : (
+                                    <span>🔄</span>
+                                )}
+                                Sync New Connections
+                            </button>
+
+                            <button
                                 onClick={() => setIsAddLeadsModalOpen(true)}
                                 className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-orange-600 text-white border border-orange-600 hover:bg-orange-700 font-bold text-sm transition-all shadow-md shadow-orange-100">
                                 <Plus size={16} /> Add Leads
@@ -16156,12 +16442,10 @@ const NetworkDashboard = () => {
 
 export default NetworkDashboard
 
+```
 
-
-======================================================
-==== ARQUIVO: src\pages\PipelinePage.jsx
-======================================================
-
+## File: src\pages\PipelinePage.jsx
+```javascript
 import React, { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../services/supabaseClient'
 import { useClientSelection } from '../contexts/ClientSelectionContext'
@@ -16383,12 +16667,10 @@ const PipelinePage = () => {
 }
 
 export default PipelinePage
+```
 
-
-======================================================
-==== ARQUIVO: src\pages\PostFeedbackPage.css
-======================================================
-
+## File: src\pages\PostFeedbackPage.css
+```css
 /* PostFeedbackPage.css */
 @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;700&display=swap');
 
@@ -16406,11 +16688,10 @@ export default PipelinePage
         transform: rotate(360deg);
     }
 }
+```
 
-======================================================
-==== ARQUIVO: src\pages\PostFeedbackPage.jsx
-======================================================
-
+## File: src\pages\PostFeedbackPage.jsx
+```javascript
 import React, { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../services/supabaseClient'
@@ -17083,12 +17364,10 @@ const PostFeedbackPage = () => {
 }
 
 export default PostFeedbackPage
+```
 
-
-======================================================
-==== ARQUIVO: src\pages\PostsPage.css
-======================================================
-
+## File: src\pages\PostsPage.css
+```css
 :root {
   --primary-color: #0f172a;
   --accent-color: #2563eb;
@@ -17564,11 +17843,10 @@ body {
   color: #f59e0b;
   cursor: help;
 }
+```
 
-======================================================
-==== ARQUIVO: src\pages\PostsPage.jsx
-======================================================
-
+## File: src\pages\PostsPage.jsx
+```javascript
 import React, { useState, useEffect } from 'react'
 import { supabase } from '../services/supabaseClient'
 import { useAuth } from '../contexts/AuthContext'
@@ -17931,21 +18209,18 @@ const PostsPage = () => {
 }
 
 export default PostsPage
+```
 
-
-======================================================
-==== ARQUIVO: src\pages\SalesHub.css
-======================================================
-
+## File: src\pages\SalesHub.css
+```css
 /* 
   DEPRECATED: Styles have been moved to Tailwind classes in SalesHubPage.jsx.
   Reverted to Light Theme (White/Orange) per user request.
 */
+```
 
-======================================================
-==== ARQUIVO: src\pages\SalesHubPage.jsx
-======================================================
-
+## File: src\pages\SalesHubPage.jsx
+```javascript
 import React, { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../services/supabaseClient'
@@ -18230,21 +18505,18 @@ const SalesHubPage = () => {
 }
 
 export default SalesHubPage
+```
 
-
-======================================================
-==== ARQUIVO: src\pages\SalesInbox.css
-======================================================
-
+## File: src\pages\SalesInbox.css
+```css
 /* 
   DEPRECATED: Styles have been moved to Tailwind classes in SalesInboxPage.jsx
   as part of the Obsidian Glass visual overhaul.
 */
+```
 
-======================================================
-==== ARQUIVO: src\pages\SalesInboxPage.jsx
-======================================================
-
+## File: src\pages\SalesInboxPage.jsx
+```javascript
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { supabase } from '../services/supabaseClient'
@@ -18253,7 +18525,9 @@ import { Search, Send, MoreVertical, Phone, Mail, MapPin, Briefcase, Zap, Star, 
 import SafeImage from '../components/SafeImage'
 import UnifiedLeadModal from '../components/UnifiedLeadModal'
 const N8N_GENERATE_REPLY_URL = 'https://n8n-n8n-start.kfocge.easypanel.host/webhook/generate-reply'
+const N8N_GENERATE_ICEBREAKER_URL = 'https://n8n-n8n-start.kfocge.easypanel.host/webhook/generate-icebreaker'
 const N8N_SEND_MESSAGE_URL = 'https://n8n-n8n-start.kfocge.easypanel.host/webhook/send-linkedin-message'
+const N8N_ANALYZE_LEAD_URL = 'https://n8n-n8n-start.kfocge.easypanel.host/webhook/analyze-lead-on-demand'
 import StrategicContextCard from '../components/StrategicContextCard'
 
 // Returns true if lead meets the strict conditions to be considered a task
@@ -18298,8 +18572,10 @@ const SalesInboxPage = () => {
     const [selectedSuggestionIdx, setSelectedSuggestionIdx] = useState(null)
     const [showLeadModal, setShowLeadModal] = useState(false)
     const [showFollowupOnly, setShowFollowupOnly] = useState(false)
+    const [showUnreadOnly, setShowUnreadOnly] = useState(false)
     const [generatingReply, setGeneratingReply] = useState(false)
     const [sdrSeniorGenerated, setSdrSeniorGenerated] = useState(false)
+    const [analyzingLead, setAnalyzingLead] = useState(false)
     const [generatedReasoning, setGeneratedReasoning] = useState(null)
 
     // Quick Actions State
@@ -18385,36 +18661,59 @@ const SalesInboxPage = () => {
         setAiLoading(true)
 
         try {
-            const conversationHistory = interactions
-                .slice().reverse()
-                .map(msg => ({
-                    is_sender: !!msg.is_sender,
-                    content: msg.content || '',
-                    interaction_date: msg.interaction_date || null
-                }))
+            const isIcebreaker = interactions.length === 0
+            let replyText = ''
 
-            const payload = {
-                user_id: selectedClientId,
-                lead_id: activeLead.id,
-                lead_name: activeLead.nome || '',
-                lead_headline: activeLead.headline || '',
-                lead_location: activeLead.location || '',
-                lead_reasoning: activeLead.analysis_reasoning || '',
-                lead_icp_reason: activeLead.icp_reason || '',
-                conversation_history: conversationHistory,
-                is_icebreaker: interactions.length === 0,
-                ai_chat_history: newHistory
+            if (isIcebreaker) {
+                // Empty conversation: generate a first-touch icebreaker
+                const payload = {
+                    name: activeLead.nome || '',
+                    headline: activeLead.headline || '',
+                    company: activeLead.empresa || '',
+                    about: activeLead.about || '',
+                    ai_chat_history: newHistory
+                }
+                const response = await fetch(N8N_GENERATE_ICEBREAKER_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                })
+                if (!response.ok) throw new Error('Request error')
+                const data = await response.json()
+                replyText = data.icebreaker || 'No response.'
+            } else {
+                // Ongoing conversation: generate a contextual reply
+                const conversationHistory = interactions
+                    .slice().reverse()
+                    .map(msg => ({
+                        is_sender: !!msg.is_sender,
+                        content: msg.content || '',
+                        interaction_date: msg.interaction_date || null
+                    }))
+
+                const payload = {
+                    user_id: selectedClientId,
+                    lead_id: activeLead.id,
+                    lead_name: activeLead.nome || '',
+                    lead_headline: activeLead.headline || '',
+                    lead_location: activeLead.location || '',
+                    lead_reasoning: activeLead.analysis_reasoning || '',
+                    lead_icp_reason: activeLead.icp_reason || '',
+                    conversation_history: conversationHistory,
+                    is_icebreaker: false,
+                    ai_chat_history: newHistory
+                }
+                const response = await fetch(N8N_GENERATE_REPLY_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                })
+                if (!response.ok) throw new Error('Request error')
+                const data = await response.json()
+                replyText = data.reply || 'No response.'
             }
 
-            const response = await fetch(N8N_GENERATE_REPLY_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            })
-
-            if (!response.ok) throw new Error('Request error')
-            const data = await response.json()
-            setAiChatHistory(prev => [...prev, { role: 'assistant', content: data.reply || 'No response.' }])
+            setAiChatHistory(prev => [...prev, { role: 'assistant', content: replyText }])
         } catch {
             setAiChatHistory(prev => [...prev, { role: 'assistant', content: 'Error generating response.' }])
         } finally {
@@ -18439,6 +18738,7 @@ const SalesInboxPage = () => {
             const { data, count } = await supabase
                 .from('tasks')
                 .select('id, leads!inner(client_id, id)', { count: 'exact' })
+                .eq('client_id', selectedClientId)
                 .eq('leads.client_id', selectedClientId)
                 .neq('leads.is_blacklisted', true)
                 .eq('status', 'PENDING')
@@ -18619,7 +18919,7 @@ const SalesInboxPage = () => {
         }
 
         fetchInteractions()
-    }, [activeLead])
+    }, [activeLead?.id])
 
     // Global Search Effect
     useEffect(() => {
@@ -18700,7 +19000,11 @@ const SalesInboxPage = () => {
         : baseLeads
 
     const followupLeads = filteredLeads.filter(l => l.is_followup)
-    const displayedLeads = showFollowupOnly ? followupLeads : filteredLeads
+    const unreadLeads = filteredLeads.filter(l => (l.unread_count || 0) > 0)
+    
+    let displayedLeads = filteredLeads
+    if (showFollowupOnly) displayedLeads = displayedLeads.filter(l => l.is_followup)
+    if (showUnreadOnly) displayedLeads = displayedLeads.filter(l => (l.unread_count || 0) > 0)
 
     // Helper: days until next follow-up contact
     const getNextFollowupDays = (lead) => {
@@ -18725,6 +19029,7 @@ const SalesInboxPage = () => {
             const { data } = await supabase
                 .from('tasks')
                 .select('id, instruction, leads!inner(id, client_id, nome, empresa, headline, cadence_stage, avatar_url, linkedin_profile_url, total_interactions_count, is_blacklisted, crm_stage, last_task_completed_at, has_engaged, last_interaction_date)')
+                .eq('client_id', selectedClientId)
                 .eq('leads.client_id', selectedClientId)
                 .neq('leads.is_blacklisted', true)
                 .eq('status', 'PENDING')
@@ -18899,7 +19204,24 @@ const SalesInboxPage = () => {
                 is_sender: true,
                 interaction_date: new Date().toISOString()
             }
+            
+            // Optimistic updates for routing logic and UI
             setInteractions(prev => [tempMsg, ...prev])
+            
+            setLeads(prev => prev.map(l => l.id === activeLead.id ? { 
+                ...l, 
+                total_interactions_count: (l.total_interactions_count || 0) + 1,
+                last_interaction_date: tempMsg.interaction_date,
+                _lastMsgIsSender: true
+            } : l))
+            
+            setActiveLead(prev => prev ? {
+                ...prev,
+                total_interactions_count: (prev.total_interactions_count || 0) + 1,
+                last_interaction_date: tempMsg.interaction_date,
+                _lastMsgIsSender: true
+            } : null)
+
             setNewMessage('')
             showToast('Mensagem enviada!')
             await completeTaskIfPending()
@@ -18917,75 +19239,151 @@ const SalesInboxPage = () => {
         setGeneratingReply(true)
         setSdrSeniorGenerated(false)
         setGeneratedReasoning(null)
+
         try {
-            const conversationHistory = interactions
-                .slice().reverse()
-                .map(msg => ({
-                    is_sender: !!msg.is_sender,
-                    content: msg.content || '',
-                    interaction_date: msg.interaction_date || null
-                }))
+            const isIcebreaker = interactions.length === 0
 
-            const payload = {
-                user_id: selectedClientId,
-                lead_id: activeLead.id,
-                lead_name: activeLead.nome || '',
-                lead_headline: activeLead.headline || '',
-                lead_location: activeLead.location || '',
-                lead_reasoning: activeLead.analysis_reasoning || '',
-                lead_icp_reason: activeLead.icp_reason || '',
-                conversation_history: conversationHistory,
-                is_icebreaker: interactions.length === 0
-            }
-
-            const response = await fetch(N8N_GENERATE_REPLY_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            })
-
-            if (!response.ok) throw new Error('Erro na requisição')
-
-            const data = await response.json()
-            if (data.reply) {
-                setNewMessage(data.reply)
-                setDraftMessage(data.reply)
-                setSdrSeniorGenerated(true)
-                if (data.reasoning) {
-                    setGeneratedReasoning(data.reasoning)
+            if (isIcebreaker) {
+                // Empty conversation: generate first-touch icebreaker
+                const payload = {
+                    name: activeLead.nome || '',
+                    headline: activeLead.headline || '',
+                    company: activeLead.empresa || '',
+                    about: activeLead.about || ''
                 }
-            }
 
-            // After 5s, re-fetch the lead's strategic columns + suggested_message (populated by n8n workflow)
-            const leadId = activeLead.id
-            setTimeout(async () => {
-                try {
-                    const { data: updated, error } = await supabase
-                        .from('leads')
-                        .select('last_cadence_level, last_signal_detected, last_psychological_factor, last_forbidden_action, last_strategy_used, suggested_message')
-                        .eq('id', leadId)
-                        .single()
+                const response = await fetch(N8N_GENERATE_ICEBREAKER_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                })
 
-                    if (error || !updated) return
+                if (!response.ok) throw new Error('Erro na requisição')
 
-                    // Update activeLead & leads array
-                    setActiveLead(prev => prev && prev.id === leadId ? { ...prev, ...updated } : prev)
-                    setLeads(prev => prev.map(l => l.id === leadId ? { ...l, ...updated } : l))
+                const data = await response.json()
+                if (data.icebreaker) {
+                    setNewMessage(data.icebreaker)
+                    setDraftMessage(data.icebreaker)
+                    setSdrSeniorGenerated(true)
+                }
+            } else {
+                // Ongoing conversation: generate contextual reply
+                const conversationHistory = interactions
+                    .slice().reverse()
+                    .map(msg => ({
+                        is_sender: !!msg.is_sender,
+                        content: msg.content || '',
+                        interaction_date: msg.interaction_date || null
+                    }))
 
-                    // Update Próximo Passo with DB suggested_message
-                    if (updated.suggested_message) {
-                        setDraftMessage(updated.suggested_message)
-                        setSdrSeniorGenerated(true)
+                const payload = {
+                    user_id: selectedClientId,
+                    lead_id: activeLead.id,
+                    lead_name: activeLead.nome || '',
+                    lead_headline: activeLead.headline || '',
+                    lead_location: activeLead.location || '',
+                    lead_reasoning: activeLead.analysis_reasoning || '',
+                    lead_icp_reason: activeLead.icp_reason || '',
+                    conversation_history: conversationHistory,
+                    is_icebreaker: false
+                }
+
+                const response = await fetch(N8N_GENERATE_REPLY_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                })
+
+                if (!response.ok) throw new Error('Erro na requisição')
+
+                const data = await response.json()
+                if (data.reply) {
+                    setNewMessage(data.reply)
+                    setDraftMessage(data.reply)
+                    setSdrSeniorGenerated(true)
+                    if (data.reasoning) {
+                        setGeneratedReasoning(data.reasoning)
                     }
-                } catch (err) {
-                    console.error('[Raio-X] Error refreshing strategic data:', err)
                 }
-            }, 5000)
+
+                // After 5s, re-fetch the lead's strategic columns + suggested_message (populated by n8n workflow)
+                const leadId = activeLead.id
+                setTimeout(async () => {
+                    try {
+                        const { data: updated, error } = await supabase
+                            .from('leads')
+                            .select('last_cadence_level, last_signal_detected, last_psychological_factor, last_forbidden_action, last_strategy_used, suggested_message')
+                            .eq('id', leadId)
+                            .single()
+
+                        if (error || !updated) return
+
+                        setActiveLead(prev => prev && prev.id === leadId ? { ...prev, ...updated } : prev)
+                        setLeads(prev => prev.map(l => l.id === leadId ? { ...l, ...updated } : l))
+
+                        if (updated.suggested_message) {
+                            setDraftMessage(updated.suggested_message)
+                            setSdrSeniorGenerated(true)
+                        }
+                    } catch (err) {
+                        console.error('[Raio-X] Error refreshing strategic data:', err)
+                    }
+                }, 5000)
+            }
         } catch (error) {
             console.error('[AI] Error generating suggestion:', error)
             alert('❌ Erro ao gerar sugestão. Tente novamente.')
         } finally {
             setGeneratingReply(false)
+        }
+    }
+
+    const handleAnalyzeNow = async () => {
+        if (!activeLead || analyzingLead) return
+        setAnalyzingLead(true)
+        try {
+            const response = await fetch(N8N_ANALYZE_LEAD_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ lead_id: activeLead.id })
+            })
+            if (!response.ok) throw new Error('Erro na requisição')
+            const data = await response.json()
+
+            if (data.success) {
+                // The webhook triggers n8n successfully, but AI processing takes ~5-10s.
+                // Display the success toast immediately, keep spinner spinning, and silently fetch data in 10s.
+                showToast('✅ Análise iniciada. Atualizando em breve...')
+
+                setTimeout(async () => {
+                    try {
+                        const { data: updatedLead, error } = await supabase
+                            .from('leads')
+                            .select('cadence_stage, stage_reasoning, next_action, ready_for_analysis, updated_at, last_interaction_date')
+                            .eq('id', activeLead.id)
+                            .single()
+
+                        if (error) throw error
+
+                        if (updatedLead) {
+                            setActiveLead(prev => prev && prev.id === activeLead.id ? { ...prev, ...updatedLead } : prev)
+                            setLeads(prev => prev.map(l => l.id === activeLead.id ? { ...l, ...updatedLead } : l))
+                        }
+                    } catch (err) {
+                        console.error('[AnalyzeNow] Delayed fetch error:', err)
+                        showToast('❌ Erro ao sincronizar análise.', 'error')
+                    } finally {
+                        setAnalyzingLead(false) // Only stop spinning after the 10s fetch completes
+                    }
+                }, 10000)
+            } else {
+                showToast('Falha ao iniciar análise.', 'error')
+                setAnalyzingLead(false)
+            }
+        } catch (err) {
+            console.error('[AnalyzeNow] Error:', err)
+            showToast('❌ Erro ao analisar. Tente novamente.', 'error')
+            setAnalyzingLead(false) // Only stop on immediate fetch failure
         }
     }
 
@@ -19092,6 +19490,25 @@ const SalesInboxPage = () => {
                                         <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${showFollowupOnly ? 'bg-white/20 text-white' : 'bg-orange-100 text-orange-700'
                                             }`}>
                                             {followupLeads.length}
+                                        </span>
+                                    </button>
+                                )}
+                                {/* Unread filter chip */}
+                                {unreadLeads.length > 0 && (
+                                    <button
+                                        onClick={() => setShowUnreadOnly(!showUnreadOnly)}
+                                        className={`w-full flex items-center justify-between px-3 py-2 rounded-xl border text-xs font-semibold transition-all mb-1 ${showUnreadOnly
+                                            ? 'bg-blue-500 text-white border-blue-500 shadow-sm'
+                                            : 'bg-blue-50 text-blue-600 border-blue-200 hover:bg-blue-100'
+                                            }`}
+                                    >
+                                        <span className="flex items-center gap-1.5">
+                                            <MessageSquare size={12} />
+                                            Unread{showUnreadOnly ? ' (active filter)' : ''}
+                                        </span>
+                                        <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${showUnreadOnly ? 'bg-white/20 text-white' : 'bg-blue-100 text-blue-700'
+                                            }`}>
+                                            {unreadLeads.length}
                                         </span>
                                     </button>
                                 )}
@@ -19566,8 +19983,8 @@ const SalesInboxPage = () => {
                                         </div>
                                     </div>
 
-                                    {/* Raio-X da Negociação */}
-                                    <StrategicContextCard lead={activeLead} isIcebreaker={interactions.length === 0} />
+                                    {/* Negotiation X-Ray */}
+                                    <StrategicContextCard lead={activeLead} isIcebreaker={interactions.length === 0} onAnalyzeNow={handleAnalyzeNow} isAnalyzing={analyzingLead} />
                                 </div>
                             )}
 
@@ -19676,12 +20093,10 @@ const SalesInboxPage = () => {
 }
 
 export default SalesInboxPage
+```
 
-
-======================================================
-==== ARQUIVO: src\pages\SystemInfoPage.jsx
-======================================================
-
+## File: src\pages\SystemInfoPage.jsx
+```javascript
 import React from 'react'
 import { RefreshCw, History, Info, Server, ShieldCheck, Activity } from 'lucide-react'
 
@@ -19768,12 +20183,10 @@ const SystemInfoPage = () => {
 }
 
 export default SystemInfoPage
+```
 
-
-======================================================
-==== ARQUIVO: src\services\api.js
-======================================================
-
+## File: src\services\api.js
+```javascript
 
 export const generateContent = async (cliente, tema, publico, clientData = null, imageUrl = null) => {
     try {
@@ -19810,12 +20223,10 @@ export const generateContent = async (cliente, tema, publico, clientData = null,
         throw error
     }
 }
+```
 
-
-======================================================
-==== ARQUIVO: src\services\supabaseClient.js
-======================================================
-
+## File: src\services\supabaseClient.js
+```javascript
 
 import { createClient } from '@supabase/supabase-js'
 
@@ -19823,94 +20234,5 @@ const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+```
 
-
-======================================================
-==== ARQUIVO: index.html
-======================================================
-
-<!doctype html>
-<html lang="en">
-
-<head>
-  <meta charset="UTF-8" />
-  <link rel="icon" type="image/png" href="/favicon.png" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="theme-color" content="#f97316" />
-  <link rel="manifest" href="/manifest.json" />
-  <title>Link&Lead System</title>
-</head>
-
-<body>
-  <div id="root"></div>
-  <script type="module" src="/src/main.jsx"></script>
-</body>
-
-</html>
-
-======================================================
-==== ARQUIVO: package.json
-======================================================
-
-{
-  "name": "link-lead-system",
-  "private": true,
-  "version": "0.0.0",
-  "type": "module",
-  "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "lint": "eslint .",
-    "preview": "vite preview"
-  },
-  "dependencies": {
-    "@dnd-kit/core": "^6.3.1",
-    "@dnd-kit/sortable": "^10.0.0",
-    "@dnd-kit/utilities": "^3.2.2",
-    "@supabase/supabase-js": "^2.87.1",
-    "date-fns": "^4.1.0",
-    "lucide-react": "^0.561.0",
-    "react": "^19.2.0",
-    "react-datepicker": "^9.0.0",
-    "react-day-picker": "^9.13.0",
-    "react-dom": "^19.2.0",
-    "react-markdown": "^10.1.0",
-    "react-pdf": "^10.3.0",
-    "react-router-dom": "^7.10.1",
-    "sonner": "^2.0.7"
-  },
-  "devDependencies": {
-    "@eslint/js": "^9.39.1",
-    "@types/react": "^19.2.5",
-    "@types/react-dom": "^19.2.3",
-    "@vitejs/plugin-react": "^5.1.1",
-    "autoprefixer": "^10.4.23",
-    "eslint": "^9.39.1",
-    "eslint-plugin-react-hooks": "^7.0.1",
-    "eslint-plugin-react-refresh": "^0.4.24",
-    "globals": "^16.5.0",
-    "postcss": "^8.5.6",
-    "tailwind-scrollbar-hide": "^4.0.0",
-    "tailwindcss": "^3.4.17",
-    "vite": "^7.2.4"
-  }
-}
-
-
-======================================================
-==== ARQUIVO: vite.config.js
-======================================================
-
-import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
-import path from 'path'
-
-// https://vite.dev/config/
-export default defineConfig({
-  plugins: [react()],
-  resolve: {
-    alias: {
-      "@": path.resolve(__dirname, "./src"),
-    },
-  },
-})

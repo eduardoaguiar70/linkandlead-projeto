@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
+import LeadAvatar from './LeadAvatar'
 import { supabase } from '../services/supabaseClient'
 import {
     X, Briefcase, MapPin, ExternalLink, Star, Target,
@@ -261,14 +262,11 @@ const UnifiedLeadModal = ({ lead, onClose, onLeadUpdated, showPipelineFields = f
 
                     <div className="flex items-center gap-3.5">
                         {/* Avatar */}
-                        <div className="w-14 h-14 rounded-full bg-gradient-to-br from-sky-500 to-indigo-600 p-0.5 shrink-0">
-                            <div className="w-full h-full rounded-full bg-slate-800 flex items-center justify-center overflow-hidden">
-                                {lead.avatar_url ? (
-                                    <img src={lead.avatar_url} alt={lead.nome} className="w-full h-full object-cover" />
-                                ) : (
-                                    <span className="text-xl font-bold text-white">{lead.nome?.charAt(0)?.toUpperCase() || '?'}</span>
-                                )}
-                            </div>
+                        <div className="w-14 h-14 shrink-0">
+                            <LeadAvatar
+                                lead={lead}
+                                className="w-full h-full border-2 border-slate-700 shadow-xl"
+                            />
                         </div>
 
                         {/* Info */}

@@ -9,7 +9,7 @@ import {
     Clock,
     ChevronRight
 } from 'lucide-react'
-import SafeImage from './SafeImage'
+import LeadAvatar from './LeadAvatar'
 
 const TYPE_CONFIG = {
     GHOSTING: { icon: AlertTriangle, label: 'Ghosting', color: 'text-red-400' },
@@ -64,20 +64,11 @@ const MissionCard = ({ task, isHighPriority = false }) => {
         >
             <div className="flex items-start gap-3 sm:gap-4">
                 {/* Lead Avatar */}
-                <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-full overflow-hidden shrink-0 bg-gradient-to-br from-gray-800 to-black border border-white/[0.1] flex items-center justify-center">
-                    {lead.avatar_url ? (
-                        <SafeImage
-                            src={lead.avatar_url}
-                            alt={lead.nome || 'Lead'}
-                            className="w-full h-full object-cover"
-                            fallbackText={lead.nome?.charAt(0)?.toUpperCase() || '?'}
-                            containerClassName="w-full h-full flex items-center justify-center text-sm font-bold text-gray-300 bg-gradient-to-br from-gray-800 to-black"
-                        />
-                    ) : (
-                        <span className="text-sm font-bold text-gray-300">
-                            {lead.nome?.charAt(0)?.toUpperCase() || '?'}
-                        </span>
-                    )}
+                <div className="w-10 h-10 sm:w-11 sm:h-11 shrink-0">
+                    <LeadAvatar
+                        lead={lead}
+                        className="w-full h-full"
+                    />
                 </div>
 
                 {/* Content */}

@@ -124,8 +124,11 @@ const LeadDetailModal = ({ lead, onClose, onLeadUpdated }) => {
                         <X size={20} />
                     </button>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-                        <div style={{ width: 56, height: 56, borderRadius: '50%', border: '2px solid rgba(255,255,255,0.2)', overflow: 'hidden', flexShrink: 0, background: '#374151', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px', fontWeight: 700, color: '#fff' }}>
-                            {lead.avatar_url ? <img src={lead.avatar_url} alt={lead.nome} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : lead.nome?.charAt(0)?.toUpperCase() || '?'}
+                        <div style={{ width: 56, height: 56, shrink: 0 }}>
+                            <LeadAvatar
+                                lead={lead}
+                                className="w-full h-full shadow-lg"
+                            />
                         </div>
                         <div style={{ minWidth: 0 }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>

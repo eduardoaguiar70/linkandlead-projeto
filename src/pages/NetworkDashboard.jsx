@@ -39,7 +39,7 @@ import {
 import AddLeadsModal from '../components/AddLeadsModal'
 import LeadDetailModal from '../components/LeadDetailModal'
 import HistorySyncModal from '../components/HistorySyncModal'
-import SafeImage from '../components/SafeImage'
+import LeadAvatar from '../components/LeadAvatar'
 
 const NetworkDashboard = () => {
     const { id: campaignId } = useParams()
@@ -1233,12 +1233,10 @@ const NetworkDashboard = () => {
                                             }`}>
                                             {idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : idx + 1}
                                         </div>
-                                        <div className="w-10 h-10 rounded-full border border-slate-200 overflow-hidden shrink-0 flex items-center justify-center bg-slate-100 text-slate-500 font-bold">
-                                            <SafeImage
-                                                src={lead.avatar_url}
-                                                alt={lead.nome}
-                                                className="w-full h-full object-cover"
-                                                fallbackText={lead.nome?.charAt(0) || '?'}
+                                        <div className="w-10 h-10 shrink-0">
+                                            <LeadAvatar
+                                                lead={lead}
+                                                className="w-full h-full"
                                             />
                                         </div>
                                         <div className="flex-1 min-w-0">
@@ -1602,12 +1600,10 @@ const NetworkDashboard = () => {
 
                                                 <td className="py-3 px-4">
                                                     <div className="flex items-center gap-3">
-                                                        <div className="w-9 h-9 rounded-full bg-slate-200 flex items-center justify-center text-slate-600 font-semibold text-sm border border-slate-300 overflow-hidden shrink-0">
-                                                            <SafeImage
-                                                                src={lead.avatar_url}
-                                                                alt={lead.nome}
-                                                                className="w-full h-full object-cover"
-                                                                fallbackText={lead.nome?.charAt(0) || '?'}
+                                                        <div className="w-9 h-9 shrink-0">
+                                                            <LeadAvatar
+                                                                lead={lead}
+                                                                className="w-full h-full"
                                                             />
                                                         </div>
                                                         <div className="min-w-0">
@@ -1843,8 +1839,11 @@ const NetworkDashboard = () => {
                             {/* BLOCK 1: CONTEXT (Why is this lead here?) */}
                             <div className="bg-white p-5 rounded-xl border border-orange-100 shadow-sm">
                                 <div className="flex items-start gap-4 mb-4">
-                                    <div className="w-14 h-14 rounded-full bg-slate-100 flex items-center justify-center text-lg font-bold text-slate-500 shrink-0 border border-gray-200">
-                                        {selectedLead.avatar_url ? <img src={selectedLead.avatar_url} className="w-full h-full object-cover rounded-full" /> : (selectedLead.nome?.charAt(0) || '?')}
+                                    <div className="w-14 h-14 shrink-0">
+                                        <LeadAvatar
+                                            lead={selectedLead}
+                                            className="w-full h-full shadow-lg"
+                                        />
                                     </div>
                                     <div className="flex-1">
                                         <div className="flex justify-between items-start">

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { supabase } from '../services/supabaseClient'
 import { useClientSelection } from '../contexts/ClientSelectionContext'
 import { toast } from 'sonner'
+import LeadAvatar from './LeadAvatar'
 
 const GENERATE_ICEBREAKER_URL = 'https://n8n-n8n-start.kfocge.easypanel.host/webhook/generate-icebreaker'
 const ACCEPT_AND_SEND_URL = 'https://n8n-n8n-start.kfocge.easypanel.host/webhook/accept-and-send'
@@ -187,12 +188,14 @@ const ConnectionRequests = () => {
                         className="flex flex-col border border-gray-200 rounded-lg bg-white shadow-sm overflow-hidden"
                     >
                         <div className="flex items-center p-4 gap-4">
-                            <img
-                                src={req.avatar_url || 'https://via.placeholder.com/150'}
-                                alt={req.name || '?'}
-                                className="w-14 h-14 rounded-full object-cover border border-gray-200 shrink-0"
-                                referrerPolicy="no-referrer"
-                            />
+                            <div className="w-14 h-14 shrink-0">
+                                <LeadAvatar
+                                    avatar_img={req.avatar_img}
+                                    avatar_url={req.avatar_url}
+                                    name={req.name}
+                                    className="w-full h-full"
+                                />
+                            </div>
                             <div className="flex flex-col flex-1 min-w-0">
                                 <div className="flex items-center gap-2 flex-wrap">
                                     <span className="font-semibold text-gray-900 truncate">
