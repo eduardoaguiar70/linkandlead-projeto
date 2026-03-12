@@ -6,7 +6,9 @@ import { Search, Send, MoreVertical, Phone, Mail, MapPin, Briefcase, Zap, Star, 
 import SafeImage from '../components/SafeImage'
 import UnifiedLeadModal from '../components/UnifiedLeadModal'
 const N8N_GENERATE_REPLY_URL = 'https://n8n-n8n-start.kfocge.easypanel.host/webhook/generate-reply'
+const N8N_GENERATE_ICEBREAKER_URL = 'https://n8n-n8n-start.kfocge.easypanel.host/webhook/generate-icebreaker'
 const N8N_SEND_MESSAGE_URL = 'https://n8n-n8n-start.kfocge.easypanel.host/webhook/send-linkedin-message'
+const N8N_ANALYZE_LEAD_URL = 'https://n8n-n8n-start.kfocge.easypanel.host/webhook/analyze-lead-on-demand'
 import StrategicContextCard from '../components/StrategicContextCard'
 
 // Returns true if lead meets the strict conditions to be considered a task
@@ -51,8 +53,10 @@ const SalesInboxPage = () => {
     const [selectedSuggestionIdx, setSelectedSuggestionIdx] = useState(null)
     const [showLeadModal, setShowLeadModal] = useState(false)
     const [showFollowupOnly, setShowFollowupOnly] = useState(false)
+    const [showUnreadOnly, setShowUnreadOnly] = useState(false)
     const [generatingReply, setGeneratingReply] = useState(false)
     const [sdrSeniorGenerated, setSdrSeniorGenerated] = useState(false)
+    const [analyzingLead, setAnalyzingLead] = useState(false)
     const [generatedReasoning, setGeneratedReasoning] = useState(null)
 
     // Quick Actions State
@@ -138,36 +142,58 @@ const SalesInboxPage = () => {
         setAiLoading(true)
 
         try {
-            const conversationHistory = interactions
-                .slice().reverse()
-                .map(msg => ({
-                    is_sender: !!msg.is_sender,
-                    content: msg.content || '',
-                    interaction_date: msg.interaction_date || null
-                }))
+            const isIcebreaker = interactions.length === 0
+            let replyText = ''
 
-            const payload = {
-                user_id: selectedClientId,
-                lead_id: activeLead.id,
-                lead_name: activeLead.nome || '',
-                lead_headline: activeLead.headline || '',
-                lead_location: activeLead.location || '',
-                lead_reasoning: activeLead.analysis_reasoning || '',
-                lead_icp_reason: activeLead.icp_reason || '',
-                conversation_history: conversationHistory,
-                is_icebreaker: interactions.length === 0,
-                ai_chat_history: newHistory
+            if (isIcebreaker) {
+                // Empty conversation: generate a first-touch icebreaker
+                const payload = {
+                    name: activeLead.nome || '',
+                    headline: activeLead.headline || '',
+                    company: activeLead.empresa || '',
+                    about: activeLead.about || ''
+                }
+                const response = await fetch(N8N_GENERATE_ICEBREAKER_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                })
+                if (!response.ok) throw new Error('Request error')
+                const data = await response.json()
+                replyText = data.icebreaker || 'No response.'
+            } else {
+                // Ongoing conversation: generate a contextual reply
+                const conversationHistory = interactions
+                    .slice().reverse()
+                    .map(msg => ({
+                        is_sender: !!msg.is_sender,
+                        content: msg.content || '',
+                        interaction_date: msg.interaction_date || null
+                    }))
+
+                const payload = {
+                    user_id: selectedClientId,
+                    lead_id: activeLead.id,
+                    lead_name: activeLead.nome || '',
+                    lead_headline: activeLead.headline || '',
+                    lead_location: activeLead.location || '',
+                    lead_reasoning: activeLead.analysis_reasoning || '',
+                    lead_icp_reason: activeLead.icp_reason || '',
+                    conversation_history: conversationHistory,
+                    is_icebreaker: false,
+                    ai_chat_history: newHistory
+                }
+                const response = await fetch(N8N_GENERATE_REPLY_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                })
+                if (!response.ok) throw new Error('Request error')
+                const data = await response.json()
+                replyText = data.reply || 'No response.'
             }
 
-            const response = await fetch(N8N_GENERATE_REPLY_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            })
-
-            if (!response.ok) throw new Error('Request error')
-            const data = await response.json()
-            setAiChatHistory(prev => [...prev, { role: 'assistant', content: data.reply || 'No response.' }])
+            setAiChatHistory(prev => [...prev, { role: 'assistant', content: replyText }])
         } catch {
             setAiChatHistory(prev => [...prev, { role: 'assistant', content: 'Error generating response.' }])
         } finally {
@@ -453,7 +479,11 @@ const SalesInboxPage = () => {
         : baseLeads
 
     const followupLeads = filteredLeads.filter(l => l.is_followup)
-    const displayedLeads = showFollowupOnly ? followupLeads : filteredLeads
+    const unreadLeads = filteredLeads.filter(l => (l.unread_count || 0) > 0)
+    
+    let displayedLeads = filteredLeads
+    if (showFollowupOnly) displayedLeads = displayedLeads.filter(l => l.is_followup)
+    if (showUnreadOnly) displayedLeads = displayedLeads.filter(l => (l.unread_count || 0) > 0)
 
     // Helper: days until next follow-up contact
     const getNextFollowupDays = (lead) => {
@@ -670,75 +700,151 @@ const SalesInboxPage = () => {
         setGeneratingReply(true)
         setSdrSeniorGenerated(false)
         setGeneratedReasoning(null)
+
         try {
-            const conversationHistory = interactions
-                .slice().reverse()
-                .map(msg => ({
-                    is_sender: !!msg.is_sender,
-                    content: msg.content || '',
-                    interaction_date: msg.interaction_date || null
-                }))
+            const isIcebreaker = interactions.length === 0
 
-            const payload = {
-                user_id: selectedClientId,
-                lead_id: activeLead.id,
-                lead_name: activeLead.nome || '',
-                lead_headline: activeLead.headline || '',
-                lead_location: activeLead.location || '',
-                lead_reasoning: activeLead.analysis_reasoning || '',
-                lead_icp_reason: activeLead.icp_reason || '',
-                conversation_history: conversationHistory,
-                is_icebreaker: interactions.length === 0
-            }
-
-            const response = await fetch(N8N_GENERATE_REPLY_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            })
-
-            if (!response.ok) throw new Error('Erro na requisição')
-
-            const data = await response.json()
-            if (data.reply) {
-                setNewMessage(data.reply)
-                setDraftMessage(data.reply)
-                setSdrSeniorGenerated(true)
-                if (data.reasoning) {
-                    setGeneratedReasoning(data.reasoning)
+            if (isIcebreaker) {
+                // Empty conversation: generate first-touch icebreaker
+                const payload = {
+                    name: activeLead.nome || '',
+                    headline: activeLead.headline || '',
+                    company: activeLead.empresa || '',
+                    about: activeLead.about || ''
                 }
-            }
 
-            // After 5s, re-fetch the lead's strategic columns + suggested_message (populated by n8n workflow)
-            const leadId = activeLead.id
-            setTimeout(async () => {
-                try {
-                    const { data: updated, error } = await supabase
-                        .from('leads')
-                        .select('last_cadence_level, last_signal_detected, last_psychological_factor, last_forbidden_action, last_strategy_used, suggested_message')
-                        .eq('id', leadId)
-                        .single()
+                const response = await fetch(N8N_GENERATE_ICEBREAKER_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                })
 
-                    if (error || !updated) return
+                if (!response.ok) throw new Error('Erro na requisição')
 
-                    // Update activeLead & leads array
-                    setActiveLead(prev => prev && prev.id === leadId ? { ...prev, ...updated } : prev)
-                    setLeads(prev => prev.map(l => l.id === leadId ? { ...l, ...updated } : l))
+                const data = await response.json()
+                if (data.icebreaker) {
+                    setNewMessage(data.icebreaker)
+                    setDraftMessage(data.icebreaker)
+                    setSdrSeniorGenerated(true)
+                }
+            } else {
+                // Ongoing conversation: generate contextual reply
+                const conversationHistory = interactions
+                    .slice().reverse()
+                    .map(msg => ({
+                        is_sender: !!msg.is_sender,
+                        content: msg.content || '',
+                        interaction_date: msg.interaction_date || null
+                    }))
 
-                    // Update Próximo Passo with DB suggested_message
-                    if (updated.suggested_message) {
-                        setDraftMessage(updated.suggested_message)
-                        setSdrSeniorGenerated(true)
+                const payload = {
+                    user_id: selectedClientId,
+                    lead_id: activeLead.id,
+                    lead_name: activeLead.nome || '',
+                    lead_headline: activeLead.headline || '',
+                    lead_location: activeLead.location || '',
+                    lead_reasoning: activeLead.analysis_reasoning || '',
+                    lead_icp_reason: activeLead.icp_reason || '',
+                    conversation_history: conversationHistory,
+                    is_icebreaker: false
+                }
+
+                const response = await fetch(N8N_GENERATE_REPLY_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                })
+
+                if (!response.ok) throw new Error('Erro na requisição')
+
+                const data = await response.json()
+                if (data.reply) {
+                    setNewMessage(data.reply)
+                    setDraftMessage(data.reply)
+                    setSdrSeniorGenerated(true)
+                    if (data.reasoning) {
+                        setGeneratedReasoning(data.reasoning)
                     }
-                } catch (err) {
-                    console.error('[Raio-X] Error refreshing strategic data:', err)
                 }
-            }, 5000)
+
+                // After 5s, re-fetch the lead's strategic columns + suggested_message (populated by n8n workflow)
+                const leadId = activeLead.id
+                setTimeout(async () => {
+                    try {
+                        const { data: updated, error } = await supabase
+                            .from('leads')
+                            .select('last_cadence_level, last_signal_detected, last_psychological_factor, last_forbidden_action, last_strategy_used, suggested_message')
+                            .eq('id', leadId)
+                            .single()
+
+                        if (error || !updated) return
+
+                        setActiveLead(prev => prev && prev.id === leadId ? { ...prev, ...updated } : prev)
+                        setLeads(prev => prev.map(l => l.id === leadId ? { ...l, ...updated } : l))
+
+                        if (updated.suggested_message) {
+                            setDraftMessage(updated.suggested_message)
+                            setSdrSeniorGenerated(true)
+                        }
+                    } catch (err) {
+                        console.error('[Raio-X] Error refreshing strategic data:', err)
+                    }
+                }, 5000)
+            }
         } catch (error) {
             console.error('[AI] Error generating suggestion:', error)
             alert('❌ Erro ao gerar sugestão. Tente novamente.')
         } finally {
             setGeneratingReply(false)
+        }
+    }
+
+    const handleAnalyzeNow = async () => {
+        if (!activeLead || analyzingLead) return
+        setAnalyzingLead(true)
+        try {
+            const response = await fetch(N8N_ANALYZE_LEAD_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ lead_id: activeLead.id })
+            })
+            if (!response.ok) throw new Error('Erro na requisição')
+            const data = await response.json()
+
+            if (data.success) {
+                // The webhook triggers n8n successfully, but AI processing takes ~5-10s.
+                // Display the success toast immediately, keep spinner spinning, and silently fetch data in 10s.
+                showToast('✅ Análise iniciada. Atualizando em breve...')
+
+                setTimeout(async () => {
+                    try {
+                        const { data: updatedLead, error } = await supabase
+                            .from('leads')
+                            .select('cadence_stage, stage_reasoning, next_action, ready_for_analysis, updated_at, last_interaction_date')
+                            .eq('id', activeLead.id)
+                            .single()
+
+                        if (error) throw error
+
+                        if (updatedLead) {
+                            setActiveLead(prev => prev && prev.id === activeLead.id ? { ...prev, ...updatedLead } : prev)
+                            setLeads(prev => prev.map(l => l.id === activeLead.id ? { ...l, ...updatedLead } : l))
+                        }
+                    } catch (err) {
+                        console.error('[AnalyzeNow] Delayed fetch error:', err)
+                        showToast('❌ Erro ao sincronizar análise.', 'error')
+                    } finally {
+                        setAnalyzingLead(false) // Only stop spinning after the 10s fetch completes
+                    }
+                }, 10000)
+            } else {
+                showToast('Falha ao iniciar análise.', 'error')
+                setAnalyzingLead(false)
+            }
+        } catch (err) {
+            console.error('[AnalyzeNow] Error:', err)
+            showToast('❌ Erro ao analisar. Tente novamente.', 'error')
+            setAnalyzingLead(false) // Only stop on immediate fetch failure
         }
     }
 
@@ -845,6 +951,25 @@ const SalesInboxPage = () => {
                                         <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${showFollowupOnly ? 'bg-white/20 text-white' : 'bg-orange-100 text-orange-700'
                                             }`}>
                                             {followupLeads.length}
+                                        </span>
+                                    </button>
+                                )}
+                                {/* Unread filter chip */}
+                                {unreadLeads.length > 0 && (
+                                    <button
+                                        onClick={() => setShowUnreadOnly(!showUnreadOnly)}
+                                        className={`w-full flex items-center justify-between px-3 py-2 rounded-xl border text-xs font-semibold transition-all mb-1 ${showUnreadOnly
+                                            ? 'bg-blue-500 text-white border-blue-500 shadow-sm'
+                                            : 'bg-blue-50 text-blue-600 border-blue-200 hover:bg-blue-100'
+                                            }`}
+                                    >
+                                        <span className="flex items-center gap-1.5">
+                                            <MessageSquare size={12} />
+                                            Unread{showUnreadOnly ? ' (active filter)' : ''}
+                                        </span>
+                                        <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${showUnreadOnly ? 'bg-white/20 text-white' : 'bg-blue-100 text-blue-700'
+                                            }`}>
+                                            {unreadLeads.length}
                                         </span>
                                     </button>
                                 )}
@@ -1319,8 +1444,8 @@ const SalesInboxPage = () => {
                                         </div>
                                     </div>
 
-                                    {/* Raio-X da Negociação */}
-                                    <StrategicContextCard lead={activeLead} isIcebreaker={interactions.length === 0} />
+                                    {/* Negotiation X-Ray */}
+                                    <StrategicContextCard lead={activeLead} isIcebreaker={interactions.length === 0} onAnalyzeNow={handleAnalyzeNow} isAnalyzing={analyzingLead} />
                                 </div>
                             )}
 
