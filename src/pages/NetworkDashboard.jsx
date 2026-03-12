@@ -87,6 +87,7 @@ const NetworkDashboard = () => {
     const [messageDraft, setMessageDraft] = useState('')
     const [isAddLeadsModalOpen, setIsAddLeadsModalOpen] = useState(false)
     const [syncLoading, setSyncLoading] = useState(false)
+    const [emergencySyncLoading, setEmergencySyncLoading] = useState(false)
     const [clientSyncTimestamp, setClientSyncTimestamp] = useState(null) // from clients.last_sync_timestamp
 
     // Bulk History Import State (legacy queue kept for backward compat)
@@ -447,6 +448,40 @@ const NetworkDashboard = () => {
             setNotification({ message: 'Error starting enrichment queue.', type: 'error' })
         } finally {
             setEnrichmentLoading(false)
+            setTimeout(() => setNotification(null), 5000)
+        }
+    }
+
+    const handleEmergencySync = async () => {
+        if (!selectedClientId) return
+        setEmergencySyncLoading(true)
+
+        try {
+            const response = await fetch('https://n8n-n8n-start.kfocge.easypanel.host/webhook/emergency-sync', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    client_id: selectedClientId
+                })
+            })
+
+            if (response.ok) {
+                setNotification({
+                    message: "Sincronização iniciada! As novas conexões aparecerão aqui em instantes.",
+                    type: 'success'
+                })
+            } else {
+                throw new Error('Webhook failed')
+            }
+
+        } catch (error) {
+            console.error('Emergency sync error:', error)
+            setNotification({
+                message: "Erro ao iniciar sincronização de emergência.",
+                type: 'error'
+            })
+        } finally {
+            setEmergencySyncLoading(false)
             setTimeout(() => setNotification(null), 5000)
         }
     }
@@ -1288,6 +1323,22 @@ const NetworkDashboard = () => {
                                     {syncProgress.status === 'running' ? `Syncing (${syncProgress.current}/${syncProgress.total})` : 'Import History'}
                                 </button>
                             </div>
+
+                            <button
+                                onClick={handleEmergencySync}
+                                disabled={emergencySyncLoading}
+                                className={`flex items-center gap-2 px-4 py-2.5 rounded-lg border font-semibold text-sm transition-all ${emergencySyncLoading
+                                    ? 'bg-slate-50 text-slate-400 cursor-not-allowed border-slate-200'
+                                    : 'bg-white text-slate-600 border-slate-200 hover:border-orange-200 hover:text-orange-600 hover:bg-orange-50'
+                                    }`}
+                            >
+                                {emergencySyncLoading ? (
+                                    <Loader2 size={16} className="animate-spin" />
+                                ) : (
+                                    <span>🔄</span>
+                                )}
+                                Sync New Connections
+                            </button>
 
                             <button
                                 onClick={() => setIsAddLeadsModalOpen(true)}
