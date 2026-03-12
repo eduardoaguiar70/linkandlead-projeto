@@ -3,8 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '../services/supabaseClient'
 import {
     X, Briefcase, MapPin, ExternalLink, Star, Target,
-    MessageCircle, DollarSign, Calendar, UserPlus, UserCheck,
-    ChevronDown, ChevronUp, Bell, Clock, Kanban
+    MessageCircle, DollarSign, UserPlus, UserCheck,
+    ChevronDown, ChevronUp, Bell, Clock, Kanban, FileText
 } from 'lucide-react'
 
 // ── Color Maps ────────────────────────────────────────────────────────────────
@@ -75,7 +75,10 @@ const UnifiedLeadModal = ({ lead, onClose, onLeadUpdated, showPipelineFields = f
     const [customInterval, setCustomInterval] = useState('')
     const [showCustomInterval, setShowCustomInterval] = useState(false)
     const [followupUntilResponded, setFollowupUntilResponded] = useState(lead?.followup_until_responded !== false)
+    const [showFollowupSettings, setShowFollowupSettings] = useState(false)
+    const [observations, setObservations] = useState(lead?.observations || '')
     const [enrichedData, setEnrichedData] = useState(null)
+    const [lastReceivedMsg, setLastReceivedMsg] = useState(null)
 
     // Pipeline-only state
     const [tier, setTier] = useState(lead?.tier || 0)
@@ -85,20 +88,32 @@ const UnifiedLeadModal = ({ lead, onClose, onLeadUpdated, showPipelineFields = f
     const fetchEnriched = useCallback(async () => {
         if (!lead?.id) return
         try {
-            const { data } = await supabase
-                .from('leads')
-                .select('cadence_stage, icp_reason, stage_reasoning, conversation_summary, is_followup, followup_interval_days, followup_started_at, followup_until_responded, proposal_value, tier, crm_stage, created_at, total_interactions_count')
-                .eq('id', lead.id)
-                .single()
+            const [{ data }, { data: lastMsg }] = await Promise.all([
+                supabase
+                    .from('leads')
+                    .select('cadence_stage, icp_reason, stage_reasoning, conversation_summary, is_followup, followup_interval_days, followup_started_at, followup_until_responded, proposal_value, tier, crm_stage, created_at, total_interactions_count, observations')
+                    .eq('id', lead.id)
+                    .single(),
+                supabase
+                    .from('interactions')
+                    .select('interaction_date')
+                    .eq('lead_id', lead.id)
+                    .eq('is_sender', false)
+                    .order('interaction_date', { ascending: false })
+                    .limit(1)
+                    .maybeSingle()
+            ])
             if (data) {
                 setEnrichedData(data)
                 setIsFollowup(data.is_followup || false)
                 setFollowupInterval(data.followup_interval_days || 7)
                 setFollowupUntilResponded(data.followup_until_responded !== false)
                 setProposalValue(data.proposal_value || '')
+                setObservations(data.observations || '')
                 setTier(data.tier || 0)
                 setCrmStage(data.crm_stage || '')
             }
+            setLastReceivedMsg(lastMsg || null)
         } catch (err) {
             console.error('[UnifiedLeadModal] fetch error:', err)
         }
@@ -116,6 +131,7 @@ const UnifiedLeadModal = ({ lead, onClose, onLeadUpdated, showPipelineFields = f
             setIsFollowup(lead.is_followup || false)
             setFollowupInterval(lead.followup_interval_days || 7)
             setFollowupUntilResponded(lead.followup_until_responded !== false)
+            setObservations(lead.observations || '')
         }
     }, [lead])
 
@@ -136,6 +152,10 @@ const UnifiedLeadModal = ({ lead, onClose, onLeadUpdated, showPipelineFields = f
     }
 
     // ── Handlers ─────────────────────────────────────────────────────────────
+
+    const handleObservationsBlur = () => {
+        save('observations', observations)
+    }
 
     const handleFollowupToggle = () => {
         const next = !isFollowup
@@ -191,9 +211,6 @@ const UnifiedLeadModal = ({ lead, onClose, onLeadUpdated, showPipelineFields = f
     const icpConfig = ICP_CONFIG[lead.icp_score] || { color: '#6b7280', bg: 'bg-slate-50', border: 'border-slate-200', text: 'text-slate-500', label: icpScore }
 
     const cadStage = enrichedData?.cadence_stage || lead.cadence_stage || '—'
-    const cadColor = CAD_COLOR[cadStage] || '#6b7280'
-    const cadLabel = CAD_LABEL[cadStage] || null
-
     const interactionCount = enrichedData?.total_interactions_count ?? lead.total_interactions_count ?? 0
     const interactionColor = interactionCount > 5 ? 'text-emerald-500' : interactionCount > 0 ? 'text-amber-500' : 'text-red-400'
     const interactionBg = interactionCount > 5 ? 'bg-emerald-50' : interactionCount > 0 ? 'bg-amber-50' : 'bg-red-50'
@@ -202,10 +219,20 @@ const UnifiedLeadModal = ({ lead, onClose, onLeadUpdated, showPipelineFields = f
     const cadText = cadStage.startsWith?.('G') ? (parseInt(cadStage.slice(1)) >= 4 ? 'text-orange-500' : 'text-blue-500') : 'text-slate-500'
     const cadBg = cadStage.startsWith?.('G') ? (parseInt(cadStage.slice(1)) >= 4 ? 'bg-orange-50' : 'bg-blue-50') : 'bg-slate-50'
     const cadBorder = cadStage.startsWith?.('G') ? (parseInt(cadStage.slice(1)) >= 4 ? 'border-orange-200' : 'border-blue-200') : 'border-slate-200'
+    const cadLabel = CAD_LABEL[cadStage] || null
 
     const icpReason = enrichedData?.icp_reason || lead.icp_reason || null
     const stageReasoning = enrichedData?.stage_reasoning || lead.stage_reasoning || null
-    const connectionDate = enrichedData?.created_at || lead.created_at
+
+    // Days since last received message
+    const getDaysAgo = (dateStr) => {
+        if (!dateStr) return null
+        const diff = Date.now() - new Date(dateStr).getTime()
+        const days = Math.floor(diff / 86400000)
+        if (days === 0) return 'Today'
+        if (days === 1) return '1 day ago'
+        return `${days} days ago`
+    }
 
     // ── Render ───────────────────────────────────────────────────────────────
 
@@ -312,17 +339,23 @@ const UnifiedLeadModal = ({ lead, onClose, onLeadUpdated, showPipelineFields = f
                     {/* ── Info Row: Connection Date + Proposal ── */}
                     <div className="px-5 py-4 border-b border-slate-100">
                         <div className="grid grid-cols-2 gap-3">
-                            {/* Connection Date */}
+                            {/* Last Received Message */}
                             <div>
                                 <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-1 mb-1.5">
-                                    <Calendar size={11} /> Connection Date
+                                    <Clock size={11} /> Last Msg. Received
                                 </label>
-                                <span className="text-sm font-medium text-slate-700">
-                                    {connectionDate
-                                        ? new Date(connectionDate).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })
-                                        : '—'
-                                    }
-                                </span>
+                                {lastReceivedMsg?.interaction_date ? (
+                                    <div>
+                                        <span className="text-sm font-bold text-slate-700 block">
+                                            {getDaysAgo(lastReceivedMsg.interaction_date)}
+                                        </span>
+                                        <span className="text-[11px] text-slate-400">
+                                            {new Date(lastReceivedMsg.interaction_date).toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                        </span>
+                                    </div>
+                                ) : (
+                                    <span className="text-sm text-slate-400">None</span>
+                                )}
                             </div>
 
                             {/* Proposal Value */}
@@ -341,6 +374,20 @@ const UnifiedLeadModal = ({ lead, onClose, onLeadUpdated, showPipelineFields = f
                                 />
                             </div>
                         </div>
+                    </div>
+
+                    {/* Observations */}
+                    <div className="px-5 py-4 border-b border-slate-100">
+                        <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-1 mb-1.5">
+                            <FileText size={11} /> Observations
+                        </label>
+                        <textarea
+                            value={observations}
+                            onChange={e => setObservations(e.target.value)}
+                            onBlur={handleObservationsBlur}
+                            placeholder="Escreva detalhes importantes, dores da empresa, notas confidenciais..."
+                            className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm text-slate-700 bg-white outline-none focus:border-orange-300 focus:ring-1 focus:ring-orange-200 resize-y min-h-[80px] custom-scrollbar transition"
+                        />
                     </div>
 
                     {/* ── Pipeline-Only Fields ── */}
@@ -388,75 +435,88 @@ const UnifiedLeadModal = ({ lead, onClose, onLeadUpdated, showPipelineFields = f
 
                     {/* Follow-up config panel — shown when active */}
                     {isFollowup && (
-                        <div className="px-5 py-3 border-b border-slate-200 space-y-3">
-                            <div className="flex items-center gap-2 mb-1">
-                                <Bell size={13} className="text-orange-500" />
-                                <span className="text-[11px] font-bold text-slate-600 uppercase tracking-wider">Follow-up Settings</span>
-                            </div>
+                        <div className="px-5 py-3 border-b border-slate-200">
+                            {/* Accordion Header */}
+                            <button
+                                onClick={() => setShowFollowupSettings(!showFollowupSettings)}
+                                className="w-full flex items-center justify-between"
+                            >
+                                <div className="flex items-center gap-2">
+                                    <Bell size={13} className="text-orange-500" />
+                                    <span className="text-[11px] font-bold text-slate-600 uppercase tracking-wider">Follow-up Settings</span>
+                                </div>
+                                {showFollowupSettings ? <ChevronUp size={14} className="text-slate-400" /> : <ChevronDown size={14} className="text-slate-400" />}
+                            </button>
 
-                            {/* Interval selector */}
-                            <div>
-                                <p className="text-[11px] text-slate-400 mb-2">Contact every:</p>
-                                <div className="flex items-center gap-1.5 flex-wrap">
-                                    {[3, 7, 14].map(d => (
+                            {/* Accordion Body */}
+                            {showFollowupSettings && (
+                                <div className="mt-3 space-y-3">
+                                    {/* Interval selector */}
+                                    <div>
+                                        <p className="text-[11px] text-slate-400 mb-2">Contact every:</p>
+                                        <div className="flex items-center gap-1.5 flex-wrap">
+                                            {[3, 7, 14].map(d => (
+                                                <button
+                                                    key={d}
+                                                    onClick={() => handleIntervalChange(d)}
+                                                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${followupInterval === d && !showCustomInterval
+                                                        ? 'bg-orange-500 text-white border-orange-500 shadow-sm'
+                                                        : 'bg-white text-slate-600 border-slate-200 hover:border-orange-300'
+                                                        }`}
+                                                >
+                                                    {d}d
+                                                </button>
+                                            ))}
+                                            <button
+                                                onClick={() => setShowCustomInterval(!showCustomInterval)}
+                                                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${showCustomInterval || (![3, 7, 14].includes(followupInterval))
+                                                    ? 'bg-orange-500 text-white border-orange-500'
+                                                    : 'bg-white text-slate-600 border-slate-200 hover:border-orange-300'
+                                                    }`}
+                                            >
+                                                Custom
+                                            </button>
+                                            {showCustomInterval && (
+                                                <div className="flex items-center gap-1">
+                                                    <input
+                                                        type="number"
+                                                        min="1"
+                                                        max="90"
+                                                        placeholder="days"
+                                                        value={customInterval}
+                                                        onChange={e => setCustomInterval(e.target.value)}
+                                                        className="w-16 px-2 py-1.5 rounded-lg border border-slate-200 text-xs outline-none focus:border-orange-300"
+                                                    />
+                                                    <button
+                                                        onClick={handleCustomIntervalSave}
+                                                        className="px-2 py-1.5 rounded-lg bg-orange-500 text-white text-xs font-bold hover:bg-orange-600 transition"
+                                                    >OK</button>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* Until responded toggle */}
+                                    <div className="flex items-center gap-2">
                                         <button
-                                            key={d}
-                                            onClick={() => handleIntervalChange(d)}
-                                            className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${followupInterval === d && !showCustomInterval
-                                                ? 'bg-orange-500 text-white border-orange-500 shadow-sm'
-                                                : 'bg-white text-slate-600 border-slate-200 hover:border-orange-300'
+                                            type="button"
+                                            onClick={handleUntilRespondedToggle}
+                                            className={`relative inline-flex shrink-0 items-center w-9 h-5 rounded-full transition-colors ${followupUntilResponded ? 'bg-orange-500' : 'bg-slate-200'
                                                 }`}
                                         >
-                                            {d}d
+                                            <span className={`inline-block w-4 h-4 rounded-full bg-white shadow transition-transform ${followupUntilResponded ? 'translate-x-[18px]' : 'translate-x-[2px]'
+                                                }`} />
                                         </button>
-                                    ))}
-                                    <button
-                                        onClick={() => setShowCustomInterval(!showCustomInterval)}
-                                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${showCustomInterval || (![3, 7, 14].includes(followupInterval))
-                                            ? 'bg-orange-500 text-white border-orange-500'
-                                            : 'bg-white text-slate-600 border-slate-200 hover:border-orange-300'
-                                            }`}
-                                    >
-                                        Custom
-                                    </button>
-                                    {showCustomInterval && (
-                                        <div className="flex items-center gap-1">
-                                            <input
-                                                type="number"
-                                                min="1"
-                                                max="90"
-                                                placeholder="days"
-                                                value={customInterval}
-                                                onChange={e => setCustomInterval(e.target.value)}
-                                                className="w-16 px-2 py-1.5 rounded-lg border border-slate-200 text-xs outline-none focus:border-orange-300"
-                                            />
-                                            <button
-                                                onClick={handleCustomIntervalSave}
-                                                className="px-2 py-1.5 rounded-lg bg-orange-500 text-white text-xs font-bold hover:bg-orange-600 transition"
-                                            >OK</button>
-                                        </div>
-                                    )}
+                                        <span className="text-xs text-slate-600">Stop when lead replies</span>
+                                    </div>
+
+                                    {/* Summary line */}
+                                    <p className="text-[10px] text-slate-400 italic">
+                                        <Clock size={10} className="inline mr-1" />
+                                        Contacting every <strong className="text-slate-600">{followupInterval} days</strong>{followupUntilResponded ? ', until they reply' : ''}.
+                                    </p>
                                 </div>
-                            </div>
-
-                            {/* Until responded toggle */}
-                            <div className="flex items-center gap-2">
-                                <button
-                                    onClick={handleUntilRespondedToggle}
-                                    className={`relative w-9 h-5 rounded-full transition-colors ${followupUntilResponded ? 'bg-orange-500' : 'bg-slate-200'
-                                        }`}
-                                >
-                                    <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${followupUntilResponded ? 'translate-x-4' : 'translate-x-0.5'
-                                        }`} />
-                                </button>
-                                <span className="text-xs text-slate-600">Stop when lead replies</span>
-                            </div>
-
-                            {/* Summary line */}
-                            <p className="text-[10px] text-slate-400 italic">
-                                <Clock size={10} className="inline mr-1" />
-                                Contacting every <strong className="text-slate-600">{followupInterval} days</strong>{followupUntilResponded ? ', until they reply' : ''}.
-                            </p>
+                            )}
                         </div>
                     )}
 
