@@ -32,25 +32,18 @@ const ClientPortal = () => {
     const fetchPost = async (numericId) => {
         setLoading(true);
         try {
-            const { data, error } = await supabase
-                .from('tabela_projetofred1')
-                .select('*')
-                .eq('id', numericId)
-                .single();
+            // Use secure RPC for public post details
+            const { data: portalData, error } = await supabase.rpc('get_public_post_details', { p_post_id: numericId })
 
-            if (error) {
-                // PGRST116 means no rows returned (JSON) or row count 0
-                if (error.code === 'PGRST116') {
-                    throw new Error('Post não encontrado ou acesso negado.');
-                }
-                throw error;
+            if (error || (portalData && portalData.error)) {
+                throw new Error(portalData?.error || error.message);
             }
 
-            if (!data) {
+            if (!portalData || !portalData.post) {
                 throw new Error('Post não encontrado.');
             }
 
-            setPost(data);
+            setPost(portalData.post);
         } catch (err) {
             console.error(err);
             setError(err.message || 'Erro ao carregar o post.');
@@ -62,12 +55,13 @@ const ClientPortal = () => {
     const handleApprove = async () => {
         setActionLoading(true)
         try {
-            const { error } = await supabase
-                .from('tabela_projetofred1')
-                .update({ status: 'Aprovado' })
-                .eq('id', id)
+            // Use secure RPC for status update
+            const { data, error } = await supabase.rpc('update_public_post', {
+                p_post_id: id,
+                p_status: 'Aprovado'
+            })
 
-            if (error) throw error
+            if (error || (data && data.error)) throw new Error(data?.error || error.message)
 
             setPost(prev => ({ ...prev, status: 'Aprovado' }))
             setSuccessMessage('Conteúdo aprovado! Em breve será publicado.')
@@ -83,15 +77,14 @@ const ClientPortal = () => {
 
         setActionLoading(true)
         try {
-            const { error } = await supabase
-                .from('tabela_projetofred1')
-                .update({
-                    status: 'Revisão',
-                    feedback_cliente: feedbackText
-                })
-                .eq('id', id)
+            // Use secure RPC for revision status and feedback
+            const { data, error } = await supabase.rpc('update_public_post', {
+                p_post_id: id,
+                p_status: 'Revisão',
+                p_feedback: feedbackText
+            })
 
-            if (error) throw error
+            if (error || (data && data.error)) throw new Error(data?.error || error.message)
 
             setPost(prev => ({ ...prev, status: 'Revisão', feedback_cliente: feedbackText }))
             setFeedbackMode(false)

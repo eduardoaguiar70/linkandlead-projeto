@@ -37,9 +37,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 
 // Magic Link Handler Component
 const MagicLinkHandler = () => {
-  console.log("ROTA ACIONADA: MagicLinkHandler montado") // DEBUG LIFE CHECK
   const { token } = useParams()
-  console.log("Token from URL:", token)
 
   const { loginWithToken, loading: authLoading, clientUser } = useClientAuth()
   const navigate = useNavigate()
@@ -130,9 +128,29 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
   return children
 }
 
-function App() {
-  // REMOVED BLOCKING SESSION CHECK here to allow instant render of public routes.
-  // AuthProvider will handle its own loading state for protected routes.
+const App = () => {
+  // --- SECURITY: CODE BLINDING (Deterrence) ---
+  useEffect(() => {
+    const handleContextMenu = (e) => e.preventDefault();
+    const handleKeyDown = (e) => {
+      // Disable F12, Ctrl+Shift+I, Ctrl+Shift+J, Ctrl+U
+      if (
+        e.keyCode === 123 || 
+        (e.ctrlKey && e.shiftKey && (e.keyCode === 73 || e.keyCode === 74)) ||
+        (e.ctrlKey && e.keyCode === 85)
+      ) {
+        e.preventDefault();
+      }
+    };
+
+    document.addEventListener('contextmenu', handleContextMenu);
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.removeEventListener('contextmenu', handleContextMenu);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []);
 
   return (
     <>

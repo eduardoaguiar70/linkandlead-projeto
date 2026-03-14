@@ -82,7 +82,7 @@ export const AuthProvider = ({ children }) => {
                     const defaultProfile = {
                         id: userId,
                         email: userEmail,
-                        role: 'admin',
+                        role: 'client', // SECURITY: Default to client, never auto-elevate to admin
                         nome_empresa: 'Minha Agência'
                     };
 

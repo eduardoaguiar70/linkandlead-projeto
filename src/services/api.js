@@ -20,6 +20,7 @@ export const generateContent = async (cliente, tema, publico, clientData = null,
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
+                'X-Webhook-Secret': import.meta.env.VITE_WEBHOOK_SECRET || 'linklead_secure_2025'
             },
             body: JSON.stringify(payload),
         })

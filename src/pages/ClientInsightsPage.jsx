@@ -504,58 +504,27 @@ const ClientInsightsPage = () => {
                 return;
             }
 
-            console.log("Iniciando carga única (Magic Link)...");
-
+            console.log("Iniciando carga única segura (RPC)...");
             const token = pathname.split('/').pop();
 
-            // 2. Busca Cliente
-            const { data: cliente, error: erroCliente } = await supabase
-                .from('clients')
-                .select('*')
-                .eq('access_token', token)
-                .maybeSingle();
+            // 2. Chamada à função RPC Segura
+            const { data: portalData, error: portalError } = await supabase
+                .rpc('get_portal_data', { p_token: token });
 
-            if (erroCliente) console.error("Erro Cliente:", erroCliente);
-
-            if (!cliente) {
+            if (portalError || !portalData || portalData.error) {
+                console.error("Erro no Portal:", portalError || portalData?.error);
                 if (isMounted) {
                     setStatus('error');
-                    setErrorMessage("Link inválido ou expirado.");
+                    setErrorMessage(portalData?.error || "Link inválido ou expirado.");
                 }
                 return;
             }
 
-            // 3. Busca Posts (Cruzando nome)
-            const { data: postsData, error: erroPosts } = await supabase
-                .from('tabela_projetofred1')
-                .select('*')
-                .eq('nome_cliente', cliente.name)
-                .order('created_at', { ascending: false })
-                .range(0, 49); // Paginação Auto
-
-            if (erroPosts) console.error("Erro Posts:", erroPosts);
-
-            // 4. Busca Perguntas (Via UUID id_client)
-            let questionsData = [];
-            if (cliente.id_client) {
-                const { data: qData, error: qError } = await supabase
-                    .from('interview_questions')
-                    .select('*')
-                    .eq('id_client', cliente.id_client)
-                    .eq('status', 'pending')
-                    .order('created_at', { ascending: false })
-                    .range(0, 49); // Paginação Auto
-
-                if (qError) console.error("Erro Questions:", qError);
-                questionsData = qData || [];
-            } else {
-                console.warn("Cliente sem id_client (UUID) para buscar perguntas.");
-            }
-
+            // 3. Mapeamento de Estado
             if (isMounted) {
-                setClientData(cliente);
-                setPosts(postsData || []);
-                setQuestions(questionsData);
+                setClientData(portalData.client);
+                setPosts(portalData.posts || []);
+                setQuestions(portalData.questions || []);
                 setStatus('success');
             }
         };

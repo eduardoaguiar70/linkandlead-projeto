@@ -158,7 +158,10 @@ const SalesInboxPage = () => {
                 }
                 const response = await fetch(N8N_GENERATE_ICEBREAKER_URL, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'X-Webhook-Secret': import.meta.env.VITE_WEBHOOK_SECRET || 'linklead_secure_2025'
+                    },
                     body: JSON.stringify(payload)
                 })
                 if (!response.ok) throw new Error('Request error')
@@ -188,7 +191,10 @@ const SalesInboxPage = () => {
                 }
                 const response = await fetch(N8N_GENERATE_REPLY_URL, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'X-Webhook-Secret': import.meta.env.VITE_WEBHOOK_SECRET || 'linklead_secure_2025'
+                    },
                     body: JSON.stringify(payload)
                 })
                 if (!response.ok) throw new Error('Request error')
@@ -737,7 +743,10 @@ const SalesInboxPage = () => {
 
                 const response = await fetch(N8N_GENERATE_ICEBREAKER_URL, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'X-Webhook-Secret': import.meta.env.VITE_WEBHOOK_SECRET || 'linklead_secure_2025'
+                    },
                     body: JSON.stringify(payload)
                 })
 
@@ -773,7 +782,10 @@ const SalesInboxPage = () => {
 
                 const response = await fetch(N8N_GENERATE_REPLY_URL, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'X-Webhook-Secret': import.meta.env.VITE_WEBHOOK_SECRET || 'linklead_secure_2025'
+                    },
                     body: JSON.stringify(payload)
                 })
 
@@ -827,7 +839,10 @@ const SalesInboxPage = () => {
         try {
             const response = await fetch(N8N_ANALYZE_LEAD_URL, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'X-Webhook-Secret': import.meta.env.VITE_WEBHOOK_SECRET || 'linklead_secure_2025'
+                },
                 body: JSON.stringify({ lead_id: activeLead.id })
             })
             if (!response.ok) throw new Error('Erro na requisição')

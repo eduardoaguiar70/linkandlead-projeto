@@ -365,11 +365,19 @@ const PostFeedbackPage = () => {
     if (!id) return
     const fetchData = async () => {
       try {
-        const { data: postData } = await supabase.from('tabela_projetofred1').select('*').eq('id', id).single()
-        setPost(postData)
-        const { data: commentsData } = await supabase.from('post_comments').select('*').eq('post_id', id).order('created_at', { ascending: true })
-        setComments(commentsData || [])
-      } catch (err) { console.error(err) } finally { setLoading(false) }
+        // Use single secure RPC for post and comments
+        const { data, error } = await supabase.rpc('get_public_post_details', { p_post_id: id })
+        
+        if (error || data.error) throw new Error(data?.error || error.message)
+        
+        setPost(data.post)
+        setComments(data.comments || [])
+      } catch (err) { 
+        console.error(err)
+        alert('Erro ao carregar dados: ' + err.message)
+      } finally { 
+        setLoading(false) 
+      }
     }
     fetchData()
     const channel = supabase.channel(`post_feed_${id}`).on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'post_comments', filter: `post_id=eq.${id}` }, (pl) => setComments(prev => [...prev, pl.new])).subscribe()
@@ -397,17 +405,18 @@ const PostFeedbackPage = () => {
     try {
       const authorName = isAdmin ? 'Link&Lead' : (post?.nome_cliente || 'Cliente')
 
-      const payload = {
-        post_id: id,
-        content: messageText,
-        role: isAdmin ? 'admin' : 'client',
-        author_name: authorName
-        // user_id is NOT sent for guests/clients as it doesn't exist in the table schema or is optional
-      }
+      // Use secure RPC for comment insertion
+      const { data, error } = await supabase.rpc('add_public_comment', {
+        p_post_id: id,
+        p_content: messageText,
+        p_author_name: authorName,
+        p_role: isAdmin ? 'admin' : 'client'
+      })
 
-      await supabase.from('post_comments').insert([payload])
+      if (error || data.error) throw new Error(data?.error || error.message)
+
       setMessageText('')
-    } catch (err) { alert('Erro ao enviar.') } finally { setSending(false) }
+    } catch (err) { alert('Erro ao enviar: ' + err.message) } finally { setSending(false) }
   }
 
   const handleUpdateStatus = async (newStatus) => {
@@ -428,7 +437,14 @@ const PostFeedbackPage = () => {
     }
 
     try {
-      await supabase.from('tabela_projetofred1').update({ status: finalStatus }).eq('id', id)
+      // Use secure RPC for status update
+      const { data, error } = await supabase.rpc('update_public_post', {
+        p_post_id: id,
+        p_status: finalStatus
+      })
+
+      if (error || data.error) throw new Error(data?.error || error.message)
+
       setPost({ ...post, status: finalStatus })
 
       if (newStatus === 'APPROVED' || finalStatus === 'AGENDADO') {
@@ -436,7 +452,7 @@ const PostFeedbackPage = () => {
       } else {
         inputRef.current?.focus()
       }
-    } catch (err) { alert('Erro ao atualizar status.') }
+    } catch (err) { alert('Erro ao atualizar status: ' + err.message) }
   }
 
   const handleImageUpload = async (e) => {
@@ -446,14 +462,21 @@ const PostFeedbackPage = () => {
     try {
       const fileName = `${id}_${Date.now()}_${file.name}`
       await supabase.storage.from('post-images').upload(fileName, file)
-      const { data } = supabase.storage.from('post-images').getPublicUrl(fileName)
+      const { data: pubData } = supabase.storage.from('post-images').getPublicUrl(fileName)
 
       // Save as array [url]
-      const newImageArray = [data.publicUrl]
+      const newImageArray = [pubData.publicUrl]
 
-      await supabase.from('tabela_projetofred1').update({ sugestao_imagem: newImageArray }).eq('id', id)
+      // Use secure RPC for image update
+      const { data, error } = await supabase.rpc('update_public_post', {
+        p_post_id: id,
+        p_image_array: newImageArray
+      })
+
+      if (error || data.error) throw new Error(data?.error || error.message)
+
       setPost({ ...post, sugestao_imagem: newImageArray })
-    } catch (err) { alert('Erro no upload.') } finally { setUploading(false) }
+    } catch (err) { alert('Erro no upload: ' + err.message) } finally { setUploading(false) }
   }
 
   if (authLoading || loading) return <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Loader2 className="animate-spin" /></div>

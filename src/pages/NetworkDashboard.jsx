@@ -1556,11 +1556,9 @@ const NetworkDashboard = () => {
                                     {loading && leads.length === 0 ? (
                                         <tr><td colSpan="7" className="py-20 text-center text-gray-400"><Loader2 className="animate-spin mx-auto mb-2" />Loading Leads...</td></tr>
                                     ) : leads.map((item, index) => {
-                                        console.log(`[Render ${index + 1}/${leads.length}] Full item:`, item)
 
                                         // FIXED: campaign_leads view is flat - all data is directly on item
                                         const lead = item
-                                        console.log(`[Render ${index + 1}] Using lead data:`, lead)
 
                                         const campaignStatus = item.status_pipeline
                                         const totalInteractions = lead.total_interactions_count || 0

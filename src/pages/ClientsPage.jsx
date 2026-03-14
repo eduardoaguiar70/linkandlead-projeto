@@ -35,7 +35,14 @@ export default function ClientsPage() {
     async function fetchClients() {
         try {
             setLoading(true);
-            const { data, error } = await supabase.from('clients').select('*').order('created_at', { ascending: false });
+            // SECURITY: Filter by owner unless admin
+            let query = supabase.from('clients').select('*');
+            
+            if (profile?.role !== 'admin') {
+                query = query.eq('auth_user_id', user.id);
+            }
+
+            const { data, error } = await query.order('created_at', { ascending: false });
             if (error) throw error;
             setClients(data || []);
         } catch (error) {
@@ -195,11 +202,9 @@ export default function ClientsPage() {
 
     const handleSubmit = async (e) => {
         e.preventDefault(); // 1. Prevent Default
-        console.log("1. Started handleSave");
         setSaving(true);
 
         try {
-            console.log("2. User ID:", user?.id);
 
             // PAYLOAD CONSTRUCTION & LOGGING
             const payload = {
@@ -209,16 +214,15 @@ export default function ClientsPage() {
                 tone_of_voice: formData.tone_of_voice,
                 target_audience_default: formData.target_audience_default,
                 pain_points: formData.pain_points,
-                unipile_account_id: formData.unipile_account_id
+                unipile_account_id: formData.unipile_account_id,
+                auth_user_id: user.id // SECURITY: Associate client with the creator
             };
-            console.log("3. Payload constructed:", payload);
 
             // --- EXECUTE SUPABASE CALLS AFTER PAYLOAD IS READY ---
             let clientData = null;
             let realClientId = null;
 
             if (editingClient) {
-                console.log("[DEBUG] Updating existing client...", editingClient.id);
                 const { data, error } = await supabase
                     .from('clients')
                     .update(payload) // Use the constructed payload
@@ -229,7 +233,6 @@ export default function ClientsPage() {
                 if (error) throw error;
                 clientData = data;
             } else {
-                console.log("[DEBUG] Creating new client...");
                 const { data, error } = await supabase
                     .from('clients')
                     .insert([payload]) // Use the constructed payload
