@@ -19,7 +19,8 @@ import {
     Library,
     Kanban,
     ShieldBan,
-    Link2
+    Link2,
+    Calendar
 } from 'lucide-react'
 import CreatePostModal from './CreatePostModal'
 import ClientSelector from './ClientSelector'
@@ -163,6 +164,9 @@ const AdminLayout = () => {
                         </Link>
                         <Link to="/sales/inbox" className={isActive('/sales/inbox')}>
                             <MessageCircle size={18} /> Smart Inbox
+                        </Link>
+                        <Link to="/sales/scheduled" className={isActive('/sales/scheduled')}>
+                            <Calendar size={18} /> Scheduled Messages
                         </Link>
                         <Link to="/pipeline" className={isActive('/pipeline')}>
                             <Kanban size={18} /> Pipeline

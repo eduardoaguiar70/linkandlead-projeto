@@ -24,6 +24,7 @@ import MissionsPage from './pages/MissionsPage'
 import ContentLibraryPage from './pages/ContentLibraryPage'
 import BlacklistPage from './pages/BlacklistPage'
 import ConnectionRequestsPage from './pages/ConnectionRequestsPage'
+import ScheduledMessagesPage from './pages/ScheduledMessagesPage'
 import AdminLayout from './components/AdminLayout'
 
 // Client Portal New (Ideas/Insights)
@@ -183,8 +184,9 @@ function App() {
                   <Route path="/sales" element={<SalesHubPage />} />
                   <Route path="/network" element={<NetworkDashboard />} />
                   <Route path="/connections" element={<ConnectionRequestsPage />} />
-                  <Route path="/sales/inbox" element={<SalesInboxPage />} />
-                  <Route path="/pipeline" element={<PipelinePage />} />
+                   <Route path="/sales/inbox" element={<SalesInboxPage />} />
+                   <Route path="/sales/scheduled" element={<ScheduledMessagesPage />} />
+                   <Route path="/pipeline" element={<PipelinePage />} />
                   <Route path="/system-info" element={<SystemInfoPage />} />
                   <Route path="/engagement" element={<LinkedInEngagementPage />} />
                   <Route path="/missions" element={<MissionsPage />} />

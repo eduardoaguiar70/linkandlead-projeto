@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { supabase } from '../services/supabaseClient'
 import { useClientSelection } from '../contexts/ClientSelectionContext'
-import { Search, Send, MoreVertical, Phone, Mail, MapPin, Briefcase, Zap, Star, Sparkles, MessageSquare, Check, LayoutGrid, List, Loader2, X, ClipboardList, CheckCircle2, Ban, Bell } from 'lucide-react'
 import LeadAvatar from '../components/LeadAvatar'
 import UnifiedLeadModal from '../components/UnifiedLeadModal'
 const N8N_GENERATE_REPLY_URL = 'https://n8n-n8n-start.kfocge.easypanel.host/webhook/generate-reply'
@@ -10,6 +9,8 @@ const N8N_GENERATE_ICEBREAKER_URL = 'https://n8n-n8n-start.kfocge.easypanel.host
 const N8N_SEND_MESSAGE_URL = 'https://n8n-n8n-start.kfocge.easypanel.host/webhook/send-linkedin-message'
 const N8N_ANALYZE_LEAD_URL = 'https://n8n-n8n-start.kfocge.easypanel.host/webhook/analyze-lead-on-demand'
 import StrategicContextCard from '../components/StrategicContextCard'
+import ScheduleMessageModal from '../components/ScheduleMessageModal'
+import { Search, Send, MoreVertical, Phone, Mail, MapPin, Briefcase, Zap, Star, Sparkles, MessageSquare, Check, LayoutGrid, List, Loader2, X, ClipboardList, CheckCircle2, Ban, Bell, Clock } from 'lucide-react'
 
 // Returns true if lead meets the strict conditions to be considered a task
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000
@@ -58,6 +59,7 @@ const SalesInboxPage = () => {
     const [sdrSeniorGenerated, setSdrSeniorGenerated] = useState(false)
     const [analyzingLead, setAnalyzingLead] = useState(false)
     const [generatedReasoning, setGeneratedReasoning] = useState(null)
+    const [showScheduleModal, setShowScheduleModal] = useState(false)
 
     // Quick Actions State
     const [quickActions, setQuickActions] = useState([])
@@ -1358,8 +1360,16 @@ const SalesInboxPage = () => {
                                     <Zap size={16} className={showQuickActionsPopover ? "fill-primary" : ""} />
                                 </button>
 
+                                <button
+                                    onClick={() => setShowScheduleModal(true)}
+                                    className="absolute left-[3.25rem] z-10 p-1.5 rounded-lg bg-white text-orange-500 border border-orange-100 hover:bg-orange-50 hover:border-orange-200 transition-all shadow-sm"
+                                    title="Programar Mensagem"
+                                >
+                                    <Clock size={16} />
+                                </button>
+
                                 <textarea
-                                    className="w-full bg-white border border-gray-200 rounded-xl pl-[3.25rem] pr-12 py-3 text-gray-800 placeholder-gray-400 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition-all resize-none text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                                    className="w-full bg-white border border-gray-200 rounded-xl pl-[5.5rem] pr-12 py-3 text-gray-800 placeholder-gray-400 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition-all resize-none text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                                     rows="1"
                                     placeholder={isSending ? 'Sending...' : 'Type your reply... (Ctrl+Enter to send)'}
                                     value={newMessage}
@@ -1565,6 +1575,16 @@ const SalesInboxPage = () => {
                         setActiveLead(prev => prev && prev.id === updated.id ? { ...prev, ...updated } : prev)
                         setLeads(prev => prev.map(l => l.id === updated.id ? { ...l, ...updated } : l))
                     }}
+                />
+            )}
+            {/* Schedule Message Modal */}
+            {showScheduleModal && activeLead && (
+                <ScheduleMessageModal
+                    lead={activeLead}
+                    clientId={selectedClientId}
+                    onClose={() => setShowScheduleModal(false)}
+                    onSuccess={(msg) => showCrmToast(msg)}
+                    onError={(msg) => showCrmToast(msg, 'error')}
                 />
             )}
         </div>
