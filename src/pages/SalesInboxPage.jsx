@@ -60,6 +60,7 @@ const SalesInboxPage = () => {
     const [analyzingLead, setAnalyzingLead] = useState(false)
     const [generatedReasoning, setGeneratedReasoning] = useState(null)
     const [showScheduleModal, setShowScheduleModal] = useState(false)
+    const [showContextMenu, setShowContextMenu]     = useState(false)
 
     // Quick Actions State
     const [quickActions, setQuickActions] = useState([])
@@ -130,6 +131,57 @@ const SalesInboxPage = () => {
         } catch (err) {
             console.error('[Inbox] blacklist error:', err)
             showCrmToast('Error saving.', 'error')
+        }
+    }
+
+    const handleScheduleCall = async () => {
+        if (!activeLead) return
+        setShowContextMenu(false)
+        try {
+            const { error } = await supabase.from('leads')
+                .update({ call_status: 'scheduled', call_scheduled_at: new Date().toISOString() })
+                .eq('id', activeLead.id)
+            if (error) throw error
+            setActiveLead(prev => prev ? { ...prev, call_status: 'scheduled', call_scheduled_at: new Date().toISOString() } : prev)
+            setLeads(prev => prev.map(l => l.id === activeLead.id ? { ...l, call_status: 'scheduled' } : l))
+            showCrmToast('📞 Call agendada com sucesso!')
+        } catch (err) {
+            console.error('[Inbox] schedule call error:', err)
+            showCrmToast('Erro ao agendar call.', 'error')
+        }
+    }
+
+    const handleMarkCallDone = async () => {
+        if (!activeLead) return
+        setShowContextMenu(false)
+        try {
+            const { error } = await supabase.from('leads')
+                .update({ call_status: 'completed' })
+                .eq('id', activeLead.id)
+            if (error) throw error
+            setActiveLead(prev => prev ? { ...prev, call_status: 'completed' } : prev)
+            setLeads(prev => prev.map(l => l.id === activeLead.id ? { ...l, call_status: 'completed' } : l))
+            showCrmToast('✅ Call marcada como realizada!')
+        } catch (err) {
+            console.error('[Inbox] mark call done error:', err)
+            showCrmToast('Erro ao atualizar call.', 'error')
+        }
+    }
+
+    const handleMarkCallNoShow = async () => {
+        if (!activeLead) return
+        setShowContextMenu(false)
+        try {
+            const { error } = await supabase.from('leads')
+                .update({ call_status: 'no_show' })
+                .eq('id', activeLead.id)
+            if (error) throw error
+            setActiveLead(prev => prev ? { ...prev, call_status: 'no_show' } : prev)
+            setLeads(prev => prev.map(l => l.id === activeLead.id ? { ...l, call_status: 'no_show' } : l))
+            showCrmToast('👻 No-show registrado. Lead volta ao follow-up.')
+        } catch (err) {
+            console.error('[Inbox] no-show error:', err)
+            showCrmToast('Erro ao registrar no-show.', 'error')
         }
     }
 
@@ -1197,9 +1249,71 @@ const SalesInboxPage = () => {
                                         </button>
                                     </>
                                 )}
-                                <button className="p-2 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-700 transition-colors">
-                                    <MoreVertical size={18} />
-                                </button>
+                                <div className="relative">
+                                    <button
+                                        onClick={() => setShowContextMenu(v => !v)}
+                                        className="p-2 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-700 transition-colors"
+                                        title="Mais ações"
+                                    >
+                                        <MoreVertical size={18} />
+                                    </button>
+
+                                    {showContextMenu && (
+                                        <>
+                                            {/* Overlay to close */}
+                                            <div
+                                                className="fixed inset-0 z-40"
+                                                onClick={() => setShowContextMenu(false)}
+                                            />
+                                            <div className="absolute right-0 top-full mt-1 w-56 bg-white rounded-xl border border-gray-200 shadow-xl z-50 overflow-hidden">
+                                                <div className="px-3 py-2 border-b border-gray-100">
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Ações do Lead</span>
+                                                </div>
+
+                                                {/* Call actions */}
+                                                {activeLead?.call_status !== 'scheduled' && activeLead?.call_status !== 'completed' && (
+                                                    <button
+                                                        onClick={handleScheduleCall}
+                                                        className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-orange-50 hover:text-orange-600 transition-colors"
+                                                    >
+                                                        <Phone size={14} />
+                                                        Marcar Call Agendada
+                                                    </button>
+                                                )}
+
+                                                {activeLead?.call_status === 'scheduled' && (
+                                                    <>
+                                                        <button
+                                                            onClick={handleMarkCallDone}
+                                                            className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-semibold text-emerald-700 hover:bg-emerald-50 transition-colors"
+                                                        >
+                                                            <Check size={14} />
+                                                            Call Realizada ✅
+                                                        </button>
+                                                        <button
+                                                            onClick={handleMarkCallNoShow}
+                                                            className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-semibold text-amber-700 hover:bg-amber-50 transition-colors"
+                                                        >
+                                                            <Clock size={14} />
+                                                            Lead não apareceu (No-show)
+                                                        </button>
+                                                    </>
+                                                )}
+
+                                                <div className="border-t border-gray-100 mt-1" />
+
+                                                {/* Blacklist */}
+                                                <button
+                                                    onClick={() => { setShowContextMenu(false); handleBlacklistLead() }}
+                                                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-semibold text-red-500 hover:bg-red-50 transition-colors"
+                                                >
+                                                    <Ban size={14} />
+                                                    Adicionar ao Blacklist
+                                                </button>
+                                            </div>
+                                        </>
+                                    )}
+                                </div>
                             </div>
 
                             {/* CRM Toast */}

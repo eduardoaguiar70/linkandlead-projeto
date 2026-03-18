@@ -21,7 +21,7 @@ dist-ssr
 # Agent / Gemini
 .gemini
 _agent
-.agent
+# .agent  <-- removed so Cursor indexes it for @ mentions
 brain
 .antigravityignore
 

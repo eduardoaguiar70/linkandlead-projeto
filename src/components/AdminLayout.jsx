@@ -20,7 +20,9 @@ import {
     Kanban,
     ShieldBan,
     Link2,
-    Calendar
+    Calendar,
+    BarChart2,
+    Shield
 } from 'lucide-react'
 import CreatePostModal from './CreatePostModal'
 import ClientSelector from './ClientSelector'
@@ -30,10 +32,17 @@ import { useLanguage } from '../contexts/LanguageContext'
 import { useNotifications } from '../hooks/useNotifications'
 import { useClientSelection } from '../contexts/ClientSelectionContext'
 import { supabase } from '../services/supabaseClient'
+import { TeamMemberProvider, useTeamMember } from '../contexts/TeamMemberContext'
+
+const SidebarContent = () => {
+    const { isTeamAdmin } = useTeamMember()
+    return null // consumed inside AdminLayout below
+}
 
 const AdminLayout = () => {
     const { signOut } = useAuth()
     const { t } = useLanguage()
+    const { isTeamAdmin } = useTeamMember()
     const [showModal, setShowModal] = useState(false)
     const [isSidebarOpen, setSidebarOpen] = useState(false)
     const location = useLocation()
@@ -185,6 +194,23 @@ const AdminLayout = () => {
                         </Link>
                     </div>
 
+                    {/* ═══ ANALYTICS ═══ */}
+                    <div style={{ marginTop: '1.5rem' }}>
+                        <div className="px-6 py-2 text-[10px] font-extrabold tracking-widest text-primary uppercase opacity-70">
+                            Analytics
+                        </div>
+                        <div className="nav-group-items">
+                            <Link to="/analytics" className={isActive('/analytics')}>
+                                <BarChart2 size={18} /> My Analytics
+                            </Link>
+                            {isTeamAdmin && (
+                                <Link to="/team-dashboard" className={isActive('/team-dashboard')}>
+                                    <Shield size={18} /> Team View
+                                </Link>
+                            )}
+                        </div>
+                    </div>
+
                     {/* ═══ SECONDARY: Gestão Criativa (collapsible, subtle) ═══ */}
                     <div style={{ marginTop: '1.5rem' }}>
                         <button
@@ -223,6 +249,19 @@ const AdminLayout = () => {
 
                     <div style={{ marginTop: 'auto' }}></div>
 
+                    <Link
+                        to="/docs"
+                        className={isActive('/docs')}
+                        style={{
+                            display: 'flex', alignItems: 'center', gap: '0.6rem',
+                            padding: '0.5rem 1.5rem', color: '#6B7280',
+                            fontSize: '0.75rem', fontWeight: '600', textDecoration: 'none',
+                            marginBottom: '0.25rem'
+                        }}
+                    >
+                        <FileText size={16} /> Ajuda & Documentação
+                    </Link>
+
                     <button
                         type="button"
                         onClick={(e) => { e.preventDefault(); signOut() }}
@@ -250,7 +289,7 @@ const AdminLayout = () => {
             {/* MAIN CONTENT */}
             <main className="main-content">
                 {/* Client Context Header for sales-related pages */}
-                {(location.pathname === '/' || location.pathname.startsWith('/sales') || location.pathname.startsWith('/leads') || location.pathname.startsWith('/campaigns') || location.pathname.startsWith('/network') || location.pathname.startsWith('/connections') || location.pathname.startsWith('/engagement') || location.pathname.startsWith('/missions') || location.pathname.startsWith('/content-library') || location.pathname.startsWith('/pipeline') || location.pathname.startsWith('/blacklist')) && (
+                {(location.pathname === '/' || location.pathname.startsWith('/sales') || location.pathname.startsWith('/leads') || location.pathname.startsWith('/campaigns') || location.pathname.startsWith('/network') || location.pathname.startsWith('/connections') || location.pathname.startsWith('/engagement') || location.pathname.startsWith('/missions') || location.pathname.startsWith('/content-library') || location.pathname.startsWith('/pipeline') || location.pathname.startsWith('/blacklist')) && !location.pathname.startsWith('/analytics') && !location.pathname.startsWith('/team-dashboard') && (
                     <div className="px-6 py-3 bg-white/5 border-b border-white/10 flex items-center justify-between backdrop-blur-md">
                         <div className="flex items-center gap-4">
                             <span className="text-sm text-text-muted font-medium">Context:</span>
@@ -275,5 +314,11 @@ const AdminLayout = () => {
     )
 }
 
-export default AdminLayout
+const AdminLayoutWithTeam = () => (
+    <TeamMemberProvider>
+        <AdminLayout />
+    </TeamMemberProvider>
+)
+
+export default AdminLayoutWithTeam
 

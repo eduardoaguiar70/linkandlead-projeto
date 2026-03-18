@@ -25,6 +25,9 @@ import ContentLibraryPage from './pages/ContentLibraryPage'
 import BlacklistPage from './pages/BlacklistPage'
 import ConnectionRequestsPage from './pages/ConnectionRequestsPage'
 import ScheduledMessagesPage from './pages/ScheduledMessagesPage'
+import MyAnalyticsPage from './pages/MyAnalyticsPage'
+import TeamDashboard from './pages/TeamDashboard'
+import SystemDocumentationPage from './pages/SystemDocumentationPage'
 import AdminLayout from './components/AdminLayout'
 
 // Client Portal New (Ideas/Insights)
@@ -129,28 +132,6 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
 }
 
 const App = () => {
-  // --- SECURITY: CODE BLINDING (Deterrence) ---
-  useEffect(() => {
-    const handleContextMenu = (e) => e.preventDefault();
-    const handleKeyDown = (e) => {
-      // Disable F12, Ctrl+Shift+I, Ctrl+Shift+J, Ctrl+U
-      if (
-        e.keyCode === 123 || 
-        (e.ctrlKey && e.shiftKey && (e.keyCode === 73 || e.keyCode === 74)) ||
-        (e.ctrlKey && e.keyCode === 85)
-      ) {
-        e.preventDefault();
-      }
-    };
-
-    document.addEventListener('contextmenu', handleContextMenu);
-    document.addEventListener('keydown', handleKeyDown);
-
-    return () => {
-      document.removeEventListener('contextmenu', handleContextMenu);
-      document.removeEventListener('keydown', handleKeyDown);
-    };
-  }, []);
 
   return (
     <>
@@ -210,6 +191,9 @@ const App = () => {
                   <Route path="/missions" element={<MissionsPage />} />
                   <Route path="/content-library" element={<ContentLibraryPage />} />
                   <Route path="/blacklist" element={<BlacklistPage />} />
+                  <Route path="/analytics" element={<MyAnalyticsPage />} />
+                  <Route path="/team-dashboard" element={<TeamDashboard />} />
+                  <Route path="/docs" element={<SystemDocumentationPage />} />
                 </Route>
 
                 {/* Fallback */}
