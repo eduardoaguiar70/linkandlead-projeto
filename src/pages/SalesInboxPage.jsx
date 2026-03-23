@@ -24,6 +24,19 @@ const isLeadTask = (lead) => {
     return overdue && !lead.has_engaged
 }
 
+const needsFollowup = (lead) => {
+    if (!lead.is_followup || !lead.followup_started_at) return false
+    
+    // Discrete milestone logic: only TRUE on exactly the interval day multiples
+    const interval = lead.followup_interval_days || 7
+    const started = new Date(lead.followup_started_at).getTime()
+    const now = Date.now()
+    const elapsedDays = Math.floor((now - started) / 86400000)
+    
+    // Day 0 is not a follow-up day. Milestone is every 'interval' days.
+    return elapsedDays > 0 && (elapsedDays % interval === 0)
+}
+
 const SalesInboxPage = () => {
     const { selectedClientId, setActiveLeadId } = useClientSelection()
     const [searchParams, setSearchParams] = useSearchParams()
@@ -221,25 +234,27 @@ const SalesInboxPage = () => {
                 replyText = data.icebreaker || 'No response.'
             } else {
                 // Ongoing conversation: generate a contextual reply
-                const conversationHistory = interactions
-                    .slice().reverse()
-                    .map(msg => ({
-                        is_sender: !!msg.is_sender,
-                        content: msg.content || '',
-                        interaction_date: msg.interaction_date || null
-                    }))
+                const { data: clientData, error: clientError } = await supabase
+                    .from('clients')
+                    .select('agenda_link')
+                    .eq('id', selectedClientId)
+                    .single()
+
+                if (clientError) throw clientError
 
                 const payload = {
-                    user_id: selectedClientId,
-                    lead_id: activeLead.id,
-                    lead_name: activeLead.nome || '',
-                    lead_headline: activeLead.headline || '',
-                    lead_location: activeLead.location || '',
-                    lead_reasoning: activeLead.analysis_reasoning || '',
-                    lead_icp_reason: activeLead.icp_reason || '',
-                    conversation_history: conversationHistory,
-                    is_icebreaker: false,
-                    ai_chat_history: newHistory
+                    name: activeLead.nome || '',
+                    headline: activeLead.headline || '',
+                    company: activeLead.empresa || '',
+                    about: activeLead.about || '',
+                    ai_chat_history: newHistory,
+                    agenda_link: clientData?.agenda_link || null,
+                    last_interaction_date: activeLead.last_interaction_date,
+                    last_interaction_is_sender: activeLead._lastMsgIsSender,
+                    total_interactions_count: activeLead.total_interactions_count,
+                    lead_status: activeLead.status,
+                    call_status: activeLead.call_status,
+                    call_scheduled_at: activeLead.call_scheduled_at,
                 }
                 const response = await fetch(N8N_GENERATE_REPLY_URL, {
                     method: 'POST',
@@ -255,7 +270,8 @@ const SalesInboxPage = () => {
             }
 
             setAiChatHistory(prev => [...prev, { role: 'assistant', content: replyText }])
-        } catch {
+        } catch (err) {
+            console.error('[Inbox] AI Chat error:', err)
             setAiChatHistory(prev => [...prev, { role: 'assistant', content: 'Error generating response.' }])
         } finally {
             setAiLoading(false)
@@ -553,9 +569,16 @@ const SalesInboxPage = () => {
         const interval = lead.followup_interval_days || 7
         const started = new Date(lead.followup_started_at).getTime()
         const now = Date.now()
-        const elapsed = Math.floor((now - started) / 86400000)
-        const daysLeft = interval - (elapsed % interval)
-        return daysLeft === interval ? 0 : daysLeft
+        
+        // Use floor to get full days passed
+        const elapsedDays = Math.floor((now - started) / 86400000)
+        
+        if (elapsedDays === 0) return interval // Not due yet (Day 0)
+        
+        const daysSinceLastMilestone = elapsedDays % interval
+        if (daysSinceLastMilestone === 0) return 0 // It is precisely a milestone day!
+        
+        return interval - daysSinceLastMilestone
     }
 
 
@@ -749,19 +772,22 @@ const SalesInboxPage = () => {
             // Optimistic updates for routing logic and UI
             setInteractions(prev => [tempMsg, ...prev])
             
-            setLeads(prev => prev.map(l => l.id === activeLead.id ? { 
-                ...l, 
-                total_interactions_count: (l.total_interactions_count || 0) + 1,
+            const updates = {
+                total_interactions_count: (activeLead.total_interactions_count || 0) + 1,
                 last_interaction_date: tempMsg.interaction_date,
                 _lastMsgIsSender: true
-            } : l))
+            }
+
+            if (activeLead.is_followup) {
+                updates.followup_started_at = tempMsg.interaction_date
+            }
+
+            // Persistence
+            await supabase.from('leads').update(updates).eq('id', activeLead.id)
+
+            setLeads(prev => prev.map(l => l.id === activeLead.id ? { ...l, ...updates } : l))
             
-            setActiveLead(prev => prev ? {
-                ...prev,
-                total_interactions_count: (prev.total_interactions_count || 0) + 1,
-                last_interaction_date: tempMsg.interaction_date,
-                _lastMsgIsSender: true
-            } : null)
+            setActiveLead(prev => prev ? { ...prev, ...updates } : null)
 
             setNewMessage('')
             showToast('Mensagem enviada!')

@@ -5,8 +5,10 @@ import { supabase } from '../services/supabaseClient'
 import {
     X, Briefcase, MapPin, ExternalLink, Star, Target,
     MessageCircle, DollarSign, UserPlus, UserCheck,
-    ChevronDown, ChevronUp, Bell, Clock, Kanban, FileText
+    ChevronDown, ChevronUp, Bell, Clock, Kanban, FileText,
+    History, Loader2
 } from 'lucide-react'
+import { toast } from 'sonner'
 
 // ── Color Maps ────────────────────────────────────────────────────────────────
 
@@ -80,6 +82,8 @@ const UnifiedLeadModal = ({ lead, onClose, onLeadUpdated, showPipelineFields = f
     const [observations, setObservations] = useState(lead?.observations || '')
     const [enrichedData, setEnrichedData] = useState(null)
     const [lastReceivedMsg, setLastReceivedMsg] = useState(null)
+    const [isSyncing, setIsSyncing] = useState(false)
+    const [isSavingObs, setIsSavingObs] = useState(false)
 
     // Pipeline-only state
     const [tier, setTier] = useState(lead?.tier || 0)
@@ -154,8 +158,37 @@ const UnifiedLeadModal = ({ lead, onClose, onLeadUpdated, showPipelineFields = f
 
     // ── Handlers ─────────────────────────────────────────────────────────────
 
-    const handleObservationsBlur = () => {
-        save('observations', observations)
+    const handleSaveObservations = async () => {
+        setIsSavingObs(true)
+        try {
+            await supabase.from('leads').update({ observations }).eq('id', lead.id)
+            if (onLeadUpdated) onLeadUpdated({ ...lead, observations })
+            toast.success("Observation saved!")
+        } catch (err) {
+            console.error('[UnifiedLeadModal] save error:', err)
+            toast.error("Error saving observation.")
+        } finally {
+            setIsSavingObs(false)
+        }
+    }
+
+    const handleDeepSync = async () => {
+        if (!lead?.id) return
+        setIsSyncing(true)
+        try {
+            const response = await fetch('https://n8n-n8n-start.kfocge.easypanel.host/webhook/import-deep-history', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ lead_id: lead.id })
+            })
+            if (!response.ok) throw new Error('Request error')
+            toast.success("Busca profunda iniciada! As mensagens mais antigas aparecerão aqui na tela em alguns minutos.")
+        } catch (err) {
+            console.error('[UnifiedLeadModal] deep sync error:', err)
+            toast.error("Não foi possível iniciar a sincronização. Tente novamente mais tarde.")
+        } finally {
+            setIsSyncing(false)
+        }
     }
 
     const handleFollowupToggle = () => {
@@ -280,6 +313,15 @@ const UnifiedLeadModal = ({ lead, onClose, onLeadUpdated, showPipelineFields = f
                                         <ExternalLink size={14} />
                                     </a>
                                 )}
+                                <button
+                                    onClick={handleDeepSync}
+                                    disabled={isSyncing}
+                                    className="shrink-0 flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-slate-700/50 hover:bg-slate-700 text-slate-400 hover:text-white transition disabled:opacity-50 disabled:cursor-not-allowed"
+                                    title="Resgata todo o histórico antigo de mensagens deste lead. Pode levar alguns minutos."
+                                >
+                                    {isSyncing ? <Loader2 size={14} className="animate-spin" /> : <History size={14} />}
+                                    <span className="text-[10px] font-semibold uppercase tracking-wider hidden sm:block">Sincronização Profunda</span>
+                                </button>
                             </div>
                             {lead.headline && (
                                 <p className="text-slate-400 text-sm flex items-center gap-1.5 mt-0.5 truncate">
@@ -379,13 +421,24 @@ const UnifiedLeadModal = ({ lead, onClose, onLeadUpdated, showPipelineFields = f
                         <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-1 mb-1.5">
                             <FileText size={11} /> Observations
                         </label>
-                        <textarea
-                            value={observations}
-                            onChange={e => setObservations(e.target.value)}
-                            onBlur={handleObservationsBlur}
-                            placeholder="Escreva detalhes importantes, dores da empresa, notas confidenciais..."
-                            className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm text-slate-700 bg-white outline-none focus:border-orange-300 focus:ring-1 focus:ring-orange-200 resize-y min-h-[80px] custom-scrollbar transition"
-                        />
+                        <div className="relative group">
+                            <textarea
+                                value={observations}
+                                onChange={e => setObservations(e.target.value)}
+                                placeholder="Escreva detalhes importantes, dores da empresa, notas confidenciais..."
+                                className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm text-slate-700 bg-white outline-none focus:border-orange-300 focus:ring-1 focus:ring-orange-200 resize-y min-h-[100px] custom-scrollbar transition pr-4 pb-10"
+                            />
+                            <div className="absolute bottom-3 right-3 flex items-center gap-2">
+                                <button
+                                    onClick={handleSaveObservations}
+                                    disabled={isSavingObs}
+                                    className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-orange-500 text-white text-[11px] font-bold uppercase tracking-wider hover:bg-orange-600 transition shadow-sm disabled:opacity-50"
+                                >
+                                    {isSavingObs ? <Loader2 size={12} className="animate-spin" /> : <FileText size={12} />}
+                                    Save Observation
+                                </button>
+                            </div>
+                        </div>
                     </div>
 
                     {/* ── Pipeline-Only Fields ── */}

@@ -29,7 +29,7 @@ const ClientSelector = () => {
 
     const handleChange = (e) => {
         const val = e.target.value
-        setSelectedClientId(val ? parseInt(val) : null)
+        setSelectedClientId(val || null)
     }
 
     const getClientName = (c) => c.name || 'Cliente sem nome'

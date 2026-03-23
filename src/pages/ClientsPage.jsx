@@ -6,7 +6,7 @@ import { Pencil, Upload, FileText, X, Check, Link as LinkIcon, Info, AlertTriang
 
 
 export default function ClientsPage() {
-    const { user } = useAuth(); // Hook Auth
+    const { user, profile } = useAuth(); // Hook Auth
     const [clients, setClients] = useState([]);
     const [loading, setLoading] = useState(true);
     const [showModal, setShowModal] = useState(false);
@@ -25,7 +25,8 @@ export default function ClientsPage() {
         tone_of_voice: 'Profissional',
         target_audience_default: '',
         pain_points: '',
-        unipile_account_id: ''
+        unipile_account_id: '',
+        agenda_link: ''
     });
 
     useEffect(() => {
@@ -112,7 +113,8 @@ export default function ClientsPage() {
             tone_of_voice: client.tone_of_voice || 'Profissional',
             target_audience_default: client.target_audience_default || '',
             pain_points: client.pain_points || '',
-            unipile_account_id: client.unipile_account_id || ''
+            unipile_account_id: client.unipile_account_id || '',
+            agenda_link: client.agenda_link || ''
         });
         setFilesToUpload([]);
         setExistingFiles([]);
@@ -129,7 +131,8 @@ export default function ClientsPage() {
             tone_of_voice: 'Profissional',
             target_audience_default: '',
             pain_points: '',
-            unipile_account_id: ''
+            unipile_account_id: '',
+            agenda_link: ''
         });
         setFilesToUpload([]);
         setExistingFiles([]);
@@ -215,6 +218,7 @@ export default function ClientsPage() {
                 target_audience_default: formData.target_audience_default,
                 pain_points: formData.pain_points,
                 unipile_account_id: formData.unipile_account_id,
+                agenda_link: formData.agenda_link,
                 auth_user_id: user.id // SECURITY: Associate client with the creator
             };
 
@@ -526,6 +530,22 @@ export default function ClientsPage() {
                                     style={{ width: '100%', padding: '0.5rem', border: '1px solid #d1d5db', borderRadius: '0.25rem', color: '#1f2937' }}
                                     rows="3"
                                 />
+                            </div>
+
+                            <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '6px', padding: '1rem' }}>
+                                <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.85rem', fontWeight: 'bold', color: '#166534' }}>
+                                    Link da Agenda (Calendly, etc)
+                                </label>
+                                <input
+                                    name="agenda_link"
+                                    value={formData.agenda_link}
+                                    onChange={handleInputChange}
+                                    placeholder="Ex: https://calendly.com/sua-agenda"
+                                    style={{ width: '100%', padding: '0.5rem', border: '1px solid #86efac', borderRadius: '4px', color: '#1f2937' }}
+                                />
+                                <p style={{ margin: '0.5rem 0 0 0', fontSize: '0.75rem', color: '#15803d' }}>
+                                    💡 A IA usará este link automaticamente para sugerir reuniões no estágio G5.
+                                </p>
                             </div>
 
                             {/* DOCUMENT UPLOAD SECTION */}
