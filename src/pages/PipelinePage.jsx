@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../services/supabaseClient'
 import { useClientSelection } from '../contexts/ClientSelectionContext'
 import { Kanban, Table2, Loader2, Users } from 'lucide-react'
+import { toast } from 'sonner'
 import PipelineTable from '../components/pipeline/PipelineTable'
 import PipelineTableFilters from '../components/pipeline/PipelineTableFilters'
 import PipelineKanbanBoard from '../components/pipeline/PipelineKanbanBoard'
@@ -36,7 +37,7 @@ const PipelinePage = () => {
         if (!selectedClientId) return
         setLoading(true)
         const BATCH = 1000
-        const SELECT = 'id, nome, empresa, headline, avatar_url, linkedin_profile_url, icp_score, icp_reason, cadence_stage, stage_reasoning, crm_stage, has_engaged, tier, proposal_value, is_blacklisted, total_interactions_count, last_interaction_date, client_id'
+        const SELECT = 'id, nome, empresa, headline, avatar_url, linkedin_profile_url, icp_score, icp_reason, cadence_stage, stage_reasoning, crm_stage, has_engaged, tier, proposal_value, is_blacklisted, total_interactions_count, last_interaction_date, client_id, call_status, call_scheduled_at'
         let all = []
         let from = 0
         try {
@@ -67,7 +68,7 @@ const PipelinePage = () => {
         try {
             const { data, error } = await supabase
                 .from('leads')
-                .select('id, nome, empresa, headline, avatar_url, linkedin_profile_url, icp_score, icp_reason, cadence_stage, stage_reasoning, crm_stage, has_engaged, tier, proposal_value, is_blacklisted, total_interactions_count, last_interaction_date, last_task_completed_at, client_id')
+                .select('id, nome, empresa, headline, avatar_url, linkedin_profile_url, icp_score, icp_reason, cadence_stage, stage_reasoning, crm_stage, has_engaged, tier, proposal_value, is_blacklisted, total_interactions_count, last_interaction_date, last_task_completed_at, client_id, call_status, call_scheduled_at')
                 .eq('client_id', selectedClientId)
                 .neq('is_blacklisted', true)
                 .not('crm_stage', 'is', null)
@@ -91,8 +92,28 @@ const PipelinePage = () => {
             await supabase.from('leads').update({ crm_stage: 'Frio' }).in('id', ids)
             fetchAllLeads()
             fetchFunnelLeads()
+            toast.success(`${ids.length} leads movidos para o Funil!`)
         } catch (err) {
             console.error('[Pipeline] Error moving to funnel:', err)
+            toast.error('Erro ao mover para o funil.')
+        }
+    }
+
+    // Batch create tasks
+    const handleCreateTasks = async (ids) => {
+        try {
+            const tasksToInsert = ids.map(id => ({
+                client_id: selectedClientId,
+                lead_id: id,
+                status: 'PENDING',
+                instruction: 'Tarefa manual solicitada via Pipeline'
+            }))
+            const { error } = await supabase.from('tasks').insert(tasksToInsert)
+            if (error) throw error
+            toast.success(`${ids.length} tasks criadas com sucesso!`)
+        } catch (err) {
+            console.error('[Pipeline] Error creating tasks:', err)
+            toast.error('Erro ao criar tasks.')
         }
     }
 
@@ -194,6 +215,7 @@ const PipelinePage = () => {
                             leads={filteredTableLeads}
                             onOpenLead={setSelectedLead}
                             onMoveToFunnel={handleMoveToFunnel}
+                            onCreateTasks={handleCreateTasks}
                         />
                     ) : (
                         <PipelineKanbanBoard

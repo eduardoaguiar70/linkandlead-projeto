@@ -15,10 +15,10 @@ const supabase = createClient(supabaseUrl, supabaseKey)
 async function checkSchema() {
     console.log('--- Checking leads table schema ---')
 
-    // Try to fetch one lead with the new columns
+    // Try to fetch one client
     const { data, error } = await supabase
-        .from('leads')
-        .select('cadence_stage, message_count')
+        .from('clients')
+        .select('*')
         .limit(1)
 
     if (error) {

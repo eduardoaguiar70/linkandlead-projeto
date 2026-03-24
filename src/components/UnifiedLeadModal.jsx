@@ -6,7 +6,7 @@ import {
     X, Briefcase, MapPin, ExternalLink, Star, Target,
     MessageCircle, DollarSign, UserPlus, UserCheck,
     ChevronDown, ChevronUp, Bell, Clock, Kanban, FileText,
-    History, Loader2
+    History, Loader2, Ban, BotOff, Bot, Calendar
 } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -69,7 +69,7 @@ const ReasoningBlock = ({ title, text, defaultOpen = false }) => {
 
 // ── Main Component ────────────────────────────────────────────────────────────
 
-const UnifiedLeadModal = ({ lead, onClose, onLeadUpdated, showPipelineFields = false }) => {
+const UnifiedLeadModal = ({ lead, onClose, onLeadUpdated }) => {
     const navigate = useNavigate()
     const [saving, setSaving] = useState(false)
     const [proposalValue, setProposalValue] = useState(lead?.proposal_value || '')
@@ -88,6 +88,9 @@ const UnifiedLeadModal = ({ lead, onClose, onLeadUpdated, showPipelineFields = f
     // Pipeline-only state
     const [tier, setTier] = useState(lead?.tier || 0)
     const [crmStage, setCrmStage] = useState(lead?.crm_stage || '')
+    const [callStatus, setCallStatus] = useState(lead?.call_status || null)
+    const [callScheduledAt, setCallScheduledAt] = useState(lead?.call_scheduled_at || '')
+    const [pauseAutomatedTasks, setPauseAutomatedTasks] = useState(lead?.pause_automated_tasks || false)
 
     // Fetch fresh enriched data
     const fetchEnriched = useCallback(async () => {
@@ -96,7 +99,7 @@ const UnifiedLeadModal = ({ lead, onClose, onLeadUpdated, showPipelineFields = f
             const [{ data }, { data: lastMsg }] = await Promise.all([
                 supabase
                     .from('leads')
-                    .select('cadence_stage, icp_reason, stage_reasoning, conversation_summary, is_followup, followup_interval_days, followup_started_at, followup_until_responded, proposal_value, tier, crm_stage, created_at, total_interactions_count, observations')
+                    .select('cadence_stage, icp_reason, stage_reasoning, conversation_summary, is_followup, followup_interval_days, followup_started_at, followup_until_responded, proposal_value, tier, crm_stage, created_at, total_interactions_count, observations, pause_automated_tasks, call_status, call_scheduled_at')
                     .eq('id', lead.id)
                     .single(),
                 supabase
@@ -113,10 +116,12 @@ const UnifiedLeadModal = ({ lead, onClose, onLeadUpdated, showPipelineFields = f
                 setIsFollowup(data.is_followup || false)
                 setFollowupInterval(data.followup_interval_days || 7)
                 setFollowupUntilResponded(data.followup_until_responded !== false)
-                setProposalValue(data.proposal_value || '')
-                setObservations(data.observations || '')
+                setProposalValue(data.proposal_value || 0)
                 setTier(data.tier || 0)
                 setCrmStage(data.crm_stage || '')
+                setCallStatus(data.call_status || null)
+                setCallScheduledAt(data.call_scheduled_at || '')
+                setPauseAutomatedTasks(data.pause_automated_tasks || false)
             }
             setLastReceivedMsg(lastMsg || null)
         } catch (err) {
@@ -130,13 +135,16 @@ const UnifiedLeadModal = ({ lead, onClose, onLeadUpdated, showPipelineFields = f
 
     useEffect(() => {
         if (lead) {
-            setTier(lead.tier || 0)
-            setCrmStage(lead.crm_stage || '')
             setProposalValue(lead.proposal_value || '')
             setIsFollowup(lead.is_followup || false)
             setFollowupInterval(lead.followup_interval_days || 7)
             setFollowupUntilResponded(lead.followup_until_responded !== false)
             setObservations(lead.observations || '')
+            setTier(lead.tier || 0)
+            setCrmStage(lead.crm_stage || '')
+            setCallStatus(lead.call_status || null)
+            setCallScheduledAt(lead.call_scheduled_at || '')
+            setPauseAutomatedTasks(lead.pause_automated_tasks || false)
         }
     }, [lead])
 
@@ -236,8 +244,38 @@ const UnifiedLeadModal = ({ lead, onClose, onLeadUpdated, showPipelineFields = f
 
     const handleProposalBlur = () => save('proposal_value', parseFloat(proposalValue) || 0)
     const handleTier = (val) => { setTier(val); save('tier', val) }
-    const handleStage = (val) => { setCrmStage(val); save('crm_stage', val || null) }
+    
+    const handleStage = async (val) => {
+        setCrmStage(val)
+        const payload = { crm_stage: val || null }
+        
+        // Automation: Call Scheduled
+        const triggerStages = ['Agendado', 'Proposta', 'Ganho', 'Perdido']
+        if (triggerStages.includes(val) && !callScheduledAt) {
+            const nowIso = new Date().toISOString()
+            payload.call_status = 'scheduled'
+            payload.call_scheduled_at = nowIso
+            setCallStatus('scheduled')
+            setCallScheduledAt(nowIso)
+        }
+
+        try {
+            await supabase.from('leads').update(payload).eq('id', lead.id)
+            if (onLeadUpdated) {
+                onLeadUpdated({ ...lead, ...payload })
+            }
+        } catch (err) {
+            console.error('Error saving crm_stage:', err)
+        }
+    }
+    
     const goToInbox = () => { navigate(`/sales/inbox?leadId=${lead.id}`); onClose() }
+
+    const handlePauseTasksToggle = () => {
+        const next = !pauseAutomatedTasks
+        setPauseAutomatedTasks(next)
+        save('pause_automated_tasks', next)
+    }
 
     // ── Derived data ─────────────────────────────────────────────────────────
 
@@ -317,10 +355,10 @@ const UnifiedLeadModal = ({ lead, onClose, onLeadUpdated, showPipelineFields = f
                                     onClick={handleDeepSync}
                                     disabled={isSyncing}
                                     className="shrink-0 flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-slate-700/50 hover:bg-slate-700 text-slate-400 hover:text-white transition disabled:opacity-50 disabled:cursor-not-allowed"
-                                    title="Resgata todo o histórico antigo de mensagens deste lead. Pode levar alguns minutos."
+                                    title="Fetches the entire old message history for this lead. It might take a few minutes."
                                 >
                                     {isSyncing ? <Loader2 size={14} className="animate-spin" /> : <History size={14} />}
-                                    <span className="text-[10px] font-semibold uppercase tracking-wider hidden sm:block">Sincronização Profunda</span>
+                                    <span className="text-[10px] font-semibold uppercase tracking-wider hidden sm:block">Deep Sync</span>
                                 </button>
                             </div>
                             {lead.headline && (
@@ -378,7 +416,7 @@ const UnifiedLeadModal = ({ lead, onClose, onLeadUpdated, showPipelineFields = f
 
                     {/* ── Info Row: Connection Date + Proposal ── */}
                     <div className="px-5 py-4 border-b border-slate-100">
-                        <div className="grid grid-cols-2 gap-3">
+                        <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
                             {/* Last Received Message */}
                             <div>
                                 <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-1 mb-1.5">
@@ -398,6 +436,23 @@ const UnifiedLeadModal = ({ lead, onClose, onLeadUpdated, showPipelineFields = f
                                 )}
                             </div>
 
+                            {/* Call Booked Date */}
+                            <div>
+                                <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-1 mb-1.5">
+                                    <Calendar size={11} /> Call Booked Date
+                                </label>
+                                <input
+                                    type="date"
+                                    value={callScheduledAt ? callScheduledAt.split('T')[0] : ''}
+                                    onChange={e => {
+                                        const dateVal = e.target.value ? new Date(e.target.value).toISOString() : ''
+                                        setCallScheduledAt(dateVal)
+                                    }}
+                                    onBlur={() => save('call_scheduled_at', callScheduledAt || null)}
+                                    className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 text-sm text-slate-700 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-100 transition shadow-sm bg-white"
+                                />
+                            </div>
+
                             {/* Proposal Value */}
                             <div>
                                 <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-1 mb-1.5">
@@ -410,7 +465,7 @@ const UnifiedLeadModal = ({ lead, onClose, onLeadUpdated, showPipelineFields = f
                                     value={proposalValue}
                                     onChange={e => setProposalValue(e.target.value)}
                                     onBlur={handleProposalBlur}
-                                    className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 text-sm text-slate-700 outline-none focus:border-orange-300 focus:ring-1 focus:ring-orange-200 transition"
+                                    className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 text-sm text-slate-700 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-100 transition shadow-sm bg-white"
                                 />
                             </div>
                         </div>
@@ -425,7 +480,7 @@ const UnifiedLeadModal = ({ lead, onClose, onLeadUpdated, showPipelineFields = f
                             <textarea
                                 value={observations}
                                 onChange={e => setObservations(e.target.value)}
-                                placeholder="Escreva detalhes importantes, dores da empresa, notas confidenciais..."
+                                placeholder="Write important details, company pain points, confidential notes..."
                                 className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm text-slate-700 bg-white outline-none focus:border-orange-300 focus:ring-1 focus:ring-orange-200 resize-y min-h-[100px] custom-scrollbar transition pr-4 pb-10"
                             />
                             <div className="absolute bottom-3 right-3 flex items-center gap-2">
@@ -441,10 +496,9 @@ const UnifiedLeadModal = ({ lead, onClose, onLeadUpdated, showPipelineFields = f
                         </div>
                     </div>
 
-                    {/* ── Pipeline-Only Fields ── */}
-                    {showPipelineFields && (
-                        <div className="px-5 py-4 border-b border-slate-100 space-y-4">
-                            {/* Tier (Priority) */}
+                    {/* ── Pipeline & Standard Fields ── */}
+                    <div className="px-5 py-4 border-b border-slate-100 space-y-4">
+                        {/* Tier (Priority) */}
                             <div>
                                 <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-1 mb-2">
                                     <Star size={11} /> Priority Tier
@@ -478,7 +532,6 @@ const UnifiedLeadModal = ({ lead, onClose, onLeadUpdated, showPipelineFields = f
                                 </select>
                             </div>
                         </div>
-                    )}
                 </div>
 
                 {/* ═══ FOOTER (Actions) ═══ */}
@@ -583,6 +636,18 @@ const UnifiedLeadModal = ({ lead, onClose, onLeadUpdated, showPipelineFields = f
                         >
                             {isFollowup ? <UserCheck size={14} /> : <UserPlus size={14} />}
                             {isFollowup ? 'Follow-up ON' : 'Add to Follow-up'}
+                        </button>
+
+                        {/* Pause Tasks Toggle */}
+                        <button
+                            onClick={handlePauseTasksToggle}
+                            className={`flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl text-xs font-semibold border transition-all ${pauseAutomatedTasks
+                                ? 'bg-red-50 text-red-600 border-red-300 hover:bg-red-100'
+                                : 'bg-white text-slate-500 border-slate-200 hover:border-red-300 hover:text-red-600'
+                                }`}
+                        >
+                            {pauseAutomatedTasks ? <BotOff size={14} /> : <Bot size={14} />}
+                            {pauseAutomatedTasks ? 'Daily Tasks Paused' : 'Pause Daily Tasks'}
                         </button>
 
                         {/* Add to Kanban */}

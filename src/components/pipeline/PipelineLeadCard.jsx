@@ -17,6 +17,12 @@ const isFollowupOverdue = (lead) => {
     return new Date(lead.last_task_completed_at).getTime() < Date.now() - SEVEN_DAYS_MS
 }
 
+const formatCallDate = (isoString) => {
+    if (!isoString) return ''
+    const date = new Date(isoString)
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+}
+
 const PipelineLeadCard = ({ lead, onClick, onRemove }) => {
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: lead.id })
     const [isHovered, setIsHovered] = useState(false)
@@ -142,6 +148,18 @@ const PipelineLeadCard = ({ lead, onClick, onRemove }) => {
 
                 {lead.has_engaged && (
                     <span style={{ fontSize: '9px', fontWeight: 700, padding: '1px 5px', borderRadius: '4px', background: '#fff3ee', color: '#ff4d00', border: '1px solid #ffd4c2' }}>Replied</span>
+                )}
+
+                {lead.call_status === 'completed' && lead.call_scheduled_at && (
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '9px', fontWeight: 700, padding: '1.5px 5px', borderRadius: '4px', background: '#ecfdf5', color: '#059669', border: '1px solid #d1fae5' }}>
+                        <CheckCircle2 size={10} /> Done: {formatCallDate(lead.call_scheduled_at)}
+                    </span>
+                )}
+
+                {lead.call_status === 'no_show' && lead.call_scheduled_at && (
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '9px', fontWeight: 700, padding: '1.5px 5px', borderRadius: '4px', background: '#fffbeb', color: '#d97706', border: '1px solid #fef3c7' }}>
+                        <AlertTriangle size={10} /> No-show: {formatCallDate(lead.call_scheduled_at)}
+                    </span>
                 )}
             </div>
         </div>

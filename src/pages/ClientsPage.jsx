@@ -26,7 +26,8 @@ export default function ClientsPage() {
         target_audience_default: '',
         pain_points: '',
         unipile_account_id: '',
-        agenda_link: ''
+        agenda_link: '',
+        language_preference: 'Português (BR)'
     });
 
     useEffect(() => {
@@ -114,7 +115,8 @@ export default function ClientsPage() {
             target_audience_default: client.target_audience_default || '',
             pain_points: client.pain_points || '',
             unipile_account_id: client.unipile_account_id || '',
-            agenda_link: client.agenda_link || ''
+            agenda_link: client.agenda_link || '',
+            language_preference: client.language_preference || 'Português (BR)'
         });
         setFilesToUpload([]);
         setExistingFiles([]);
@@ -132,7 +134,8 @@ export default function ClientsPage() {
             target_audience_default: '',
             pain_points: '',
             unipile_account_id: '',
-            agenda_link: ''
+            agenda_link: '',
+            language_preference: 'Português (BR)'
         });
         setFilesToUpload([]);
         setExistingFiles([]);
@@ -219,6 +222,7 @@ export default function ClientsPage() {
                 pain_points: formData.pain_points,
                 unipile_account_id: formData.unipile_account_id,
                 agenda_link: formData.agenda_link,
+                language_preference: formData.language_preference,
                 auth_user_id: user.id // SECURITY: Associate client with the creator
             };
 
@@ -508,6 +512,21 @@ export default function ClientsPage() {
                                     <option>Casual</option>
                                     <option>Authoritative</option>
                                     <option>Educational</option>
+                                </select>
+                            </div>
+
+                            <div>
+                                <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem' }}>Idioma de Preferência</label>
+                                <select
+                                    name="language_preference"
+                                    value={formData.language_preference}
+                                    onChange={handleInputChange}
+                                    style={{ width: '100%', padding: '0.5rem', border: '1px solid #d1d5db', borderRadius: '0.25rem', color: '#1f2937' }}
+                                >
+                                    <option>Português (BR)</option>
+                                    <option>English</option>
+                                    <option>Deutsch</option>
+                                    <option>Español</option>
                                 </select>
                             </div>
 

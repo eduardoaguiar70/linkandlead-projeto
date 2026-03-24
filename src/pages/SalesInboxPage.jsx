@@ -24,18 +24,7 @@ const isLeadTask = (lead) => {
     return overdue && !lead.has_engaged
 }
 
-const needsFollowup = (lead) => {
-    if (!lead.is_followup || !lead.followup_started_at) return false
-    
-    // Discrete milestone logic: only TRUE on exactly the interval day multiples
-    const interval = lead.followup_interval_days || 7
-    const started = new Date(lead.followup_started_at).getTime()
-    const now = Date.now()
-    const elapsedDays = Math.floor((now - started) / 86400000)
-    
-    // Day 0 is not a follow-up day. Milestone is every 'interval' days.
-    return elapsedDays > 0 && (elapsedDays % interval === 0)
-}
+
 
 const SalesInboxPage = () => {
     const { selectedClientId, setActiveLeadId } = useClientSelection()
@@ -150,17 +139,27 @@ const SalesInboxPage = () => {
     const handleScheduleCall = async () => {
         if (!activeLead) return
         setShowContextMenu(false)
+
+        const nowIso = new Date().toISOString()
+        const updates = { 
+            crm_stage: 'Agendado', 
+            call_status: 'scheduled', 
+            call_scheduled_at: nowIso 
+        }
+
         try {
             const { error } = await supabase.from('leads')
-                .update({ call_status: 'scheduled', call_scheduled_at: new Date().toISOString() })
+                .update(updates)
                 .eq('id', activeLead.id)
             if (error) throw error
-            setActiveLead(prev => prev ? { ...prev, call_status: 'scheduled', call_scheduled_at: new Date().toISOString() } : prev)
-            setLeads(prev => prev.map(l => l.id === activeLead.id ? { ...l, call_status: 'scheduled' } : l))
-            showCrmToast('📞 Call agendada com sucesso!')
+
+            setActiveLead(prev => prev ? { ...prev, ...updates } : prev)
+            setLeads(prev => prev.map(l => l.id === activeLead.id ? { ...l, ...updates } : l))
+            
+            showCrmToast('📞 Call scheduled successfully!')
         } catch (err) {
             console.error('[Inbox] schedule call error:', err)
-            showCrmToast('Erro ao agendar call.', 'error')
+            showCrmToast('Error scheduling call.', 'error')
         }
     }
 
@@ -174,10 +173,10 @@ const SalesInboxPage = () => {
             if (error) throw error
             setActiveLead(prev => prev ? { ...prev, call_status: 'completed' } : prev)
             setLeads(prev => prev.map(l => l.id === activeLead.id ? { ...l, call_status: 'completed' } : l))
-            showCrmToast('✅ Call marcada como realizada!')
+            showCrmToast('✅ Call marked as completed!')
         } catch (err) {
             console.error('[Inbox] mark call done error:', err)
-            showCrmToast('Erro ao atualizar call.', 'error')
+            showCrmToast('Error updating call.', 'error')
         }
     }
 
@@ -191,10 +190,10 @@ const SalesInboxPage = () => {
             if (error) throw error
             setActiveLead(prev => prev ? { ...prev, call_status: 'no_show' } : prev)
             setLeads(prev => prev.map(l => l.id === activeLead.id ? { ...l, call_status: 'no_show' } : l))
-            showCrmToast('👻 No-show registrado. Lead volta ao follow-up.')
+            showCrmToast('🕒 Lead marked as no-show!')
         } catch (err) {
-            console.error('[Inbox] no-show error:', err)
-            showCrmToast('Erro ao registrar no-show.', 'error')
+            console.error('[Inbox] mark call no-show error:', err)
+            showCrmToast('Error updating call.', 'error')
         }
     }
 
@@ -212,14 +211,23 @@ const SalesInboxPage = () => {
             const isIcebreaker = interactions.length === 0
             let replyText = ''
 
+            const { data: clientData } = await supabase
+                .from('clients')
+                .select('agenda_link, language_preference')
+                .eq('id', selectedClientId)
+                .single()
+
             if (isIcebreaker) {
                 // Empty conversation: generate a first-touch icebreaker
                 const payload = {
+                    client_id: selectedClientId,
+                    lead_id: activeLead.id,
                     name: activeLead.nome || '',
                     headline: activeLead.headline || '',
                     company: activeLead.empresa || '',
                     about: activeLead.about || '',
-                    ai_chat_history: newHistory
+                    ai_chat_history: newHistory,
+                    language_preference: clientData?.language_preference || 'Português (BR)'
                 }
                 const response = await fetch(N8N_GENERATE_ICEBREAKER_URL, {
                     method: 'POST',
@@ -234,21 +242,16 @@ const SalesInboxPage = () => {
                 replyText = data.icebreaker || 'No response.'
             } else {
                 // Ongoing conversation: generate a contextual reply
-                const { data: clientData, error: clientError } = await supabase
-                    .from('clients')
-                    .select('agenda_link')
-                    .eq('id', selectedClientId)
-                    .single()
-
-                if (clientError) throw clientError
-
                 const payload = {
+                    client_id: selectedClientId,
+                    lead_id: activeLead.id,
                     name: activeLead.nome || '',
                     headline: activeLead.headline || '',
                     company: activeLead.empresa || '',
                     about: activeLead.about || '',
                     ai_chat_history: newHistory,
                     agenda_link: clientData?.agenda_link || null,
+                    language_preference: clientData?.language_preference || 'Português (BR)',
                     last_interaction_date: activeLead.last_interaction_date,
                     last_interaction_is_sender: activeLead._lastMsgIsSender,
                     total_interactions_count: activeLead.total_interactions_count,
@@ -563,7 +566,7 @@ const SalesInboxPage = () => {
     if (showFollowupOnly) displayedLeads = displayedLeads.filter(l => l.is_followup)
     if (showUnreadOnly) displayedLeads = displayedLeads.filter(l => (l.unread_count || 0) > 0)
 
-    // Helper: days until next follow-up contact
+    // Helper: Next follow-up contact status (pending, due_today, overdue)
     const getNextFollowupDays = (lead) => {
         if (!lead.is_followup || !lead.followup_started_at) return null
         const interval = lead.followup_interval_days || 7
@@ -573,12 +576,16 @@ const SalesInboxPage = () => {
         // Use floor to get full days passed
         const elapsedDays = Math.floor((now - started) / 86400000)
         
-        if (elapsedDays === 0) return interval // Not due yet (Day 0)
+        if (elapsedDays === 0) return { status: 'pending', days: interval }
         
         const daysSinceLastMilestone = elapsedDays % interval
-        if (daysSinceLastMilestone === 0) return 0 // It is precisely a milestone day!
+        if (daysSinceLastMilestone === 0) return { status: 'due_today', days: 0 }
         
-        return interval - daysSinceLastMilestone
+        if (daysSinceLastMilestone === 1 || daysSinceLastMilestone === 2) {
+            return { status: 'overdue', days: daysSinceLastMilestone }
+        }
+        
+        return { status: 'pending', days: interval - daysSinceLastMilestone }
     }
 
 
@@ -810,13 +817,22 @@ const SalesInboxPage = () => {
         try {
             const isIcebreaker = interactions.length === 0
 
+            const { data: clientData } = await supabase
+                .from('clients')
+                .select('agenda_link, language_preference')
+                .eq('id', selectedClientId)
+                .single()
+
             if (isIcebreaker) {
                 // Empty conversation: generate first-touch icebreaker
                 const payload = {
+                    client_id: selectedClientId,
+                    lead_id: activeLead.id,
                     name: activeLead.nome || '',
                     headline: activeLead.headline || '',
                     company: activeLead.empresa || '',
-                    about: activeLead.about || ''
+                    about: activeLead.about || '',
+                    language_preference: clientData?.language_preference || 'Português (BR)'
                 }
 
                 const response = await fetch(N8N_GENERATE_ICEBREAKER_URL, {
@@ -847,6 +863,7 @@ const SalesInboxPage = () => {
                     }))
 
                 const payload = {
+                    client_id: selectedClientId,
                     user_id: selectedClientId,
                     lead_id: activeLead.id,
                     lead_name: activeLead.nome || '',
@@ -855,7 +872,8 @@ const SalesInboxPage = () => {
                     lead_reasoning: activeLead.analysis_reasoning || '',
                     lead_icp_reason: activeLead.icp_reason || '',
                     conversation_history: conversationHistory,
-                    is_icebreaker: false
+                    is_icebreaker: false,
+                    language_preference: clientData?.language_preference || 'Português (BR)'
                 }
 
                 const response = await fetch(N8N_GENERATE_REPLY_URL, {
@@ -921,7 +939,7 @@ const SalesInboxPage = () => {
                     'Content-Type': 'application/json',
                     'X-Webhook-Secret': import.meta.env.VITE_WEBHOOK_SECRET || 'linklead_secure_2025'
                 },
-                body: JSON.stringify({ lead_id: activeLead.id })
+                body: JSON.stringify({ lead_id: activeLead.id, client_id: selectedClientId })
             })
             if (!response.ok) throw new Error('Erro na requisição')
             const data = await response.json()
@@ -1135,11 +1153,29 @@ const SalesInboxPage = () => {
                                                 ICP {lead.icp_score || 'C'}
                                             </span>
                                             {lead.is_followup && (() => {
-                                                const dLeft = getNextFollowupDays(lead)
+                                                const followupInfo = getNextFollowupDays(lead)
+                                                if (!followupInfo) return null
+                                                
+                                                if (followupInfo.status === 'due_today') {
+                                                    return (
+                                                        <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-orange-100 text-orange-700 border border-orange-300 font-bold">
+                                                            <Bell size={9} />
+                                                            Hoje!
+                                                        </span>
+                                                    )
+                                                }
+                                                if (followupInfo.status === 'overdue') {
+                                                    return (
+                                                        <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-red-50 text-red-600 border border-red-200 font-bold">
+                                                            <Clock size={9} />
+                                                            Atrasado {followupInfo.days}d
+                                                        </span>
+                                                    )
+                                                }
                                                 return (
-                                                    <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-orange-50 text-orange-600 border border-orange-200 font-semibold">
+                                                    <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-slate-50 text-slate-500 border border-slate-200 font-semibold">
                                                         <Bell size={9} />
-                                                        {dLeft === 0 ? 'Contact today!' : `in ${dLeft}d`}
+                                                        em {followupInfo.days}d
                                                     </span>
                                                 )
                                             })()}
@@ -1293,35 +1329,35 @@ const SalesInboxPage = () => {
                                             />
                                             <div className="absolute right-0 top-full mt-1 w-56 bg-white rounded-xl border border-gray-200 shadow-xl z-50 overflow-hidden">
                                                 <div className="px-3 py-2 border-b border-gray-100">
-                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Ações do Lead</span>
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Lead Actions</span>
                                                 </div>
 
                                                 {/* Call actions */}
-                                                {activeLead?.call_status !== 'scheduled' && activeLead?.call_status !== 'completed' && (
+                                                {(!activeLead?.call_scheduled_at || !['Agendado', 'Proposta', 'Ganho', 'Perdido'].includes(activeLead?.crm_stage)) && (
                                                     <button
                                                         onClick={handleScheduleCall}
                                                         className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-orange-50 hover:text-orange-600 transition-colors"
                                                     >
                                                         <Phone size={14} />
-                                                        Marcar Call Agendada
+                                                        Schedule Call
                                                     </button>
                                                 )}
 
-                                                {activeLead?.call_status === 'scheduled' && (
+                                                {(!!activeLead?.call_scheduled_at && ['Agendado', 'Proposta', 'Ganho', 'Perdido'].includes(activeLead?.crm_stage)) && (
                                                     <>
                                                         <button
                                                             onClick={handleMarkCallDone}
                                                             className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-semibold text-emerald-700 hover:bg-emerald-50 transition-colors"
                                                         >
                                                             <Check size={14} />
-                                                            Call Realizada ✅
+                                                            Call Completed ✅
                                                         </button>
                                                         <button
                                                             onClick={handleMarkCallNoShow}
                                                             className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-semibold text-amber-700 hover:bg-amber-50 transition-colors"
                                                         >
                                                             <Clock size={14} />
-                                                            Lead não apareceu (No-show)
+                                                            Lead No-show 🕒
                                                         </button>
                                                     </>
                                                 )}
@@ -1334,7 +1370,7 @@ const SalesInboxPage = () => {
                                                     className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-semibold text-red-500 hover:bg-red-50 transition-colors"
                                                 >
                                                     <Ban size={14} />
-                                                    Adicionar ao Blacklist
+                                                    Add to Blacklist
                                                 </button>
                                             </div>
                                         </>

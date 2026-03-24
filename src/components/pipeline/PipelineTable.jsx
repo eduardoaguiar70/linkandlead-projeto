@@ -27,7 +27,7 @@ const SortIcon = ({ field, sortField, sortDir }) => {
     return sortDir === 'asc' ? <ChevronUp size={12} style={{ color: '#ff4d00' }} /> : <ChevronDown size={12} style={{ color: '#ff4d00' }} />
 }
 
-const PipelineTable = ({ leads, onOpenLead, onMoveToFunnel }) => {
+const PipelineTable = ({ leads, onOpenLead, onMoveToFunnel, onCreateTasks }) => {
     const [selected, setSelected] = useState(new Set())
     const [sortField, setSortField] = useState('nome')
     const [sortDir, setSortDir] = useState('asc')
@@ -94,6 +94,12 @@ const PipelineTable = ({ leads, onOpenLead, onMoveToFunnel }) => {
         setSelected(new Set())
     }
 
+    const handleCreateTasks = () => {
+        if (selected.size === 0) return
+        onCreateTasks([...selected])
+        setSelected(new Set())
+    }
+
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', flex: 1, minHeight: 0 }}>
             {/* Bulk action bar */}
@@ -107,6 +113,12 @@ const PipelineTable = ({ leads, onOpenLead, onMoveToFunnel }) => {
                         style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 14px', borderRadius: '6px', fontSize: '12px', fontWeight: 700, background: '#ff4d00', color: '#fff', border: 'none', cursor: 'pointer' }}
                     >
                         <ArrowRightToLine size={14} /> Move to Funnel
+                    </button>
+                    <button
+                        onClick={handleCreateTasks}
+                        style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 14px', borderRadius: '6px', fontSize: '12px', fontWeight: 700, background: '#3b82f6', color: '#fff', border: 'none', cursor: 'pointer' }}
+                    >
+                        <CheckSquare size={14} /> Create Daily Tasks
                     </button>
                 </div>
             )}

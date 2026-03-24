@@ -68,12 +68,29 @@ const PipelineKanbanBoard = ({ leads, setLeads, onCardClick }) => {
         const lead = leads.find(l => l.id === leadId)
         setActiveId(null)
         if (!lead) return
+        
+        const payload = { crm_stage: lead.crm_stage }
+        
+        // Automation: Call Scheduled
+        const triggerStages = ['Agendado', 'Proposta', 'Ganho', 'Perdido']
+        let updatingCallStatus = false
+        
+        if (triggerStages.includes(lead.crm_stage) && !lead.call_scheduled_at) {
+            payload.call_status = 'scheduled'
+            payload.call_scheduled_at = new Date().toISOString()
+            updatingCallStatus = true
+        }
+
         try {
-            await supabase.from('leads').update({ crm_stage: lead.crm_stage }).eq('id', leadId)
+            await supabase.from('leads').update(payload).eq('id', leadId)
+            if (updatingCallStatus) {
+                // Optimistically update the UI to reflect the new call status
+                setLeads(prev => prev.map(l => l.id === leadId ? { ...l, ...payload } : l))
+            }
         } catch (err) {
             console.error('[Pipeline] Error updating crm_stage:', err)
         }
-    }, [leads])
+    }, [leads, setLeads])
 
     const handleRemoveLead = useCallback(async (leadId) => {
         // Optimistic update: remove immediately from local state
