@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { ShieldAlert, Brain, Radio, Target, TrendingUp, Loader2, Sparkles, RefreshCw } from 'lucide-react'
+import { ShieldAlert, Brain, Radio, Target, TrendingUp, Loader2, Sparkles, RefreshCw, AlertOctagon, Lightbulb } from 'lucide-react'
 
 // Cadence level configurations
 const CADENCE_LEVELS = {
@@ -30,71 +30,56 @@ const getCadenceConfig = (level) => {
 }
 
 const StrategicContextCard = ({ lead, isIcebreaker = false, ...props }) => {
-    const [showTooltip, setShowTooltip] = useState(false)
-
     if (!lead) return null
 
     // Extra Fields
     const isAnalyzing = props.isAnalyzing
     const onAnalyzeNow = props.onAnalyzeNow
-    const forbidden = null // You can map this if needed
 
-    // Base Strategic Columns mapping
-    const cadenceLevel = lead?.cadence_stage
-    const signal = lead?.stage_reasoning
-    const strategy = lead?.next_action
-    const psychological = null // Not provided in new db schema
-    
-    // Map the boolean column ready_for_analysis as an indicator that analysis has run 
-    // We will use updated_at or another timestamp if available, but for now we can just check if data exists
-    // The timestamp will be "Updated" text without a date if we don't have analyzed_at, or we can use lead?.updated_at
-    const analyzedAt = lead?.updated_at || lead?.last_interaction_date || null;
+    // Data Mapping from real DB columns
+    const psychological = lead?.last_psychological_factor
+    const signal = lead?.last_signal_detected
+    const strategy = lead?.last_strategy_used
+    const forbidden = lead?.last_forbidden_action
 
-    // Derived states
-    const hasAnyData = !!(cadenceLevel || signal || psychological || forbidden || strategy)
+    const analyzedAt = lead?.updated_at || null;
+    const hasAnyAnalysis = !!(psychological || signal || strategy || forbidden)
 
-    if (!hasAnyData) {
+    // Derived states (old ones for compatibility if needed, but we focus on hasAnyAnalysis)
+    const hasAnyData = hasAnyAnalysis
+
+    if (!hasAnyAnalysis) {
         return (
-            <div className="bg-white rounded-2xl border border-gray-200 p-5">
-                <div className="flex items-center gap-2 mb-4">
-                    <div className="w-6 h-6 rounded-lg bg-primary/20 flex items-center justify-center">
-                        <TrendingUp size={14} className="text-primary" />
+            <div className="bg-white rounded-2xl border border-gray-200 p-6">
+                <div className="flex items-center gap-2 mb-6">
+                    <div className="w-8 h-8 rounded-xl bg-orange-50 flex items-center justify-center">
+                        <TrendingUp size={16} className="text-orange-500" />
                     </div>
-                    <h4 className="text-xs font-bold text-primary uppercase tracking-wider">Negotiation X-Ray</h4>
+                    <h4 className="text-sm font-bold text-gray-900 uppercase tracking-wider">Negotiation X-Ray</h4>
                 </div>
-                <div className="flex flex-col items-center justify-center py-6 gap-3">
+                <div className="flex flex-col items-center justify-center py-10 gap-4 bg-gray-50/50 rounded-2xl border border-dashed border-gray-200">
                     {isAnalyzing ? (
                         <>
                             <div className="relative">
-                                <div className="absolute inset-0 rounded-full bg-primary/10 animate-ping" />
-                                <Loader2 size={24} className="text-primary animate-spin relative" />
+                                <div className="absolute inset-0 rounded-full bg-orange-500/20 animate-ping" />
+                                <Loader2 size={32} className="text-orange-500 animate-spin relative" />
                             </div>
-                            <p className="text-xs text-primary font-medium text-center leading-relaxed">
-                                Analyzing history...
-                            </p>
-                            <p className="text-[10px] text-gray-400 text-center">This might take a few seconds.</p>
-                        </>
-                    ) : isIcebreaker ? (
-                        <>
-                            <Sparkles size={24} className="text-amber-400/70" />
-                            <p className="text-xs text-gray-400 text-center leading-relaxed">
-                                Generate the Icebreaker to activate<br />the strategic analysis.
-                            </p>
+                            <p className="text-sm text-gray-600 font-semibold">Análise profunda em andamento...</p>
                         </>
                     ) : (
                         <>
-                            <Loader2 size={24} className="text-gray-500 animate-spin" />
-                            <p className="text-xs text-gray-500 text-center leading-relaxed">
-                                Awaiting AI Analysis...<br />
-                                <span className="text-gray-600">Available after the next processing.</span>
-                            </p>
+                            <Sparkles size={32} className="text-orange-300" />
+                            <div className="text-center">
+                                <p className="text-sm text-gray-500 font-medium">Análise de IA pendente</p>
+                                <p className="text-[11px] text-gray-400 mt-1">Envie uma mensagem ou sincronize o histórico para ativar.</p>
+                            </div>
                             {onAnalyzeNow && (
                                 <button
                                     onClick={onAnalyzeNow}
-                                    className="mt-1 inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-primary/10 hover:bg-primary/20 border border-primary/30 text-primary text-[11px] font-bold transition-all hover:shadow-md hover:shadow-primary/10 active:scale-[0.97]"
+                                    className="mt-2 inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-white border border-gray-200 text-gray-700 text-xs font-bold hover:bg-gray-50 transition-all shadow-sm active:scale-95"
                                 >
-                                    <RefreshCw size={12} />
-                                    Analyze Now
+                                    <RefreshCw size={14} />
+                                    Analisar Agora
                                 </button>
                             )}
                         </>
@@ -104,152 +89,91 @@ const StrategicContextCard = ({ lead, isIcebreaker = false, ...props }) => {
         )
     }
 
-    const config = getCadenceConfig(cadenceLevel)
-
     return (
-        <div className="bg-white rounded-2xl border border-gray-200 p-5 space-y-4">
+        <div className="bg-white rounded-3xl border border-gray-200 p-6 space-y-6 shadow-sm">
             {/* Header */}
             <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                    <div className="w-6 h-6 rounded-lg bg-primary/20 flex items-center justify-center">
-                        <TrendingUp size={14} className="text-primary" />
-                    </div>
-                    <h4 className="text-xs font-bold text-primary uppercase tracking-wider">Negotiation X-Ray</h4>
-                </div>
-
-                {/* Timestamp and Refresh button */}
                 <div className="flex items-center gap-3">
-                    {analyzedAt && !isAnalyzing && (
-                        <span className="text-[10px] text-gray-400 font-medium whitespace-nowrap">
-                            Updated {getTimeAgo(analyzedAt)}
-                        </span>
-                    )}
-
-                    {onAnalyzeNow && (
-                        <button
-                            onClick={onAnalyzeNow}
-                            disabled={isAnalyzing}
-                            title="Re-analyze lead"
-                            className="p-1.5 rounded-lg text-gray-400 hover:text-primary hover:bg-primary/10 border border-transparent hover:border-primary/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex shrink-0"
-                        >
-                            <RefreshCw size={14} className={isAnalyzing ? 'animate-spin' : ''} />
-                        </button>
-                    )}
+                    <div className="w-8 h-8 rounded-xl bg-orange-500 flex items-center justify-center shadow-lg shadow-orange-500/20">
+                        <TrendingUp size={18} className="text-white" />
+                    </div>
+                    <div>
+                        <h4 className="text-sm font-bold text-gray-900 uppercase tracking-widest leading-none mb-1">Negotiation X-Ray</h4>
+                        {analyzedAt && (
+                            <span className="text-[10px] text-gray-400 font-medium lowercase">
+                                • última atualização {getTimeAgo(analyzedAt)}
+                            </span>
+                        )}
+                    </div>
                 </div>
+
+                {onAnalyzeNow && (
+                    <button
+                        onClick={onAnalyzeNow}
+                        disabled={isAnalyzing}
+                        title="Re-analisar lead"
+                        className="p-2 rounded-xl text-gray-400 hover:text-orange-500 hover:bg-orange-50 border border-transparent hover:border-orange-100 transition-all disabled:opacity-50"
+                    >
+                        <RefreshCw size={16} className={isAnalyzing ? 'animate-spin' : ''} />
+                    </button>
+                )}
             </div>
 
-            {/* Loading overlay when re-analyzing */}
-            {isAnalyzing && (
-                <div className="flex items-center gap-2 rounded-lg bg-primary/5 border border-primary/20 px-3 py-2">
-                    <Loader2 size={12} className="text-primary animate-spin shrink-0" />
-                    <span className="text-[11px] text-primary font-medium">Re-analyzing history...</span>
-                </div>
-            )}
-
-            {/* A. Cadence Level Badge */}
-            {config && (
-                <div className="relative">
-                    <div
-                        className={`relative overflow-hidden rounded-xl ${config.bg} border ${config.border} p-3 cursor-default`}
-                        onMouseEnter={() => setShowTooltip(true)}
-                        onMouseLeave={() => setShowTooltip(false)}
-                    >
-                        {/* Progress bar behind */}
-                        <div
-                            className={`absolute inset-y-0 left-0 bg-gradient-to-r ${config.color} opacity-10`}
-                            style={{ width: `${config.percent}%`, transition: 'width 0.6s ease' }}
-                        />
-
-                        <div className="relative flex items-center justify-between">
-                            <div className="flex items-center gap-2.5">
-                                <span className={`text-lg font-black ${config.text}`}>
-                                    {cadenceLevel}
-                                </span>
-                                <div>
-                                    <span className={`text-[10px] font-bold uppercase tracking-widest ${config.text} opacity-80`}>
-                                        {config.label}
-                                    </span>
-                                    <div className="flex items-center gap-1 mt-0.5">
-                                        {[1, 2, 3, 4, 5].map(i => {
-                                            const levelNum = parseInt(cadenceLevel?.replace(/\D/g, '') || '0')
-                                            return (
-                                                <div
-                                                    key={i}
-                                                    className={`h-1 w-4 rounded-full transition-colors ${i <= levelNum
-                                                        ? `bg-gradient-to-r ${config.color}`
-                                                        : 'bg-gray-200'
-                                                        }`}
-                                                />
-                                            )
-                                        })}
-                                    </div>
-                                </div>
-                            </div>
+            {/* Analysis Stack */}
+            <div className="flex flex-col gap-4">
+                
+                {/* Psychological Factor */}
+                {psychological && (
+                    <div className="bg-blue-50/30 border border-blue-100 rounded-2xl p-4 flex flex-col gap-3 h-fit">
+                        <div className="flex items-center gap-2 text-blue-600">
+                            <Brain size={16} />
+                            <span className="text-[10px] font-bold uppercase tracking-wider">Psychological Profile</span>
                         </div>
+                        <p className="text-[13px] text-slate-700 leading-relaxed font-medium break-words h-auto">
+                            {psychological}
+                        </p>
                     </div>
+                )}
 
-                    {/* Tooltip */}
-                    {showTooltip && (
-                        <div className="absolute z-50 -top-2 left-1/2 -translate-x-1/2 -translate-y-full bg-white border border-gray-200 rounded-lg px-3 py-2 shadow-xl max-w-[220px]">
-                            <p className="text-[11px] text-gray-600 leading-relaxed">{config.desc}</p>
-                            <div className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 rotate-45 w-2 h-2 bg-white border-r border-b border-gray-200" />
+                {/* Intent Signal */}
+                {signal && (
+                    <div className="bg-cyan-50/30 border border-cyan-100 rounded-2xl p-4 flex flex-col gap-3 h-fit">
+                        <div className="flex items-center gap-2 text-cyan-600">
+                            <Target size={16} />
+                            <span className="text-[10px] font-bold uppercase tracking-wider">Intent Signal</span>
                         </div>
-                    )}
-                </div>
-            )}
-
-            {/* B. Forbidden Action - DANGER ZONE */}
-            {forbidden && (
-                <div className="rounded-xl bg-red-50 border border-red-200 p-3 space-y-1.5">
-                    <div className="flex items-center gap-2">
-                        <ShieldAlert size={14} className="text-red-500 shrink-0" />
-                        <span className="text-[10px] font-bold uppercase tracking-widest text-red-500">Danger Zone</span>
+                        <p className="text-[13px] text-slate-700 leading-relaxed font-medium break-words h-auto">
+                            {signal}
+                        </p>
                     </div>
-                    <p className="text-xs text-red-600 leading-relaxed font-medium pl-[22px]">
-                        {forbidden}
-                    </p>
-                </div>
-            )}
+                )}
 
-            {/* C. Lead Analysis (Signal + Psychological) */}
-            {(signal || psychological) && (
-                <div className="rounded-xl bg-gray-50 border border-gray-200 p-3 space-y-2.5">
-                    <span className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Lead Analysis</span>
-
-                    {signal && (
-                        <div className="flex items-start gap-2">
-                            <Radio size={13} className="text-cyan-600 mt-0.5 shrink-0" />
-                            <div>
-                                <span className="text-[9px] uppercase tracking-widest text-cyan-600 font-bold">Detected Signal</span>
-                                <p className="text-xs text-gray-600 leading-relaxed">{signal}</p>
-                            </div>
+                {/* Recommended Tactic */}
+                {strategy && (
+                    <div className="bg-amber-50/30 border border-amber-100 rounded-2xl p-4 flex flex-col gap-3 h-fit">
+                        <div className="flex items-center gap-2 text-amber-600">
+                            <Lightbulb size={16} />
+                            <span className="text-[10px] font-bold uppercase tracking-wider">Winning Strategy</span>
                         </div>
-                    )}
-
-                    {psychological && (
-                        <div className="flex items-start gap-2">
-                            <Brain size={13} className="text-fuchsia-600 mt-0.5 shrink-0" />
-                            <div>
-                                <span className="text-[9px] uppercase tracking-widest text-fuchsia-600 font-bold">Psychological Factor</span>
-                                <p className="text-xs text-gray-600 leading-relaxed">{psychological}</p>
-                            </div>
-                        </div>
-                    )}
-                </div>
-            )}
-
-            {/* D. Recommended Tactic */}
-            {strategy && (
-                <div className="rounded-xl bg-orange-50 border border-orange-200 p-3 space-y-1.5">
-                    <div className="flex items-center gap-2">
-                        <Target size={14} className="text-primary shrink-0" />
-                        <span className="text-[10px] font-bold uppercase tracking-widest text-primary/80">Recommended Tactic</span>
+                        <p className="text-[13px] text-slate-700 leading-relaxed font-medium break-words h-auto">
+                            {strategy}
+                        </p>
                     </div>
-                    <p className="text-xs text-gray-700 leading-relaxed pl-[22px]">
-                        {strategy}
-                    </p>
-                </div>
-            )}
+                )}
+
+                {/* Forbidden Action - DANGER ZONE */}
+                {forbidden && (
+                    <div className="bg-red-50 border-l-4 border-red-500 rounded-r-2xl p-4 flex flex-col gap-3 h-fit">
+                        <div className="flex items-center gap-2 text-red-600">
+                            <AlertOctagon size={16} />
+                            <span className="text-[10px] font-bold uppercase tracking-wider">Danger Zone</span>
+                        </div>
+                        <p className="text-[13px] text-red-700 leading-relaxed font-bold break-words h-auto">
+                            {forbidden}
+                        </p>
+                    </div>
+                )}
+            </div>
         </div>
     )
 }

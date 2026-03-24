@@ -885,7 +885,7 @@ const SalesInboxPage = () => {
                     try {
                         const { data: updated, error } = await supabase
                             .from('leads')
-                            .select('last_cadence_level, last_signal_detected, last_psychological_factor, last_forbidden_action, last_strategy_used, suggested_message')
+                            .select('cadence_stage, last_signal_detected, last_psychological_factor, last_forbidden_action, last_strategy_used, suggested_message')
                             .eq('id', leadId)
                             .single()
 
@@ -935,7 +935,7 @@ const SalesInboxPage = () => {
                     try {
                         const { data: updatedLead, error } = await supabase
                             .from('leads')
-                            .select('cadence_stage, stage_reasoning, next_action, ready_for_analysis, updated_at, last_interaction_date')
+                            .select('cadence_stage, last_signal_detected, last_psychological_factor, last_forbidden_action, last_strategy_used, updated_at, last_interaction_date')
                             .eq('id', activeLead.id)
                             .single()
 
@@ -1525,7 +1525,7 @@ const SalesInboxPage = () => {
 
                                 <textarea
                                     className="w-full bg-white border border-gray-200 rounded-xl pl-[5.5rem] pr-12 py-3 text-gray-800 placeholder-gray-400 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition-all resize-none text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                                    rows="1"
+                                    rows={newMessage.trim().length > 0 ? 3 : 1}
                                     placeholder={isSending ? 'Sending...' : 'Type your reply... (Ctrl+Enter to send)'}
                                     value={newMessage}
                                     onChange={e => setNewMessage(e.target.value)}
