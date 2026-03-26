@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../services/supabaseClient';
 import { useAuth } from '../contexts/AuthContext'; // Import Auth
-import { Pencil, Upload, FileText, X, Check, Link as LinkIcon, Info, AlertTriangle, Linkedin, Download } from 'lucide-react';
+import { Pencil, Upload, FileText, X, Check, Link as LinkIcon, Info, AlertTriangle, Linkedin, Download, Bot, ChevronDown, ChevronUp, Save } from 'lucide-react';
+import { toast } from 'sonner';
 
 
 
@@ -11,8 +12,12 @@ export default function ClientsPage() {
     const [loading, setLoading] = useState(true);
     const [showModal, setShowModal] = useState(false);
     const [saving, setSaving] = useState(false);
+    const [savingScripts, setSavingScripts] = useState(false);
     const [editingClient, setEditingClient] = useState(null);
-    const [toast, setToast] = useState(null);
+    const [toast2, setToast2] = useState(null);
+    const [showScriptsSection, setShowScriptsSection] = useState(false);
+    const [activeScriptTab, setActiveScriptTab] = useState('G1');
+    const [messageScripts, setMessageScripts] = useState({ G1: '', G2: '', G3: '', G4: '', G5: '' });
 
     // File Upload State
     const [filesToUpload, setFilesToUpload] = useState([]);
@@ -118,6 +123,16 @@ export default function ClientsPage() {
             agenda_link: client.agenda_link || '',
             language_preference: client.language_preference || 'Português (BR)'
         });
+        const scripts = client.message_scripts || {};
+        setMessageScripts({
+            G1: scripts.G1 || '',
+            G2: scripts.G2 || '',
+            G3: scripts.G3 || '',
+            G4: scripts.G4 || '',
+            G5: scripts.G5 || ''
+        });
+        setActiveScriptTab('G1');
+        setShowScriptsSection(false);
         setFilesToUpload([]);
         setExistingFiles([]);
         fetchClientFiles(client.id);
@@ -173,8 +188,26 @@ export default function ClientsPage() {
         const link = `${window.location.origin}/portal/${client.access_token}`;
         navigator.clipboard.writeText(link);
 
-        setToast({ message: "Access link copied!", type: "success" });
-        setTimeout(() => setToast(null), 3000);
+        setToast2({ message: "Access link copied!", type: "success" });
+        setTimeout(() => setToast2(null), 3000);
+    };
+
+    const handleSaveScripts = async () => {
+        if (!editingClient) return;
+        setSavingScripts(true);
+        try {
+            const { error } = await supabase
+                .from('clients')
+                .update({ message_scripts: messageScripts })
+                .eq('id', editingClient.id);
+            if (error) throw error;
+            toast.success('✅ Scripts saved successfully!');
+        } catch (err) {
+            console.error('[Scripts] Save error:', err);
+            toast.error('❌ Error saving scripts.');
+        } finally {
+            setSavingScripts(false);
+        }
     };
 
     const sanitizeFileName = (originalName) => {
@@ -385,12 +418,12 @@ export default function ClientsPage() {
             )}
 
             {/* TOAST */}
-            {toast && (
+            {toast2 && (
                 <div style={{
                     position: 'fixed',
                     bottom: '2rem',
                     right: '2rem',
-                    background: toast.type === 'error' ? '#ef4444' : '#22c55e',
+                    background: toast2.type === 'error' ? '#ef4444' : '#22c55e',
                     color: 'white',
                     padding: '1rem 1.5rem',
                     borderRadius: '8px',
@@ -402,7 +435,7 @@ export default function ClientsPage() {
                     animation: 'slideIn 0.3s ease-out'
                 }}>
                     <Check size={18} />
-                    <span style={{ fontWeight: 600 }}>{toast.message}</span>
+                    <span style={{ fontWeight: 600 }}>{toast2.message}</span>
                 </div>
             )}
 
@@ -654,6 +687,114 @@ export default function ClientsPage() {
                                     </div>
                                 )}
                             </div>
+
+                            {/* MESSAGE SCRIPTS SECTION — only when editing */}
+                            {editingClient && (
+                                <div style={{ borderTop: '1px solid #e5e7eb', paddingTop: '1rem', marginTop: '0.5rem' }}>
+                                    {/* Accordion Header */}
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowScriptsSection(v => !v)}
+                                        style={{
+                                            width: '100%', display: 'flex', alignItems: 'center',
+                                            justifyContent: 'space-between', background: '#fef3c7',
+                                            border: '1px solid #fcd34d', borderRadius: '8px',
+                                            padding: '0.75rem 1rem', cursor: 'pointer', gap: '0.5rem'
+                                        }}
+                                    >
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                            <Bot size={18} style={{ color: '#d97706' }} />
+                                            <span style={{ fontWeight: '700', fontSize: '0.9rem', color: '#92400e' }}>
+                                                Message Scripts (AI Identity)
+                                            </span>
+                                        </div>
+                                        {showScriptsSection
+                                            ? <ChevronUp size={16} style={{ color: '#92400e' }} />
+                                            : <ChevronDown size={16} style={{ color: '#92400e' }} />
+                                        }
+                                    </button>
+
+                                    {showScriptsSection && (
+                                        <div style={{ marginTop: '0.75rem', padding: '1rem', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '8px' }}>
+                                            {/* Description */}
+                                            <p style={{ fontSize: '0.8rem', color: '#78350f', marginBottom: '1rem', lineHeight: '1.5', background: '#fef9c3', padding: '0.75rem', borderRadius: '6px', border: '1px solid #fde047' }}>
+                                                💡 Paste here real examples of messages you usually send. The Copilot AI will analyze your slang, tone of voice, and structure to generate messages with your identity at each stage of the funnel.
+                                            </p>
+
+                                            {/* Tabs */}
+                                            <div style={{ display: 'flex', gap: '0.375rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
+                                                {[
+                                                    { id: 'G1', label: 'G1 · Icebreaker' },
+                                                    { id: 'G2', label: 'G2' },
+                                                    { id: 'G3', label: 'G3' },
+                                                    { id: 'G4', label: 'G4' },
+                                                    { id: 'G5', label: 'G5' }
+                                                ].map(tab => (
+                                                    <button
+                                                        key={tab.id}
+                                                        type="button"
+                                                        onClick={() => setActiveScriptTab(tab.id)}
+                                                        style={{
+                                                            padding: '0.375rem 0.875rem',
+                                                            borderRadius: '999px',
+                                                            border: activeScriptTab === tab.id ? '2px solid #ea580c' : '2px solid #d1d5db',
+                                                            background: activeScriptTab === tab.id ? '#ea580c' : 'white',
+                                                            color: activeScriptTab === tab.id ? 'white' : '#374151',
+                                                            fontWeight: '700',
+                                                            fontSize: '0.8rem',
+                                                            cursor: 'pointer',
+                                                            transition: 'all 0.15s ease'
+                                                        }}
+                                                    >
+                                                        {tab.label}
+                                                    </button>
+                                                ))}
+                                            </div>
+
+                                            {/* Active Textarea */}
+                                            <textarea
+                                                value={messageScripts[activeScriptTab]}
+                                                onChange={e => setMessageScripts(prev => ({ ...prev, [activeScriptTab]: e.target.value }))}
+                                                placeholder={`Paste real example messages for stage ${activeScriptTab}...`}
+                                                style={{
+                                                    width: '100%', minHeight: '200px', padding: '0.75rem',
+                                                    border: '1px solid #fbbf24', borderRadius: '8px',
+                                                    fontSize: '0.875rem', color: '#1f2937',
+                                                    resize: 'vertical', outline: 'none',
+                                                    fontFamily: 'inherit', lineHeight: '1.6',
+                                                    background: 'white', boxSizing: 'border-box'
+                                                }}
+                                                onFocus={e => { e.target.style.borderColor = '#ea580c'; e.target.style.boxShadow = '0 0 0 3px rgba(234,88,12,0.1)'; }}
+                                                onBlur={e => { e.target.style.borderColor = '#fbbf24'; e.target.style.boxShadow = 'none'; }}
+                                            />
+
+                                            {/* Char count hint */}
+                                            <p style={{ fontSize: '0.7rem', color: '#9ca3af', textAlign: 'right', marginTop: '0.25rem' }}>
+                                                {messageScripts[activeScriptTab]?.length || 0} chars
+                                            </p>
+
+                                            {/* Save Scripts Button */}
+                                            <button
+                                                type="button"
+                                                onClick={handleSaveScripts}
+                                                disabled={savingScripts}
+                                                style={{
+                                                    marginTop: '0.75rem', width: '100%', padding: '0.625rem 1rem',
+                                                    background: savingScripts ? '#9ca3af' : '#ea580c',
+                                                    color: 'white', border: 'none', borderRadius: '8px',
+                                                    fontWeight: '700', fontSize: '0.875rem',
+                                                    cursor: savingScripts ? 'not-allowed' : 'pointer',
+                                                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem',
+                                                    transition: 'background 0.15s ease'
+                                                }}
+                                            >
+                                                <Save size={16} />
+                                                {savingScripts ? 'Saving...' : 'Save Scripts'}
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
 
                             <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1rem' }}>
                                 <button

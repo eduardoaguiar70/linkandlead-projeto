@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import LeadAvatar from './LeadAvatar'
+import ScheduleMessageModal from './ScheduleMessageModal'
 import { supabase } from '../services/supabaseClient'
 import {
     X, Briefcase, MapPin, ExternalLink, Star, Target,
@@ -77,6 +78,7 @@ const UnifiedLeadModal = ({ lead, onClose, onLeadUpdated }) => {
     const [followupInterval, setFollowupInterval] = useState(lead?.followup_interval_days || 7)
     const [customInterval, setCustomInterval] = useState('')
     const [showCustomInterval, setShowCustomInterval] = useState(false)
+    const [showScheduleMessage, setShowScheduleMessage] = useState(false)
     const [followupUntilResponded, setFollowupUntilResponded] = useState(lead?.followup_until_responded !== false)
     const [showFollowupSettings, setShowFollowupSettings] = useState(false)
     const [observations, setObservations] = useState(lead?.observations || '')
@@ -619,6 +621,17 @@ const UnifiedLeadModal = ({ lead, onClose, onLeadUpdated }) => {
                                         <Clock size={10} className="inline mr-1" />
                                         Contacting every <strong className="text-slate-600">{followupInterval} days</strong>{followupUntilResponded ? ', until they reply' : ''}.
                                     </p>
+
+                                    {/* Schedule follow-up message button */}
+                                    <div className="pt-2 border-t border-slate-100 mt-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowScheduleMessage(true)}
+                                            className="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl bg-orange-50 border border-orange-200 text-orange-600 font-bold text-xs hover:bg-orange-100 hover:border-orange-300 transition-all shadow-sm"
+                                        >
+                                            <Calendar size={13} /> Schedule Follow-up Message
+                                        </button>
+                                    </div>
                                 </div>
                             )}
                         </div>
@@ -679,6 +692,22 @@ const UnifiedLeadModal = ({ lead, onClose, onLeadUpdated }) => {
                     </div>
                 </div>
             </div>
+
+            {/* Schedule Message Modal Layer */}
+            {showScheduleMessage && (
+                <div onClick={e => e.stopPropagation()}>
+                    <ScheduleMessageModal
+                        lead={lead}
+                        clientId={lead.client_id}
+                        onClose={() => setShowScheduleMessage(false)}
+                        onSuccess={(msg) => {
+                            toast.success(msg)
+                            setShowScheduleMessage(false)
+                        }}
+                        onError={(msg) => toast.error(msg)}
+                    />
+                </div>
+            )}
         </div>
     )
 }

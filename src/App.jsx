@@ -28,6 +28,7 @@ import ScheduledMessagesPage from './pages/ScheduledMessagesPage'
 import MyAnalyticsPage from './pages/MyAnalyticsPage'
 import TeamDashboard from './pages/TeamDashboard'
 import SystemDocumentationPage from './pages/SystemDocumentationPage'
+import MessageScriptsPage from './pages/MessageScriptsPage'
 import AdminLayout from './components/AdminLayout'
 
 // Client Portal New (Ideas/Insights)
@@ -194,6 +195,7 @@ const App = () => {
                   <Route path="/analytics" element={<MyAnalyticsPage />} />
                   <Route path="/team-dashboard" element={<TeamDashboard />} />
                   <Route path="/docs" element={<SystemDocumentationPage />} />
+                  <Route path="/message-scripts" element={<MessageScriptsPage />} />
                 </Route>
 
                 {/* Fallback */}

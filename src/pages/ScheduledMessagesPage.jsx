@@ -12,10 +12,9 @@ import {
     AlertCircle,
     CheckCircle2,
     Timer,
-    ChevronRight,
     Loader2,
     MessageSquare,
-    MoreVertical
+    Pencil
 } from 'lucide-react';
 import LeadAvatar from '../components/LeadAvatar';
 import ScheduleMessageModal from '../components/ScheduleMessageModal';
@@ -26,6 +25,7 @@ const ScheduledMessagesPage = () => {
     const [scheduledMessages, setScheduledMessages] = useState([]);
     const [loading, setLoading] = useState(true);
     const [showModal, setShowModal] = useState(false);
+    const [editingMessage, setEditingMessage] = useState(null);
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
 
@@ -131,7 +131,10 @@ const ScheduledMessagesPage = () => {
                     <p className="text-gray-500 text-sm font-medium">Manage and monitor LinkedIn messages scheduled for future delivery.</p>
                 </div>
                 <button 
-                    onClick={() => setShowModal(true)}
+                    onClick={() => {
+                        setEditingMessage(null);
+                        setShowModal(true);
+                    }}
                     className="flex items-center justify-center gap-2 px-6 py-3 bg-orange-500 hover:bg-orange-600 text-white rounded-xl font-bold shadow-lg shadow-orange-500/20 transition-all hover:scale-[1.02] active:scale-[0.98]"
                 >
                     <Plus size={20} />
@@ -265,13 +268,25 @@ const ScheduledMessagesPage = () => {
                                         <td className="px-6 py-5">
                                             <div className="flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-all transform translate-x-2 group-hover:translate-x-0">
                                                 {msg.status?.toLowerCase() === 'pending' && (
-                                                    <button 
-                                                        onClick={() => handleCancelMessage(msg.id)}
-                                                        className="p-2.5 rounded-xl bg-white border border-red-100 text-red-500 hover:bg-red-50 transition-all shadow-sm hover:shadow-md active:scale-95"
-                                                        title="Cancel Scheduling"
-                                                    >
-                                                        <Trash2 size={16} />
-                                                    </button>
+                                                    <>
+                                                        <button 
+                                                            onClick={() => {
+                                                                setEditingMessage(msg);
+                                                                setShowModal(true);
+                                                            }}
+                                                            className="p-2.5 rounded-xl bg-white border border-blue-100 text-blue-500 hover:bg-blue-50 transition-all shadow-sm hover:shadow-md active:scale-95"
+                                                            title="Edit Message"
+                                                        >
+                                                            <Pencil size={16} />
+                                                        </button>
+                                                        <button 
+                                                            onClick={() => handleCancelMessage(msg.id)}
+                                                            className="p-2.5 rounded-xl bg-white border border-red-100 text-red-500 hover:bg-red-50 transition-all shadow-sm hover:shadow-md active:scale-95"
+                                                            title="Cancel Scheduling"
+                                                        >
+                                                            <Trash2 size={16} />
+                                                        </button>
+                                                    </>
                                                 )}
                                                 <button 
                                                     onClick={() => window.open(`/sales/inbox?leadId=${msg.lead_id}`, '_self')}
@@ -294,7 +309,11 @@ const ScheduledMessagesPage = () => {
             {showModal && (
                 <ScheduleMessageModal 
                     clientId={selectedClientId}
-                    onClose={() => setShowModal(false)}
+                    editMessage={editingMessage}
+                    onClose={() => {
+                        setShowModal(false);
+                        setEditingMessage(null);
+                    }}
                     onSuccess={(msg) => {
                         toast.success(msg);
                         fetchScheduledMessages();

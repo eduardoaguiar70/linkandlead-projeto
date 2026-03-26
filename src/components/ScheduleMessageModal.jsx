@@ -20,9 +20,9 @@ const TIMEZONES = [
     { label: 'Tokyo (GMT+9)', value: 'Asia/Tokyo' }
 ];
 
-const ScheduleMessageModal = ({ lead: initialLead, clientId, onClose, onSuccess, onError }) => {
-    const [lead, setLead] = useState(initialLead || null);
-    const [message, setMessage] = useState('');
+const ScheduleMessageModal = ({ lead: initialLead, clientId, onClose, onSuccess, onError, editMessage }) => {
+    const [lead, setLead] = useState(editMessage?.leads || initialLead || null);
+    const [message, setMessage] = useState(editMessage?.message_text || '');
     const [scheduledAt, setScheduledAt] = useState('');
     const [timezone, setTimezone] = useState(() => {
         // Try to find if the browser timezone is in our list, otherwise default to Sao_Paulo or browser default
@@ -56,10 +56,15 @@ const ScheduleMessageModal = ({ lead: initialLead, clientId, onClose, onSuccess,
 
     // Set initial date/time when component mounts or timezone changes
     useEffect(() => {
-        const now = new Date();
-        now.setMinutes(now.getMinutes() + 30);
-        setScheduledAt(formatForInput(now, timezone));
-    }, [timezone, formatForInput]);
+        if (scheduledAt) return; // Only set once initially
+        if (editMessage) {
+            setScheduledAt(formatForInput(new Date(editMessage.scheduled_at), timezone));
+        } else {
+            const now = new Date();
+            now.setMinutes(now.getMinutes() + 30);
+            setScheduledAt(formatForInput(now, timezone));
+        }
+    }, [timezone, formatForInput, editMessage, scheduledAt]);
 
     // Current local time string for 'min' attribute
     const minTimeStr = useMemo(() => formatForInput(new Date(), timezone), [timezone, formatForInput]);
@@ -120,19 +125,8 @@ const ScheduleMessageModal = ({ lead: initialLead, clientId, onClose, onSuccess,
         // 1. Create a date string that JS can parse as local time for that timezone
         // 2. Or just use the browser's ability to calculate the offset
         
-        const [datePart, timePart] = scheduledAt.split('T');
-        const [year, month, day] = datePart.split('-').map(Number);
-        const [hour, minute] = timePart.split(':').map(Number);
-        
         // This is the chosen time in the chosen timezone. 
         // We need to find the UTC equivalent.
-        const formatter = new Intl.DateTimeFormat('en-US', {
-            timeZone: timezone,
-            year: 'numeric', month: 'numeric', day: 'numeric',
-            hour: 'numeric', minute: 'numeric', second: 'numeric',
-            hour12: false
-        });
-
         // Binary search or iterative approach to find the UTC time that matches this local time?
         // Actually, a simpler way: new Date(scheduledAt) assumes browser timezone.
         // We can offset it.
@@ -171,21 +165,32 @@ const ScheduleMessageModal = ({ lead: initialLead, clientId, onClose, onSuccess,
                 return;
             }
 
-            const { error } = await supabase
-                .from('scheduled_messages')
-                .insert([
-                    {
+            if (editMessage) {
+                const { error } = await supabase
+                    .from('scheduled_messages')
+                    .update({
                         lead_id: lead.id,
-                        client_id: clientId,
                         message_text: message.trim(),
-                        scheduled_at: finalUtcDate.toISOString(),
-                        status: 'pending'
-                    }
-                ]);
-
-            if (error) throw error;
-
-            onSuccess('Message scheduled successfully!');
+                        scheduled_at: finalUtcDate.toISOString()
+                    })
+                    .eq('id', editMessage.id);
+                if (error) throw error;
+                onSuccess('Message updated successfully!');
+            } else {
+                const { error } = await supabase
+                    .from('scheduled_messages')
+                    .insert([
+                        {
+                            lead_id: lead.id,
+                            client_id: clientId,
+                            message_text: message.trim(),
+                            scheduled_at: finalUtcDate.toISOString(),
+                            status: 'pending'
+                        }
+                    ]);
+                if (error) throw error;
+                onSuccess('Message scheduled successfully!');
+            }
             onClose();
         } catch (err) {
             console.error('[ScheduleModal] Error:', err);
@@ -204,7 +209,7 @@ const ScheduleMessageModal = ({ lead: initialLead, clientId, onClose, onSuccess,
                         <div className="w-8 h-8 rounded-lg bg-orange-100 flex items-center justify-center text-orange-600">
                             <Clock size={18} />
                         </div>
-                        <h3 className="font-bold text-gray-900">Schedule Message</h3>
+                        <h3 className="font-bold text-gray-900">{editMessage ? 'Edit Scheduled Message' : 'Schedule Message'}</h3>
                     </div>
                     <button 
                         onClick={onClose}
@@ -226,7 +231,7 @@ const ScheduleMessageModal = ({ lead: initialLead, clientId, onClose, onSuccess,
                                     <div className="text-sm font-bold text-gray-900 truncate">{lead.nome}</div>
                                     <div className="text-[10px] text-gray-500 truncate">{lead.empresa || lead.headline}</div>
                                 </div>
-                                {!initialLead && (
+                                {!initialLead && !editMessage && (
                                     <button 
                                         type="button"
                                         onClick={() => { setLead(null); setSearchTerm(''); }}
@@ -337,7 +342,7 @@ const ScheduleMessageModal = ({ lead: initialLead, clientId, onClose, onSuccess,
                             ) : (
                                 <>
                                     <Send size={16} />
-                                    Schedule Message
+                                    {editMessage ? 'Save Changes' : 'Schedule Message'}
                                 </>
                             )}
                         </button>

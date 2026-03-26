@@ -22,7 +22,8 @@ import {
     Link2,
     Calendar,
     BarChart2,
-    Shield
+    Shield,
+    Bot
 } from 'lucide-react'
 import CreatePostModal from './CreatePostModal'
 import ClientSelector from './ClientSelector'
@@ -183,6 +184,9 @@ const AdminLayout = () => {
                         <Link to="/clients" className={isActive('/clients')}>
                             <Users size={18} /> Clients
                         </Link>
+                        <Link to="/message-scripts" className={isActive('/message-scripts')}>
+                            <Bot size={18} /> Message Scripts
+                        </Link>
                         <Link to="/engagement" className={isActive('/engagement')}>
                             <ThumbsUp size={18} /> Engagement
                         </Link>
@@ -289,7 +293,7 @@ const AdminLayout = () => {
             {/* MAIN CONTENT */}
             <main className="main-content">
                 {/* Client Context Header for sales-related pages */}
-                {(location.pathname === '/' || location.pathname.startsWith('/sales') || location.pathname.startsWith('/leads') || location.pathname.startsWith('/campaigns') || location.pathname.startsWith('/network') || location.pathname.startsWith('/connections') || location.pathname.startsWith('/engagement') || location.pathname.startsWith('/missions') || location.pathname.startsWith('/content-library') || location.pathname.startsWith('/pipeline') || location.pathname.startsWith('/blacklist')) && !location.pathname.startsWith('/analytics') && !location.pathname.startsWith('/team-dashboard') && (
+                {(location.pathname === '/' || location.pathname.startsWith('/sales') || location.pathname.startsWith('/leads') || location.pathname.startsWith('/campaigns') || location.pathname.startsWith('/network') || location.pathname.startsWith('/connections') || location.pathname.startsWith('/engagement') || location.pathname.startsWith('/missions') || location.pathname.startsWith('/content-library') || location.pathname.startsWith('/pipeline') || location.pathname.startsWith('/blacklist') || location.pathname.startsWith('/message-scripts') || location.pathname.startsWith('/clients')) && !location.pathname.startsWith('/analytics') && !location.pathname.startsWith('/team-dashboard') && (
                     <div className="px-6 py-3 bg-white/5 border-b border-white/10 flex items-center justify-between backdrop-blur-md">
                         <div className="flex items-center gap-4">
                             <span className="text-sm text-text-muted font-medium">Context:</span>
