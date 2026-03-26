@@ -56,16 +56,28 @@ const LinkedInEngagementPage = () => {
 
     // Reusable fetch function
     const fetchPosts = useCallback(async (resetSelection = true) => {
-        if (!selectedClientId) return
-        setLoadingPosts(true)
+        if (!selectedClientId) {
+            console.log("[LinkedInEngagement] No selectedClientId available.");
+            return;
+        }
+
+        const clientIdNum = Number(selectedClientId);
+        setLoadingPosts(true);
+        console.log("[LinkedInEngagement] Fetching posts for client_id:", clientIdNum);
+
         try {
             const { data, error } = await supabase
                 .from('linkedin_posts')
                 .select('*')
-                .eq('client_id', selectedClientId)
-                .order('created_at_linkedin', { ascending: false })
+                .eq('client_id', clientIdNum)
+                .order('created_at_linkedin', { ascending: false });
 
-            if (error) throw error
+            if (error) {
+                console.error("[LinkedInEngagement] Supabase error fetching posts:", error);
+                throw error;
+            }
+
+            console.log("[LinkedInEngagement] Fetched", data?.length || 0, "posts.");
             setPosts(data || [])
             if (resetSelection) {
                 setSelectedPost(null)
@@ -127,8 +139,7 @@ const LinkedInEngagementPage = () => {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    user_id: user?.id || 'system_user',
-                    client_id: selectedClientId
+                    client_id: Number(selectedClientId)
                 })
             })
 
