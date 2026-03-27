@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../services/supabaseClient'
 import { useClientSelection } from '../contexts/ClientSelectionContext'
+import { useAuth } from '../contexts/AuthContext'
 import { Kanban, Table2, Loader2, Users } from 'lucide-react'
 import { toast } from 'sonner'
 import PipelineTable from '../components/pipeline/PipelineTable'
@@ -24,6 +25,7 @@ const toggleBtnStyle = (active) => ({
 
 const PipelinePage = () => {
     const { selectedClientId } = useClientSelection()
+    const { user } = useAuth()
     const [viewMode, setViewMode] = useState('table')
     const [allLeads, setAllLeads] = useState([])
     const [funnelLeads, setFunnelLeads] = useState([])
@@ -46,6 +48,7 @@ const PipelinePage = () => {
                     .from('leads')
                     .select(SELECT)
                     .eq('client_id', selectedClientId)
+                    .eq('user_id', user.id)
                     .neq('is_blacklisted', true)
                     .order('last_interaction_date', { ascending: false, nullsFirst: false })
                     .range(from, from + BATCH - 1)
@@ -70,6 +73,7 @@ const PipelinePage = () => {
                 .from('leads')
                 .select('id, nome, empresa, headline, avatar_url, linkedin_profile_url, icp_score, icp_reason, cadence_stage, stage_reasoning, crm_stage, has_engaged, tier, proposal_value, is_blacklisted, total_interactions_count, last_interaction_date, last_task_completed_at, client_id, call_status, call_scheduled_at')
                 .eq('client_id', selectedClientId)
+                .eq('user_id', user.id)
                 .neq('is_blacklisted', true)
                 .not('crm_stage', 'is', null)
                 .neq('crm_stage', '')

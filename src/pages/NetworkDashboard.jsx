@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { supabase } from '../services/supabaseClient'
 import { useClientSelection } from '../contexts/ClientSelectionContext'
+import { useAuth } from '../contexts/AuthContext'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
     Search,
@@ -45,6 +46,7 @@ const NetworkDashboard = () => {
     const { id: campaignId } = useParams()
     const navigate = useNavigate()
     const { selectedClientId } = useClientSelection()
+    const { user } = useAuth()
 
     const [campaign, setCampaign] = useState(null)
     const [clientName, setClientName] = useState('')
@@ -189,6 +191,7 @@ const NetworkDashboard = () => {
             .from('clients')
             .select('nome')
             .eq('id', selectedClientId)
+            .eq('user_id', user.id)
             .single()
         if (data) setClientName(data.nome)
     }
@@ -200,6 +203,7 @@ const NetworkDashboard = () => {
                 .from('clients')
                 .select('last_sync_timestamp')
                 .eq('id', selectedClientId)
+                .eq('user_id', user.id)
                 .single()
 
             if (data?.last_sync_timestamp) {
@@ -842,6 +846,7 @@ const NetworkDashboard = () => {
                 .from('clients')
                 .select('unipile_account_id')
                 .eq('id', selectedClientId)
+                .eq('user_id', user.id)
                 .single()
 
             if (clientError || !client?.unipile_account_id) {

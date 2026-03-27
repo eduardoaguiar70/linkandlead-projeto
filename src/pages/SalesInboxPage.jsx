@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { supabase } from '../services/supabaseClient'
 import { useClientSelection } from '../contexts/ClientSelectionContext'
+import { useAuth } from '../contexts/AuthContext'
 import LeadAvatar from '../components/LeadAvatar'
 import UnifiedLeadModal from '../components/UnifiedLeadModal'
 const N8N_GENERATE_REPLY_URL = 'https://n8n-n8n-start.kfocge.easypanel.host/webhook/generate-reply'
@@ -28,6 +29,7 @@ const isLeadTask = (lead) => {
 
 const SalesInboxPage = () => {
     const { selectedClientId, setActiveLeadId } = useClientSelection()
+    const { user } = useAuth()
     const [searchParams, setSearchParams] = useSearchParams()
     const [leads, setLeads] = useState([])
     const [loadingLeads, setLoadingLeads] = useState(false)
@@ -253,13 +255,17 @@ const SalesInboxPage = () => {
                 const data = await response.json()
                 // Handle new multi-option format { options: [...] }
                 if (data.options && Array.isArray(data.options) && data.options.length > 0) {
-                    replyText = `✨ Generated ${data.options.length} icebreaker options — choose one below.`
-                    setIcebreakerOptions(data.options)
-                    setSelectedIcebreakerIdx(null)
+                    // Inject icebreaker options directly into the Copilot panel
+                    setRightTab('copiloto')
+                    setAiChatHistory(prev => [
+                        ...prev,
+                        { role: 'assistant', content: `✨ Here are ${data.options.length} icebreaker options for you — choose one:`, type: 'icebreaker_intro' },
+                        { role: 'assistant', type: 'icebreaker_options', options: data.options }
+                    ])
+                    return // no replyText needed
                 } else {
                     // Backward-compat: plain string
                     replyText = data.icebreaker || 'No response.'
-                    setIcebreakerOptions([])
                 }
             } else {
                 // Ongoing conversation: generate a contextual reply
@@ -761,6 +767,7 @@ const SalesInboxPage = () => {
             .from('clients')
             .select('unipile_account_id')
             .eq('id', activeLead.client_id)
+            .eq('user_id', user.id)
             .single()
 
         if (clientError || !client?.unipile_account_id) {
@@ -873,12 +880,16 @@ const SalesInboxPage = () => {
                 const data = await response.json()
                 // Handle new multi-option format { options: [...] }
                 if (data.options && Array.isArray(data.options) && data.options.length > 0) {
-                    setIcebreakerOptions(data.options)
-                    setSelectedIcebreakerIdx(null)
+                    // Switch to Copilot tab and inject options as structured chat message
+                    setRightTab('copiloto')
+                    setAiChatHistory(prev => [
+                        ...prev,
+                        { role: 'assistant', content: `✨ Here are ${data.options.length} icebreaker options — choose one:`, type: 'icebreaker_intro' },
+                        { role: 'assistant', type: 'icebreaker_options', options: data.options }
+                    ])
                     setSdrSeniorGenerated(true)
                 } else if (data.icebreaker) {
                     // Backward-compat: plain string
-                    setIcebreakerOptions([])
                     setNewMessage(data.icebreaker)
                     setDraftMessage(data.icebreaker)
                     setSdrSeniorGenerated(true)
@@ -1489,63 +1500,7 @@ const SalesInboxPage = () => {
 
                         {/* Input Area */}
                         <div className="p-4 border-t border-gray-200 bg-gray-50 relative">
-                        {/* Icebreaker Multi-Option Cards */}
-                            {icebreakerOptions.length > 0 && (
-                                <div className="absolute bottom-full left-0 right-0 mb-2 px-4">
-                                    <div className="bg-white/95 backdrop-blur-md rounded-2xl shadow-xl border border-gray-200 overflow-hidden animate-in slide-in-from-bottom-2 duration-200">
-                                        <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-100 bg-orange-50/70">
-                                            <div className="flex items-center gap-2 text-orange-700 text-xs font-bold">
-                                                <span>✨</span>
-                                                <span>Choose an Icebreaker</span>
-                                                <span className="text-orange-400 font-normal">({icebreakerOptions.length} options)</span>
-                                            </div>
-                                            <button
-                                                onClick={() => setIcebreakerOptions([])}
-                                                className="text-gray-400 hover:text-gray-600 transition-colors p-0.5"
-                                            >
-                                                <X size={14} />
-                                            </button>
-                                        </div>
-                                        <div className="p-3 grid gap-2 max-h-64 overflow-y-auto custom-scrollbar">
-                                            {icebreakerOptions.map((option, idx) => (
-                                                <div
-                                                    key={idx}
-                                                    className={`relative rounded-xl border p-3 transition-all ${
-                                                        selectedIcebreakerIdx === idx
-                                                            ? 'border-emerald-400 bg-emerald-50 shadow-sm'
-                                                            : 'border-gray-200 bg-gray-50 hover:border-orange-300 hover:bg-orange-50/40'
-                                                    }`}
-                                                >
-                                                    {selectedIcebreakerIdx === idx && (
-                                                        <span className="absolute top-2 right-2 text-emerald-500 text-[10px] font-bold tracking-wide flex items-center gap-1">
-                                                            <Check size={11} /> Selected
-                                                        </span>
-                                                    )}
-                                                    <p className="text-xs text-gray-700 leading-relaxed pr-14 whitespace-pre-wrap">{option}</p>
-                                                    <div className="flex items-center gap-1.5 mt-2">
-                                                        <button
-                                                            onClick={() => navigator.clipboard.writeText(option)}
-                                                            className="flex items-center gap-1 px-2 py-1 rounded-lg bg-white border border-gray-200 text-gray-500 hover:border-gray-300 hover:text-gray-700 text-[10px] font-semibold transition-all"
-                                                            title="Copy to clipboard"
-                                                        >
-                                                            <Copy size={10} /> Copy
-                                                        </button>
-                                                        <button
-                                                            onClick={() => {
-                                                                setNewMessage(option)
-                                                                setSelectedIcebreakerIdx(idx)
-                                                            }}
-                                                            className="flex items-center gap-1 px-2 py-1 rounded-lg bg-orange-500 hover:bg-orange-600 text-white text-[10px] font-bold transition-all shadow-sm"
-                                                        >
-                                                            <Check size={10} /> Use this
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
+
                             {/* Quick Actions Popover */}
                             {showQuickActionsPopover && (
                                 <div className="absolute bottom-full left-4 mb-2 w-80 bg-white/90 backdrop-blur-md rounded-2xl shadow-xl border border-gray-200 overflow-hidden flex flex-col z-50 animate-in fade-in slide-in-from-bottom-2 duration-200">
@@ -1772,27 +1727,63 @@ const SalesInboxPage = () => {
                                                 </button>
                                             </div>
                                         ) : (
-                                            aiChatHistory.map((msg, idx) => (
-                                                <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                                                    <div className={`max-w-[90%] rounded-xl px-3.5 py-2.5 text-xs leading-relaxed ${msg.role === 'user'
-                                                        ? 'bg-orange-50 border border-orange-200 text-gray-800'
-                                                        : 'bg-gray-50 border border-gray-200 text-gray-700'
-                                                        }`}>
-                                                        <p className="whitespace-pre-wrap">{msg.content}</p>
-                                                        {msg.role === 'assistant' && msg.content !== 'Erro ao gerar resposta.' && (
-                                                            <button
-                                                                onClick={() => {
-                                                                    setNewMessage(msg.content)
-                                                                    setSelectedSuggestionIdx(0)
-                                                                }}
-                                                                className="mt-2 w-full py-1.5 rounded-lg bg-primary/20 hover:bg-primary/30 border border-primary/30 text-primary text-[10px] font-bold transition-all flex items-center justify-center gap-1.5"
-                                                            >
-                                                                <Check size={11} /> Use this message
-                                                            </button>
-                                                        )}
+                                            aiChatHistory.map((msg, idx) => {
+                                                // ── Icebreaker options card block ──
+                                                if (msg.type === 'icebreaker_options') {
+                                                    return (
+                                                        <div key={idx} className="space-y-2">
+                                                            {msg.options.map((option, oIdx) => (
+                                                                <div
+                                                                    key={oIdx}
+                                                                    className="rounded-xl border border-gray-200 bg-gray-50 hover:border-orange-300 hover:bg-orange-50/40 p-3 transition-all"
+                                                                >
+                                                                    <p className="text-xs text-gray-700 leading-relaxed whitespace-pre-wrap mb-2">{option}</p>
+                                                                    <div className="flex items-center gap-1.5">
+                                                                        <button
+                                                                            onClick={() => navigator.clipboard.writeText(option)}
+                                                                            className="flex items-center gap-1 px-2 py-1 rounded-lg bg-white border border-gray-200 text-gray-500 hover:border-gray-300 hover:text-gray-700 text-[10px] font-semibold transition-all"
+                                                                            title="Copy to clipboard"
+                                                                        >
+                                                                            <Copy size={10} /> Copy
+                                                                        </button>
+                                                                        <button
+                                                                            onClick={() => {
+                                                                                setNewMessage(option)
+                                                                                setSelectedSuggestionIdx(oIdx)
+                                                                            }}
+                                                                            className="flex items-center gap-1 px-2 py-1 rounded-lg bg-orange-500 hover:bg-orange-600 text-white text-[10px] font-bold transition-all shadow-sm"
+                                                                        >
+                                                                            <Check size={10} /> Use this
+                                                                        </button>
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    )
+                                                }
+                                                // ── Regular chat message ──
+                                                return (
+                                                    <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                                                        <div className={`max-w-[90%] rounded-xl px-3.5 py-2.5 text-xs leading-relaxed ${msg.role === 'user'
+                                                            ? 'bg-orange-50 border border-orange-200 text-gray-800'
+                                                            : 'bg-gray-50 border border-gray-200 text-gray-700'
+                                                            }`}>
+                                                            <p className="whitespace-pre-wrap">{msg.content}</p>
+                                                            {msg.role === 'assistant' && !msg.type && msg.content !== 'Error generating response.' && (
+                                                                <button
+                                                                    onClick={() => {
+                                                                        setNewMessage(msg.content)
+                                                                        setSelectedSuggestionIdx(0)
+                                                                    }}
+                                                                    className="mt-2 w-full py-1.5 rounded-lg bg-primary/20 hover:bg-primary/30 border border-primary/30 text-primary text-[10px] font-bold transition-all flex items-center justify-center gap-1.5"
+                                                                >
+                                                                    <Check size={11} /> Use this message
+                                                                </button>
+                                                            )}
+                                                        </div>
                                                     </div>
-                                                </div>
-                                            ))
+                                                )
+                                            })
                                         )}
                                         {aiLoading && (
                                             <div className="flex justify-start">

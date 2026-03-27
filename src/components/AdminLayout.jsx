@@ -35,9 +35,46 @@ import { useClientSelection } from '../contexts/ClientSelectionContext'
 import { supabase } from '../services/supabaseClient'
 import { TeamMemberProvider, useTeamMember } from '../contexts/TeamMemberContext'
 
+// ─── Reusable collapsible nav group ───────────────────────────────────────────
+const NavGroup = ({ label, icon, isOpen, onToggle, children }) => (
+    <div>
+        <button
+            onClick={onToggle}
+            className={`nav-item w-full`}
+            style={{ justifyContent: 'space-between', background: 'transparent', border: 'none', cursor: 'pointer', width: '100%', textAlign: 'left' }}
+        >
+            <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start', gap: '0.6rem', flex: 1, minWidth: 0 }}>
+                {icon}
+                <span style={{ textAlign: 'left' }}>{label}</span>
+            </span>
+            <ChevronDown
+                size={14}
+                style={{
+                    transition: 'transform 0.2s',
+                    transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+                    flexShrink: 0,
+                    opacity: 0.5,
+                }}
+            />
+        </button>
+
+        <div style={{
+            overflow: 'hidden',
+            maxHeight: isOpen ? '500px' : '0px',
+            transition: 'max-height 0.25s ease',
+        }}>
+            <div className="nav-group-items" style={{ paddingLeft: '1.25rem', marginBottom: '0.25rem' }}>
+                {children}
+            </div>
+        </div>
+    </div>
+)
+
+
+// ─── Unused stub kept for backward-compat if imported elsewhere ───────────────
 const SidebarContent = () => {
     const { isTeamAdmin } = useTeamMember()
-    return null // consumed inside AdminLayout below
+    return null
 }
 
 const AdminLayout = () => {
@@ -53,10 +90,30 @@ const AdminLayout = () => {
 
     const [showCreative, setShowCreative] = useState(false)
 
-    // ── Notification System: listen for unread_count increases ──
+    // Auto-expand the group that contains the current route
+    const inAiTemplates = ['/message-scripts', '/content-library'].some(p => location.pathname.startsWith(p))
+    const inOutreach = ['/sales/scheduled', '/engagement', '/connections'].some(p => location.pathname.startsWith(p))
+    const inAccount = ['/network', '/clients', '/blacklist'].some(p => location.pathname.startsWith(p))
+
+    const [openGroups, setOpenGroups] = useState({
+        aiTemplates: inAiTemplates,
+        outreach: inOutreach,
+        account: inAccount,
+    })
+
+    // Keep groups in sync when navigating directly via URL
+    useEffect(() => {
+        setOpenGroups(prev => ({
+            aiTemplates: prev.aiTemplates || inAiTemplates,
+            outreach: prev.outreach || inOutreach,
+            account: prev.account || inAccount,
+        }))
+    }, [location.pathname]) // eslint-disable-line react-hooks/exhaustive-deps
+
+    // ── Notification System ──────────────────────────────────────────────────
     const { selectedClientId, activeLeadId } = useClientSelection()
     const { notify } = useNotifications()
-    const [inAppNotification, setInAppNotification] = useState(null) // { leadId, leadName }
+    const [inAppNotification, setInAppNotification] = useState(null)
 
     useEffect(() => {
         if (!selectedClientId) return
@@ -72,15 +129,10 @@ const AdminLayout = () => {
                 const newCount = payload.new?.unread_count || 0
                 const leadId = payload.new?.id
 
-                // Only notify if unread INCREASED and it's not the currently open lead
                 if (newCount > oldCount && String(leadId) !== String(activeLeadId)) {
                     const leadName = payload.new?.nome || 'Lead'
                     notify(leadName, leadId)
-
-                    // Trigger visual in-app toast
                     setInAppNotification({ leadId, leadName })
-
-                    // Auto-dismiss after 5 seconds
                     setTimeout(() => {
                         setInAppNotification(current => {
                             if (current && current.leadId === leadId) return null
@@ -119,7 +171,6 @@ const AdminLayout = () => {
                                 Click to open Inbox <ChevronRight size={10} />
                             </span>
                         </div>
-
                         <button
                             onClick={(e) => {
                                 e.stopPropagation()
@@ -154,49 +205,77 @@ const AdminLayout = () => {
 
                 <nav className="nav-menu" style={{ gap: '0.25rem' }}>
 
-                    {/* ═══ PRIMARY: Máquina de Vendas (always visible, no toggle) ═══ */}
+                    {/* ═══ SALES ENGINE ═══ */}
                     <div className="px-6 py-2 text-[10px] font-extrabold tracking-widest text-primary uppercase opacity-70">
                         Sales Engine
                     </div>
 
+                    {/* Direct top-level links */}
                     <div className="nav-group-items">
                         <Link to="/" className={isActive('/')}>
                             <LayoutDashboard size={18} /> Overview
                         </Link>
-                        <Link to="/network" className={isActive('/network')}>
-                            <Users size={18} /> My Network
-                        </Link>
-                        <Link to="/connections" className={isActive('/connections')}>
-                            <Link2 size={18} /> Connection Requests
+                        <Link to="/sales/inbox" className={isActive('/sales/inbox')}>
+                            <MessageCircle size={18} /> Smart Inbox
                         </Link>
                         <Link to="/missions" className={isActive('/missions')}>
                             <Flame size={18} /> Daily Tasks
                         </Link>
-                        <Link to="/sales/inbox" className={isActive('/sales/inbox')}>
-                            <MessageCircle size={18} /> Smart Inbox
-                        </Link>
-                        <Link to="/sales/scheduled" className={isActive('/sales/scheduled')}>
-                            <Calendar size={18} /> Scheduled Messages
-                        </Link>
                         <Link to="/pipeline" className={isActive('/pipeline')}>
                             <Kanban size={18} /> Pipeline
                         </Link>
-                        <Link to="/clients" className={isActive('/clients')}>
-                            <Users size={18} /> Clients
-                        </Link>
+                    </div>
+
+                    {/* ── Group: AI Templates ── */}
+                    <NavGroup
+                        label="AI Templates"
+                        icon={<Bot size={15} />}
+                        isOpen={openGroups.aiTemplates}
+                        onToggle={() => setOpenGroups(g => ({ ...g, aiTemplates: !g.aiTemplates }))}
+                    >
                         <Link to="/message-scripts" className={isActive('/message-scripts')}>
-                            <Bot size={18} /> Message Scripts
-                        </Link>
-                        <Link to="/engagement" className={isActive('/engagement')}>
-                            <ThumbsUp size={18} /> Engagement
-                        </Link>
-                        <Link to="/blacklist" className={isActive('/blacklist')}>
-                            <ShieldBan size={18} /> Blacklist
+                            <Bot size={16} /> Message Scripts
                         </Link>
                         <Link to="/content-library" className={isActive('/content-library')}>
-                            <Library size={18} /> Content Library
+                            <Library size={16} /> Content Library
                         </Link>
-                    </div>
+                    </NavGroup>
+
+                    {/* ── Group: Outreach Tools ── */}
+                    <NavGroup
+                        label="Outreach Tools"
+                        icon={<Target size={15} />}
+                        isOpen={openGroups.outreach}
+                        onToggle={() => setOpenGroups(g => ({ ...g, outreach: !g.outreach }))}
+                    >
+                        <Link to="/sales/scheduled" className={isActive('/sales/scheduled')}>
+                            <Calendar size={16} /> Scheduled Messages
+                        </Link>
+                        <Link to="/engagement" className={isActive('/engagement')}>
+                            <ThumbsUp size={16} /> Engagement
+                        </Link>
+                        <Link to="/connections" className={isActive('/connections')}>
+                            <Link2 size={16} /> Connection Requests
+                        </Link>
+                    </NavGroup>
+
+                    {/* ── Group: Account ── */}
+                    <NavGroup
+                        label="Account Settings"
+                        icon={<Users size={15} />}
+                        isOpen={openGroups.account}
+                        onToggle={() => setOpenGroups(g => ({ ...g, account: !g.account }))}
+                    >
+                        <Link to="/network" className={isActive('/network')}>
+                            <Users size={16} /> My Network
+                        </Link>
+                        <Link to="/clients" className={isActive('/clients')}>
+                            <Users size={16} /> Clients
+                        </Link>
+                        <Link to="/blacklist" className={isActive('/blacklist')}>
+                            <ShieldBan size={16} /> Blacklist
+                        </Link>
+                    </NavGroup>
 
                     {/* ═══ ANALYTICS ═══ */}
                     <div style={{ marginTop: '1.5rem' }}>
@@ -215,7 +294,7 @@ const AdminLayout = () => {
                         </div>
                     </div>
 
-                    {/* ═══ SECONDARY: Gestão Criativa (collapsible, subtle) ═══ */}
+                    {/* ═══ CONTENT (collapsible, subtle) ═══ */}
                     <div style={{ marginTop: '1.5rem' }}>
                         <button
                             onClick={() => setShowCreative(prev => !prev)}
@@ -325,4 +404,3 @@ const AdminLayoutWithTeam = () => (
 )
 
 export default AdminLayoutWithTeam
-

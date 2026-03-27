@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../services/supabaseClient';
 import { useClientSelection } from '../contexts/ClientSelectionContext';
+import { useAuth } from '../contexts/AuthContext';
 import { Bot, Save, Loader2, Info, Plus, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -31,6 +32,7 @@ const DEFAULT_SCRIPTS = { G1: [''], G2: [''], G3: [''], G4: [''], G5: [''], G6: 
 
 export default function MessageScriptsPage() {
     const { selectedClientId } = useClientSelection();
+    const { user } = useAuth();
     const [activeTab, setActiveTab] = useState('G1');
     const [scripts, setScripts] = useState(DEFAULT_SCRIPTS);
     const [loading, setLoading] = useState(true);
@@ -44,6 +46,7 @@ export default function MessageScriptsPage() {
                 .from('clients')
                 .select('message_scripts')
                 .eq('id', selectedClientId)
+                .eq('user_id', user.id)
                 .single();
             if (error) throw error;
             const loaded = data?.message_scripts || {};
@@ -79,7 +82,8 @@ export default function MessageScriptsPage() {
             const { error } = await supabase
                 .from('clients')
                 .update({ message_scripts: cleaned })
-                .eq('id', selectedClientId);
+                .eq('id', selectedClientId)
+                .eq('user_id', user.id);
             if (error) throw error;
             toast.success('✅ Scripts saved successfully!');
         } catch (err) {

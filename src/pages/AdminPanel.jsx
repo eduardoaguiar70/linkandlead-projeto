@@ -67,51 +67,65 @@ const AdminPanel = () => {
         else setLoading(true)
 
         try {
+            // SECURITY: Always scope to clients owned by the current user
+            const { data: ownedClients, error: clientsError } = await supabase
+                .from('clients')
+                .select('id')
+                .eq('user_id', user.id)
+
+            if (clientsError) throw clientsError
+
+            const ownedClientIds = (ownedClients || []).map(c => c.id)
+
+            // If user has no clients yet — show empty dashboard, never show another user's data
+            if (ownedClientIds.length === 0) {
+                setStats({ doneToday: 0, pendingTotal: 0, hotLeads: 0 })
+                setCriticalTasks([])
+                setRadarLeads([])
+                return
+            }
+
+            // Reduce to the selected client if one is active and it belongs to this user
+            const clientFilter = selectedClientId && ownedClientIds.includes(selectedClientId)
+                ? [selectedClientId]
+                : ownedClientIds
+
             const todayStart = new Date()
             todayStart.setHours(0, 0, 0, 0)
             const todayStr = todayStart.toISOString()
             const dateStr = new Date().toISOString().split('T')[0]
 
             // 1. Stats: Done Today
-            let doneQuery = supabase
+            const doneQuery = supabase
                 .from('tasks')
                 .select('id, leads!inner(client_id)', { count: 'exact', head: true })
                 .neq('leads.is_blacklisted', true)
                 .eq('status', 'COMPLETED')
                 .gte('completed_at', `${dateStr}T00:00:00`)
-
-            if (selectedClientId) {
-                doneQuery = doneQuery
-                    .eq('client_id', selectedClientId)
-                    .eq('leads.client_id', selectedClientId)
-            }
+                .in('client_id', clientFilter)
+                .in('leads.client_id', clientFilter)
 
             // 2. Pending Tasks (Top 30 for today, same as Cockpit)
-            let pendingQuery = supabase
+            const pendingQuery = supabase
                 .from('tasks')
                 .select('*, leads!inner(id, client_id, nome, empresa, headline, linkedin_profile_url, cadence_stage, total_interactions_count, avatar_url, icp_score)')
                 .neq('leads.is_blacklisted', true)
                 .eq('status', 'PENDING')
                 .gte('created_at', todayStr)
+                .in('client_id', clientFilter)
+                .in('leads.client_id', clientFilter)
                 .order('created_at', { ascending: true })
                 .limit(30)
 
-            if (selectedClientId) {
-                pendingQuery = pendingQuery
-                    .eq('client_id', selectedClientId)
-                    .eq('leads.client_id', selectedClientId)
-            }
-
             // 3. Radar Leads (Responding/Hot)
-            let radarQuery = supabase
+            const radarQuery = supabase
                 .from('leads')
                 .select('id, nome, empresa, headline, cadence_stage, total_interactions_count, updated_at, linkedin_profile_url, avatar_url')
                 .neq('is_blacklisted', true)
                 .gt('total_interactions_count', 0)
+                .in('client_id', clientFilter)
                 .order('updated_at', { ascending: false })
                 .limit(10)
-
-            if (selectedClientId) radarQuery = radarQuery.eq('client_id', selectedClientId)
 
             // Execute all
             const [doneRes, tasksRes, radarRes] = await Promise.all([
@@ -142,7 +156,6 @@ const AdminPanel = () => {
             })
 
             const focusTasks = sortedPriority.slice(0, 3)
-
             const g4g5 = allPending.filter(t => HOT_STAGES.includes(t.leads?.cadence_stage))
 
             setStats({

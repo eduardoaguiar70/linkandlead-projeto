@@ -36,24 +36,25 @@ export default function ClientsPage() {
     });
 
     useEffect(() => {
-        fetchClients();
-    }, []);
+        if (user) fetchClients();
+    }, [user, profile]);
 
     async function fetchClients() {
         try {
             setLoading(true);
-            // SECURITY: Filter by owner unless admin
-            let query = supabase.from('clients').select('*');
             
-            if (profile?.role !== 'admin') {
-                query = query.eq('auth_user_id', user.id);
-            }
+            // SECURITY: Strict multi-tenant filtering - ALWAYS filter by user_id
+            const { data, error } = await supabase
+                .from('clients')
+                .select('*')
+                .eq('user_id', user.id)
+                .order('created_at', { ascending: false });
 
-            const { data, error } = await query.order('created_at', { ascending: false });
             if (error) throw error;
             setClients(data || []);
         } catch (error) {
             console.error('Error fetching clients:', error);
+            toast.error('Erro ao carregar clientes.');
         } finally {
             setLoading(false);
         }
@@ -165,7 +166,8 @@ export default function ClientsPage() {
             const { error } = await supabase
                 .from('clients')
                 .delete()
-                .eq('id', editingClient.id);
+                .eq('id', editingClient.id)
+                .eq('user_id', user.id);
 
             if (error) throw error;
 
@@ -199,7 +201,8 @@ export default function ClientsPage() {
             const { error } = await supabase
                 .from('clients')
                 .update({ message_scripts: messageScripts })
-                .eq('id', editingClient.id);
+                .eq('id', editingClient.id)
+                .eq('user_id', user.id);
             if (error) throw error;
             toast.success('✅ Scripts saved successfully!');
         } catch (err) {
@@ -256,7 +259,7 @@ export default function ClientsPage() {
                 unipile_account_id: formData.unipile_account_id,
                 agenda_link: formData.agenda_link,
                 language_preference: formData.language_preference,
-                auth_user_id: user.id // SECURITY: Associate client with the creator
+                user_id: user.id // SECURITY: Associate client with the creator
             };
 
             // --- EXECUTE SUPABASE CALLS AFTER PAYLOAD IS READY ---

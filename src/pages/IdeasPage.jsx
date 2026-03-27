@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect } from 'react'
 import { supabase } from '../services/supabaseClient'
+import { useAuth } from '../contexts/AuthContext'
 import { useLanguage } from '../contexts/LanguageContext'
 import {
     Lightbulb,
@@ -15,6 +16,7 @@ import './IdeasPage.css'
 
 const IdeasPage = () => {
     const { t } = useLanguage()
+    const { user } = useAuth()
 
     // Data
     const [clients, setClients] = useState([])
@@ -45,6 +47,7 @@ const IdeasPage = () => {
                 const { data, error } = await supabase
                     .from('clients')
                     .select('id, name') // Need ID for relation
+                    .eq('user_id', user.id)
                     .order('name')
 
                 if (error) throw error

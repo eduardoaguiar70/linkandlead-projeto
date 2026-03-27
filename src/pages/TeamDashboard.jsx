@@ -264,7 +264,7 @@ const TeamDashboard = () => {
                 const { data, error } = await supabase
                     .from('clients')
                     .select('id, name')
-                    .eq('auth_user_id', selectedSdr)
+                    .eq('user_id', selectedSdr)
                     .order('name')
 
                 if (error) throw error
@@ -297,7 +297,7 @@ const TeamDashboard = () => {
                 const { data: c } = await supabase
                     .from('clients')
                     .select('id')
-                    .eq('auth_user_id', selectedSdr)
+                    .eq('user_id', selectedSdr)
                 if (c) clientIds = c.map(x => x.id)
             } else {
                 // Team-wide: all clients from all SDRs in this team
@@ -311,7 +311,7 @@ const TeamDashboard = () => {
                     const { data: c } = await supabase
                         .from('clients')
                         .select('id')
-                        .in('auth_user_id', userIds)
+                        .in('user_id', userIds)
                     if (c) clientIds = c.map(x => x.id)
                 }
             }
@@ -398,7 +398,7 @@ const TeamDashboard = () => {
             // For each SDR, fetch their client IDs
             const sdrClients = await Promise.all((profilesData || []).map(async (p) => {
                 const { data: clientsData } = await supabase
-                    .from('clients').select('id').eq('auth_user_id', p.id)
+                    .from('clients').select('id').eq('user_id', p.id)
                 return {
                      id: p.id,
                      name: p.nome_empresa || p.email || p.id,

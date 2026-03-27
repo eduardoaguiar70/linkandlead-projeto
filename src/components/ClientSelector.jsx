@@ -1,19 +1,24 @@
 import React, { useEffect, useState } from 'react'
 import { supabase } from '../services/supabaseClient'
 import { useClientSelection } from '../contexts/ClientSelectionContext'
+import { useAuth } from '../contexts/AuthContext'
 import { Users, ChevronDown } from 'lucide-react'
 
 const ClientSelector = () => {
     const [clients, setClients] = useState([])
     const { selectedClientId, setSelectedClientId } = useClientSelection()
+    const { user, profile } = useAuth()
     const [loading, setLoading] = useState(true)
 
     useEffect(() => {
         const fetchClients = async () => {
+            if (!user) return; // Wait for user to be available
+
             try {
                 const { data, error } = await supabase
                     .from('clients')
                     .select('id, name')
+                    .eq('user_id', user.id)   // ALWAYS filter by owner — no exceptions
                     .order('name', { ascending: true })
 
                 if (error) throw error
@@ -25,7 +30,7 @@ const ClientSelector = () => {
             }
         }
         fetchClients()
-    }, [])
+    }, [user])
 
     const handleChange = (e) => {
         const val = e.target.value

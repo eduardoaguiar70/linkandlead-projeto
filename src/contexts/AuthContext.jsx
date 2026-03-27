@@ -135,10 +135,17 @@ export const AuthProvider = ({ children }) => {
         } catch (error) {
             console.error('Error signing out:', error);
         } finally {
+            // SECURITY: Clear local and session storage completely to prevent leaks
+            localStorage.clear();
+            sessionStorage.clear();
+            
             // Force clear state to ensure UI updates immediately
             setUser(null);
             setProfile(null);
             setLoading(false);
+            
+            // Redirect to home/login to clear memory state
+            window.location.href = '/login';
         }
     };
 

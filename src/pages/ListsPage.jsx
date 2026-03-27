@@ -13,10 +13,12 @@ import {
     CheckCircle2
 } from 'lucide-react'
 import { useClientSelection } from '../contexts/ClientSelectionContext'
+import { useAuth } from '../contexts/AuthContext'
 
 const ListsPage = () => {
     const navigate = useNavigate()
     const { selectedClientId } = useClientSelection()
+    const { user } = useAuth()
     const [lists, setLists] = useState([])
     const [loading, setLoading] = useState(false)
     const [searchTerm, setSearchTerm] = useState('')
@@ -51,6 +53,7 @@ const ListsPage = () => {
             const { data, error } = await supabase
                 .from('clients')
                 .select('id, name, unipile_account_id')
+                .eq('user_id', user.id)
                 .order('name', { ascending: true })
             if (error) throw error
             setAllClients(data || [])
@@ -80,6 +83,7 @@ const ListsPage = () => {
                 .from('clients')
                 .select('name, unipile_account_id')
                 .eq('id', clientId)
+                .eq('user_id', user.id)
                 .single()
 
             if (error) throw error
