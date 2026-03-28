@@ -7,7 +7,8 @@ import {
     X, Briefcase, MapPin, ExternalLink, Star, Target,
     MessageCircle, DollarSign, UserPlus, UserCheck,
     ChevronDown, ChevronUp, Bell, Clock, Kanban, FileText,
-    History, Loader2, Ban, BotOff, Bot, Calendar
+    History, Loader2, Ban, BotOff, Bot, Calendar,
+    Heart, Activity, Sparkles
 } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -36,6 +37,157 @@ const STAGES = [
     { id: 'Ganho', label: 'Won' },
     { id: 'Perdido', label: 'Lost' },
 ]
+// ── Activity Timeline ─────────────────────────────────────────────────────────
+
+const ACTIVITY_CONFIG = {
+    FIRST_MESSAGE: {
+        icon: MessageCircle,
+        color: '#2563eb',
+        bg: '#eff6ff',
+        border: '#bfdbfe',
+        label: 'Initial Message',
+    },
+    COMMENT: {
+        icon: Activity,
+        color: '#16a34a',
+        bg: '#f0fdf4',
+        border: '#bbf7d0',
+        label: 'Comment',
+    },
+    REACTION: {
+        icon: Heart,
+        color: '#d97706',
+        bg: '#fffbeb',
+        border: '#fde68a',
+        label: 'Reaction',
+    },
+}
+
+const formatRelTime = (dateStr) => {
+    if (!dateStr) return ''
+    const diff = Date.now() - new Date(dateStr).getTime()
+    const mins = Math.floor(diff / 60000)
+    if (mins < 1) return 'Just now'
+    if (mins < 60) return `${mins}m ago`
+    const hrs = Math.floor(mins / 60)
+    if (hrs < 24) return `${hrs}h ago`
+    const days = Math.floor(hrs / 24)
+    if (days < 7) return `${days}d ago`
+    return new Date(dateStr).toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: '2-digit' })
+}
+
+const ActivityTimeline = ({ leadId }) => {
+    const [events, setEvents] = useState([])
+    const [loading, setLoading] = useState(true)
+
+    useEffect(() => {
+        if (!leadId) return
+        let cancelled = false
+        const load = async () => {
+            setLoading(true)
+            try {
+                const { data, error } = await supabase
+                    .from('lead_activity_timeline')
+                    .select('activity_type, description, occurred_at, post_id')
+                    .eq('lead_id', leadId)
+                    .order('occurred_at', { ascending: false })
+                    .limit(80)
+                if (!cancelled) {
+                    if (!error) setEvents(data || [])
+                }
+            } catch (err) {
+                console.error('[ActivityTimeline]', err)
+            } finally {
+                if (!cancelled) setLoading(false)
+            }
+        }
+        load()
+        return () => { cancelled = true }
+    }, [leadId])
+
+    if (loading) return (
+        <div className="flex items-center justify-center py-10 gap-2">
+            <Loader2 size={18} className="animate-spin text-slate-400" />
+            <span className="text-xs text-slate-400">Loading timeline…</span>
+        </div>
+    )
+
+    if (events.length === 0) return (
+        <div className="flex flex-col items-center justify-center py-12 gap-2 text-center px-4">
+            <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center">
+                <Activity size={18} className="text-slate-300" />
+            </div>
+            <p className="text-xs text-slate-400">No activity recorded yet.</p>
+        </div>
+    )
+
+    return (
+        <div className="relative">
+            {/* Spine */}
+            <div className="absolute left-[36px] top-4 bottom-4 w-px bg-slate-100" aria-hidden />
+
+            <ul>
+                {events.map((evt, i) => {
+                    const cfg = ACTIVITY_CONFIG[evt.activity_type] || ACTIVITY_CONFIG.FIRST_MESSAGE
+                    const Icon = cfg.icon
+                    return (
+                        <li
+                            key={i}
+                            className="group flex gap-3 px-5 py-3.5 hover:bg-slate-50/80 transition-colors border-b border-slate-50 last:border-0"
+                        >
+                            {/* Icon bubble */}
+                            <div
+                                className="relative z-10 shrink-0 mt-0.5 w-7 h-7 rounded-full border-2 flex items-center justify-center shadow-sm transition-transform group-hover:scale-110"
+                                style={{ background: cfg.bg, borderColor: cfg.border }}
+                            >
+                                <Icon size={13} style={{ color: cfg.color }} strokeWidth={2.5} />
+                            </div>
+
+                            {/* Text */}
+                            <div className="flex-1 min-w-0">
+                                <div className="flex items-start justify-between gap-2">
+                                    <div className="flex-1 min-w-0">
+                                        {/* Type label */}
+                                        <span
+                                            className="inline-block text-[9px] font-black uppercase tracking-widest rounded px-1.5 py-0.5 mb-1"
+                                            style={{ color: cfg.color, background: cfg.bg }}
+                                        >
+                                            {cfg.label}
+                                        </span>
+                                        {evt.description && (
+                                            <p className="text-[12px] text-slate-600 leading-relaxed">
+                                                {evt.description}
+                                            </p>
+                                        )}
+                                    </div>
+
+                                    {/* Meta */}
+                                    <div className="shrink-0 flex flex-col items-end gap-1 pl-2">
+                                        <span className="text-[10px] text-slate-400 font-medium whitespace-nowrap">
+                                            {formatRelTime(evt.occurred_at)}
+                                        </span>
+                                        {evt.post_id && (
+                                            <a
+                                                href={`https://www.linkedin.com/feed/update/urn:li:activity:${evt.post_id}`}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-blue-500 hover:text-blue-700 transition-colors"
+                                                title="View LinkedIn post"
+                                            >
+                                                <ExternalLink size={9} />
+                                                View Post
+                                            </a>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        </li>
+                    )
+                })}
+            </ul>
+        </div>
+    )
+}
 
 // ── Sub-Components ────────────────────────────────────────────────────────────
 
@@ -73,6 +225,7 @@ const ReasoningBlock = ({ title, text, defaultOpen = false }) => {
 const UnifiedLeadModal = ({ lead, onClose, onLeadUpdated }) => {
     const navigate = useNavigate()
     const [saving, setSaving] = useState(false)
+    const [bodyTab, setBodyTab] = useState('details') // 'details' | 'timeline'
     const [proposalValue, setProposalValue] = useState(lead?.proposal_value || '')
     const [isFollowup, setIsFollowup] = useState(lead?.is_followup || false)
     const [followupInterval, setFollowupInterval] = useState(lead?.followup_interval_days || 7)
@@ -380,6 +533,33 @@ const UnifiedLeadModal = ({ lead, onClose, onLeadUpdated }) => {
                 {/* ═══ BODY (Light, Scrollable) ═══ */}
                 <div className="flex-1 overflow-y-auto bg-white">
 
+                    {/* ── Tab toggle ── */}
+                    <div className="flex border-b border-slate-100 bg-slate-50 px-5 pt-3 gap-4 shrink-0">
+                        {[
+                            { id: 'details', label: 'Details' },
+                            { id: 'timeline', label: 'Activity Timeline' },
+                        ].map(tab => (
+                            <button
+                                key={tab.id}
+                                onClick={() => setBodyTab(tab.id)}
+                                className={`pb-2.5 text-[11px] font-bold uppercase tracking-wider border-b-2 transition-colors ${
+                                    bodyTab === tab.id
+                                        ? 'border-orange-500 text-orange-500'
+                                        : 'border-transparent text-slate-400 hover:text-slate-600'
+                                }`}
+                            >
+                                {tab.label}
+                            </button>
+                        ))}
+                    </div>
+
+                    {/* ── Timeline Tab ── */}
+                    {bodyTab === 'timeline' && <ActivityTimeline leadId={lead?.id} />}
+
+                    {/* ── Details Tab ── */}
+                    {bodyTab === 'details' && (
+                    <React.Fragment>
+
                     {/* ── Stats Row ── */}
                     <div className="px-5 py-4 border-b border-slate-100 bg-slate-50">
                         <div className="grid grid-cols-3 gap-2.5">
@@ -534,8 +714,9 @@ const UnifiedLeadModal = ({ lead, onClose, onLeadUpdated }) => {
                                 </select>
                             </div>
                         </div>
-                </div>
+                    </React.Fragment>)}
 
+                </div>
                 {/* ═══ FOOTER (Actions) ═══ */}
                 <div className="shrink-0 bg-slate-50 border-t border-slate-200">
 
