@@ -11,7 +11,7 @@ const N8N_SEND_MESSAGE_URL = 'https://n8n-n8n-start.kfocge.easypanel.host/webhoo
 const N8N_ANALYZE_LEAD_URL = 'https://n8n-n8n-start.kfocge.easypanel.host/webhook/analyze-lead-on-demand'
 import StrategicContextCard from '../components/StrategicContextCard'
 import ScheduleMessageModal from '../components/ScheduleMessageModal'
-import { Search, Send, MoreVertical, Phone, Mail, MapPin, Briefcase, Zap, Star, Sparkles, MessageSquare, Check, LayoutGrid, List, Loader2, X, ClipboardList, CheckCircle2, Ban, Bell, Clock, Copy } from 'lucide-react'
+import { Search, Send, MoreVertical, Phone, Mail, MapPin, Briefcase, Zap, Star, Sparkles, MessageSquare, Check, LayoutGrid, List, Loader2, X, ClipboardList, CheckCircle2, Ban, Bell, Clock, Copy, Lock } from 'lucide-react'
 
 // Returns true if lead meets the strict conditions to be considered a task
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000
@@ -989,14 +989,18 @@ const SalesInboxPage = () => {
 
             if (data.success) {
                 // The webhook triggers n8n successfully, but AI processing takes ~5-10s.
-                // Display the success toast immediately, keep spinner spinning, and silently fetch data in 10s.
-                showToast('✅ Análise iniciada. Atualizando em breve...')
+                showToast('✅ Analysis started. Updating soon...')
+
+                // GUIDE JOURNEY: Unlock Copilot instantly in UI
+                const updatedStatusToken = { status_completo: true }
+                setActiveLead(prev => prev ? { ...prev, ...updatedStatusToken } : prev)
+                setLeads(prev => prev.map(l => l.id === activeLead.id ? { ...l, ...updatedStatusToken } : l))
 
                 setTimeout(async () => {
                     try {
                         const { data: updatedLead, error } = await supabase
                             .from('leads')
-                            .select('cadence_stage, last_signal_detected, last_psychological_factor, last_forbidden_action, last_strategy_used, updated_at, last_interaction_date')
+                            .select('cadence_stage, last_signal_detected, last_psychological_factor, last_forbidden_action, last_strategy_used, updated_at, last_interaction_date, status_completo')
                             .eq('id', activeLead.id)
                             .single()
 
@@ -1587,7 +1591,7 @@ const SalesInboxPage = () => {
                                 <button
                                     onClick={() => setShowScheduleModal(true)}
                                     className="absolute left-[3.25rem] z-10 p-1.5 rounded-lg bg-white text-orange-500 border border-orange-100 hover:bg-orange-50 hover:border-orange-200 transition-all shadow-sm"
-                                    title="Programar Mensagem"
+                                    title="Schedule Message"
                                 >
                                     <Clock size={16} />
                                 </button>
@@ -1711,8 +1715,10 @@ const SalesInboxPage = () => {
                                                 <div className="w-12 h-12 rounded-full bg-primary/10 border border-primary/30 flex items-center justify-center">
                                                     <Sparkles size={20} className="text-primary/60" />
                                                 </div>
-                                                <p className="text-xs text-gray-400 max-w-[200px] leading-relaxed">
-                                                    Ask AI to generate, rewrite, or tweak messages for this lead.
+                                                <p className="text-xs text-gray-400 max-w-[200px] leading-relaxed font-medium">
+                                                    {!activeLead.status_completo 
+                                                        ? "Request an analysis in the 'Details' section first to unlock the Copilot." 
+                                                        : "Ask AI to generate, rewrite, or tweak messages for this lead."}
                                                 </p>
                                                 {/* Quick start button */}
                                                 <button
@@ -1720,9 +1726,13 @@ const SalesInboxPage = () => {
                                                         const prompt = interactions.length === 0 ? 'Generate an icebreaker for this lead.' : 'Generate a reply to the last message.'
                                                         setAiInput(prompt)
                                                     }}
-                                                    className="mt-2 px-4 py-2 rounded-lg bg-primary/10 hover:bg-primary/20 border border-primary/30 text-primary text-[11px] font-bold transition-all"
+                                                    disabled={!activeLead.status_completo}
+                                                    title={!activeLead.status_completo ? "First perform the Negotiation X-Ray to unlock the Copilot" : ""}
+                                                    className={`mt-2 px-4 py-2 rounded-lg border text-[11px] font-bold transition-all flex items-center gap-1.5 ${!activeLead.status_completo 
+                                                        ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed opacity-60' 
+                                                        : 'bg-primary/10 hover:bg-primary/20 border-primary/30 text-primary active:scale-95'}`}
                                                 >
-                                                    <Sparkles size={12} className="inline mr-1.5" />
+                                                    {!activeLead.status_completo ? <Lock size={12} /> : <Sparkles size={12} />}
                                                     {interactions.length === 0 ? 'Generate Icebreaker' : 'Generate Reply'}
                                                 </button>
                                             </div>
@@ -1751,9 +1761,12 @@ const SalesInboxPage = () => {
                                                                                 setNewMessage(option)
                                                                                 setSelectedSuggestionIdx(oIdx)
                                                                             }}
-                                                                            className="flex items-center gap-1 px-2 py-1 rounded-lg bg-orange-500 hover:bg-orange-600 text-white text-[10px] font-bold transition-all shadow-sm"
+                                                                            disabled={!activeLead.status_completo}
+                                                                            className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold transition-all shadow-sm ${!activeLead.status_completo 
+                                                                                ? 'bg-gray-300 text-white cursor-not-allowed' 
+                                                                                : 'bg-orange-500 hover:bg-orange-600 text-white active:scale-95'}`}
                                                                         >
-                                                                            <Check size={10} /> Use this
+                                                                            {!activeLead.status_completo ? <Lock size={10} /> : <Check size={10} />} Use this
                                                                         </button>
                                                                     </div>
                                                                 </div>
@@ -1775,9 +1788,12 @@ const SalesInboxPage = () => {
                                                                         setNewMessage(msg.content)
                                                                         setSelectedSuggestionIdx(0)
                                                                     }}
-                                                                    className="mt-2 w-full py-1.5 rounded-lg bg-primary/20 hover:bg-primary/30 border border-primary/30 text-primary text-[10px] font-bold transition-all flex items-center justify-center gap-1.5"
+                                                                    disabled={!activeLead.status_completo}
+                                                                    className={`mt-2 w-full py-1.5 rounded-lg border text-[10px] font-bold transition-all flex items-center justify-center gap-1.5 ${!activeLead.status_completo 
+                                                                        ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed opacity-60' 
+                                                                        : 'bg-primary/20 hover:bg-primary/30 border-primary/30 text-primary active:scale-95'}`}
                                                                 >
-                                                                    <Check size={11} /> Use this message
+                                                                    {!activeLead.status_completo ? <Lock size={11} /> : <Check size={11} />} Use this message
                                                                 </button>
                                                             )}
                                                         </div>
@@ -1802,16 +1818,19 @@ const SalesInboxPage = () => {
                                                 value={aiInput}
                                                 onChange={e => setAiInput(e.target.value)}
                                                 onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey && aiInput.trim()) { e.preventDefault(); handleAiChat() } }}
-                                                disabled={aiLoading}
-                                                placeholder="Ex: Make it friendlier..."
-                                                className="w-full bg-white border border-gray-200 rounded-xl pl-3.5 pr-10 py-2.5 text-xs text-gray-800 placeholder-gray-400 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30 transition-all disabled:opacity-50"
+                                                disabled={aiLoading || !activeLead.status_completo}
+                                                placeholder={!activeLead.status_completo ? "Analysis required in 'Details' to unlock..." : "Ex: Make it friendlier..."}
+                                                title={!activeLead.status_completo ? "First perform the Negotiation X-Ray to unlock the Copilot" : ""}
+                                                className={`w-full bg-white border border-gray-200 rounded-xl pl-3.5 pr-10 py-2.5 text-xs text-gray-800 placeholder-gray-400 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30 transition-all ${!activeLead.status_completo ? "opacity-50 grayscale cursor-not-allowed" : "disabled:opacity-50"}`}
                                             />
                                             <button
                                                 onClick={handleAiChat}
-                                                disabled={aiLoading || !aiInput.trim()}
-                                                className="absolute right-1.5 top-1/2 -translate-y-1/2 p-1.5 rounded-lg bg-primary hover:bg-primary/80 text-white transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                                                disabled={aiLoading || !aiInput.trim() || !activeLead.status_completo}
+                                                className={`absolute right-1.5 top-1/2 -translate-y-1/2 p-1.5 rounded-lg transition-all ${!activeLead.status_completo 
+                                                    ? 'bg-gray-300 text-white cursor-not-allowed' 
+                                                    : 'bg-primary hover:bg-primary/80 text-white active:scale-95 disabled:opacity-30'}`}
                                             >
-                                                {aiLoading ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
+                                                {aiLoading ? <Loader2 size={12} className="animate-spin" /> : (!activeLead.status_completo ? <Lock size={12} /> : <Send size={12} />)}
                                             </button>
                                         </div>
                                     </div>

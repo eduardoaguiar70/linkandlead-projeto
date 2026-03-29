@@ -64,14 +64,16 @@ const StrategicContextCard = ({ lead, isIcebreaker = false, ...props }) => {
                                 <div className="absolute inset-0 rounded-full bg-orange-500/20 animate-ping" />
                                 <Loader2 size={32} className="text-orange-500 animate-spin relative" />
                             </div>
-                            <p className="text-sm text-gray-600 font-semibold">Análise profunda em andamento...</p>
+                            <p className="text-sm text-gray-600 font-semibold">Deep analysis in progress...</p>
                         </>
                     ) : (
                         <>
                             <Sparkles size={32} className="text-orange-300" />
                             <div className="text-center">
-                                <p className="text-sm text-gray-500 font-medium">Análise de IA pendente</p>
-                                <p className="text-[11px] text-gray-400 mt-1">Envie uma mensagem ou sincronize o histórico para ativar.</p>
+                                <p className="text-sm text-gray-500 font-medium">AI Analysis Pending</p>
+                                <p className="text-[11px] text-orange-500 mt-1 font-bold animate-pulse">
+                                    Execute the X-Ray to unlock the Copilot.
+                                </p>
                             </div>
                             {onAnalyzeNow && (
                                 <button
@@ -79,7 +81,7 @@ const StrategicContextCard = ({ lead, isIcebreaker = false, ...props }) => {
                                     className="mt-2 inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-white border border-gray-200 text-gray-700 text-xs font-bold hover:bg-gray-50 transition-all shadow-sm active:scale-95"
                                 >
                                     <RefreshCw size={14} />
-                                    Analisar Agora
+                                    Analyze Now
                                 </button>
                             )}
                         </>
@@ -101,7 +103,7 @@ const StrategicContextCard = ({ lead, isIcebreaker = false, ...props }) => {
                         <h4 className="text-sm font-bold text-gray-900 uppercase tracking-widest leading-none mb-1">Negotiation X-Ray</h4>
                         {analyzedAt && (
                             <span className="text-[10px] text-gray-400 font-medium lowercase">
-                                • última atualização {getTimeAgo(analyzedAt)}
+                                • last update {getTimeAgo(analyzedAt)}
                             </span>
                         )}
                     </div>
